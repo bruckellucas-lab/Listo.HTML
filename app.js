@@ -470,8 +470,56 @@
     }
     detailsError.hidden = true;
     state.selected = null;
-    show("proposals", renderProposals);
+    show("proposals", function () {
+      renderProposals();
+      saveRequest();
+    });
   });
+
+  /* ---------- Guardado del pedido en Supabase ---------- */
+
+  var lastSaved = "";   // evita guardar dos veces exactamente el mismo pedido
+  var saving = false;
+
+  function buildRequest() {
+    var d = state.data;
+    return {
+      original_prompt: state.text,
+      event_type: d.type || null,
+      guests: d.guests || null,
+      zone: d.zone || null,
+      budget: d.budget || null,
+      needs: getActiveNeeds().map(function (n) { return n.label; }),
+      status: "new"
+    };
+  }
+
+  // Un pedido está "vacío" si no hay texto o no se entendió nada útil.
+  function isEmptyRequest(row) {
+    if (!row.original_prompt || row.original_prompt.trim().length < 8) return true;
+    return !row.event_type && !row.guests && !row.zone && !row.budget && !row.needs.length;
+  }
+
+  function saveRequest() {
+    if (!window.ListoDB || !state.data) return;
+    var row = buildRequest();
+    if (isEmptyRequest(row)) return;
+    var signature = JSON.stringify(row);
+    if (saving || signature === lastSaved) return;
+    saving = true;
+    window.ListoDB.saveEventRequest(row).then(function (result) {
+      saving = false;
+      if (result.ok) {
+        lastSaved = signature;
+        toast("Listo: guardamos tu pedido.");
+      } else {
+        toast(result.message, 8000);
+      }
+    }, function () {
+      saving = false;
+      toast("No pudimos guardar tu pedido. Probá de nuevo en un rato.", 8000);
+    });
+  }
 
   function getActiveNeeds() {
     var d = state.data;
@@ -625,13 +673,13 @@
   /* ---------- Aviso flotante ---------- */
 
   var toastTimer = null;
-  function toast(msg) {
+  function toast(msg, duration) {
     toastEl.hidden = true;
     toastEl.textContent = msg;
     void toastEl.offsetWidth; // reinicia la animación
     toastEl.hidden = false;
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(function () { toastEl.hidden = true; }, 4600);
+    toastTimer = setTimeout(function () { toastEl.hidden = true; }, duration || 4600);
   }
 
   /* ---------- Botones generales y menú ---------- */

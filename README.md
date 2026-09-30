@@ -11,6 +11,10 @@ Escribís lo que querés hacer (una cena, un cumpleaños, una juntada, una noche
 - `index.html`: el contenido de las tres pantallas (inicio, "esto entendimos" y opciones).
 - `styles.css`: el diseño editorial (tipografía Anton + Inter, paleta carbón/crema/madera, adaptación a celular).
 - `app.js`: la lógica. Interpreta el texto, deja editar cada dato tocándolo y arma las 3 opciones de ejemplo.
+- `config.js`: **el único archivo donde se pegan los datos de Supabase** (Project URL y clave pública).
+- `supabase.js`: guarda cada pedido en la tabla `event_requests` al tocar "Buscar opciones".
+
+Para activar el guardado en Supabase, seguí la guía paso a paso: [SUPABASE.md](SUPABASE.md).
 
 Las fotos son de [Unsplash](https://unsplash.com) (uso libre) y se cargan directamente desde su servidor.
 Para cambiar una foto, buscá en los archivos el código que empieza con `photo-` y reemplazalo por el de otra imagen de Unsplash.
