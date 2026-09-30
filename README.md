@@ -16,6 +16,14 @@ Escribís lo que querés hacer (una cena, un cumpleaños, una juntada, una noche
 
 Para activar el guardado en Supabase, seguí la guía paso a paso: [SUPABASE.md](SUPABASE.md).
 
+### Google Places (etapa de prueba, no conectada a la web)
+
+- `api/places-search.js`: función de Vercel (servidor) que busca lugares reales en Google Places y los guarda en la tabla `providers`.
+- `api/_lib/`: la lógica de Google Places y del guardado sin duplicados.
+- `prueba-google.html`: página interna para probar la búsqueda (protegida con contraseña).
+
+Guía paso a paso: [GOOGLE-PLACES.md](GOOGLE-PLACES.md).
+
 Las fotos son de [Unsplash](https://unsplash.com) (uso libre) y se cargan directamente desde su servidor.
 Para cambiar una foto, buscá en los archivos el código que empieza con `photo-` y reemplazalo por el de otra imagen de Unsplash.
 

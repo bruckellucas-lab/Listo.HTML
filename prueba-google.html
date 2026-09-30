@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>LISTO · Prueba Google Places</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root { --ink: #141210; --cream: #EFE8DC; --bone: #F5F1EA; --wood: #5E4431; --ok: #3F6B45; --bad: #A4462F; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bone); color: var(--ink); font-family: Inter, system-ui, sans-serif; font-size: 15px; line-height: 1.5; }
+    main { max-width: 1100px; margin: 0 auto; padding: 32px 18px 80px; }
+    h1 { font-family: Anton, Impact, sans-serif; font-weight: 400; text-transform: uppercase; font-size: clamp(40px, 7vw, 76px); line-height: .9; margin: 8px 0 12px; }
+    .kicker { font-size: 11px; letter-spacing: .2em; text-transform: uppercase; opacity: .65; margin: 0; }
+    .lead { max-width: 640px; color: #4A4138; margin: 0 0 28px; }
+    section { border-top: 1px solid var(--ink); padding: 18px 0 26px; }
+    h2 { font-size: 11px; letter-spacing: .2em; text-transform: uppercase; margin: 0 0 14px; }
+    ul.checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+    ul.checks li::before { content: "…"; display: inline-block; width: 22px; font-weight: 600; }
+    ul.checks li.ok::before { content: "✓"; color: var(--ok); }
+    ul.checks li.bad::before { content: "✗"; color: var(--bad); }
+    label { display: block; font-size: 11px; letter-spacing: .16em; text-transform: uppercase; opacity: .7; margin: 0 0 6px; }
+    .grid { display: grid; grid-template-columns: 2fr 1fr 110px; gap: 14px; align-items: end; }
+    input, select { width: 100%; padding: 12px 12px; border: 1px solid #CFC5B6; background: #fff; font: inherit; font-size: 16px; border-radius: 0; }
+    .buttons { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 16px; }
+    button { font: inherit; font-size: 12px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; padding: 15px 20px; border: 1px solid var(--ink); background: transparent; color: var(--ink); cursor: pointer; }
+    button.primary { background: var(--ink); color: var(--cream); }
+    button:disabled { opacity: .45; cursor: wait; }
+    .status { margin: 16px 0 0; padding: 12px 14px; background: #fff; border-left: 3px solid var(--wood); white-space: pre-line; }
+    .status.ok { border-color: var(--ok); }
+    .status.bad { border-color: var(--bad); color: var(--bad); }
+    .table-wrap { overflow-x: auto; margin-top: 16px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 760px; }
+    th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid #DDD3C4; vertical-align: top; }
+    th { font-size: 10px; letter-spacing: .16em; text-transform: uppercase; font-weight: 600; }
+    td a { color: var(--wood); }
+    .muted { opacity: .55; }
+    @media (max-width: 640px) { .grid { grid-template-columns: 1fr; } .buttons button { width: 100%; } }
+  </style>
+</head>
+<body>
+  <main>
+    <p class="kicker">LISTO — Herramienta interna</p>
+    <h1>Prueba<br>Google Places</h1>
+    <p class="lead">Busca lugares reales en Google Places desde el servidor (la clave de Google nunca pasa por acá) y, si querés, los guarda en la tabla <strong>providers</strong> de Supabase. Esta página no está conectada a la web de LISTO.</p>
+
+    <section>
+      <h2>1 · Configuración en Vercel</h2>
+      <ul class="checks" id="checks"><li>Revisando…</li></ul>
+    </section>
+
+    <section>
+      <h2>2 · Buscar</h2>
+      <form id="form" novalidate>
+        <div class="grid">
+          <div>
+            <label for="query">Búsqueda</label>
+            <input id="query" value="restaurantes en Palermo" maxlength="120" autocomplete="off">
+          </div>
+          <div>
+            <label for="token">Contraseña de prueba</label>
+            <input id="token" type="password" autocomplete="off" placeholder="LISTO_ADMIN_TOKEN">
+          </div>
+          <div>
+            <label for="limit">Resultados</label>
+            <select id="limit"><option>5</option><option selected>10</option><option>20</option></select>
+          </div>
+        </div>
+        <div class="buttons">
+          <button type="submit" class="primary" data-save="false">Buscar (sin guardar)</button>
+          <button type="submit" data-save="true">Buscar y guardar en providers</button>
+        </div>
+      </form>
+      <p class="status" id="status" hidden></p>
+      <div class="table-wrap" id="table-wrap" hidden>
+        <table>
+          <thead><tr><th>Nombre</th><th>Categoría</th><th>Zona</th><th>Dirección</th><th>Rating</th><th>Reseñas</th><th>Links</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+  (function () {
+    "use strict";
+    var ENDPOINT = "/api/places-search";
+    var checks = document.getElementById("checks");
+    var statusEl = document.getElementById("status");
+    var tokenInput = document.getElementById("token");
+    var buttons = document.querySelectorAll("button[type=submit]");
+    var lastSave = false;
+
+    try { tokenInput.value = sessionStorage.getItem("listo-token") || ""; } catch (e) {}
+
+    var LABELS = {
+      GOOGLE_PLACES_API_KEY: "GOOGLE_PLACES_API_KEY (clave de Google)",
+      SUPABASE_URL: "SUPABASE_URL (dirección de Supabase)",
+      SUPABASE_SECRET_KEY: "SUPABASE_SECRET_KEY (clave secreta de Supabase)",
+      SUPABASE_SECRET_KEY_es_secreta: "La clave de Supabase es la secreta (no la pública)",
+      LISTO_ADMIN_TOKEN: "LISTO_ADMIN_TOKEN (tu contraseña de prueba, 12+ caracteres)"
+    };
+
+    function li(text, cls) {
+      var el = document.createElement("li");
+      el.textContent = text;
+      if (cls) el.className = cls;
+      return el;
+    }
+
+    fetch(ENDPOINT).then(function (r) { return r.json(); }).then(function (data) {
+      checks.innerHTML = "";
+      Object.keys(LABELS).forEach(function (k) {
+        var v = data.config[k];
+        checks.appendChild(li(LABELS[k], v === true ? "ok" : v === false ? "bad" : ""));
+      });
+      checks.appendChild(li(data.ready ? "Todo listo para probar." : "Falta completar lo marcado con ✗ en Vercel (y volver a publicar).", data.ready ? "ok" : "bad"));
+    }).catch(function () {
+      checks.innerHTML = "";
+      checks.appendChild(li("No se encontró la función /api/places-search. Esta página tiene que abrirse desde tu dirección de Vercel.", "bad"));
+    });
+
+    function showStatus(text, kind) {
+      statusEl.textContent = text;
+      statusEl.className = "status" + (kind ? " " + kind : "");
+      statusEl.hidden = false;
+    }
+
+    function cell(tr, value) {
+      var td = document.createElement("td");
+      if (value === null || value === undefined || value === "") { td.textContent = "—"; td.className = "muted"; }
+      else td.textContent = value;
+      tr.appendChild(td);
+      return td;
+    }
+
+    function link(td, href, text) {
+      if (!href) return;
+      var a = document.createElement("a");
+      a.href = href; a.target = "_blank"; a.rel = "noopener noreferrer"; a.textContent = text;
+      td.appendChild(a);
+      td.appendChild(document.createTextNode(" "));
+    }
+
+    function renderRows(rows) {
+      var tbody = document.getElementById("rows");
+      tbody.innerHTML = "";
+      rows.forEach(function (r) {
+        var tr = document.createElement("tr");
+        cell(tr, r.name); cell(tr, r.category); cell(tr, r.zone); cell(tr, r.address);
+        cell(tr, r.rating); cell(tr, r.review_count);
+        var td = document.createElement("td");
+        link(td, r.maps_url, "Maps"); link(td, r.website, "Web");
+        if (!td.childNodes.length) { td.textContent = "—"; td.className = "muted"; }
+        tr.appendChild(td);
+        tbody.appendChild(tr);
+      });
+      document.getElementById("table-wrap").hidden = !rows.length;
+    }
+
+    buttons.forEach(function (b) { b.addEventListener("click", function () { lastSave = b.getAttribute("data-save") === "true"; }); });
+
+    document.getElementById("form").addEventListener("submit", function (e) {
+      e.preventDefault();
+      var token = tokenInput.value.trim();
+      var query = document.getElementById("query").value.trim();
+      if (!token) { showStatus("Escribí la contraseña de prueba (la que cargaste en Vercel como LISTO_ADMIN_TOKEN).", "bad"); return; }
+      if (query.length < 3) { showStatus("Escribí una búsqueda, por ejemplo: restaurantes en Palermo.", "bad"); return; }
+      try { sessionStorage.setItem("listo-token", token); } catch (err) {}
+
+      buttons.forEach(function (b) { b.disabled = true; });
+      showStatus(lastSave ? "Buscando en Google y guardando en Supabase…" : "Buscando en Google…");
+
+      fetch(ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-listo-token": token },
+        body: JSON.stringify({ query: query, limit: parseInt(document.getElementById("limit").value, 10), save: lastSave })
+      }).then(function (r) {
+        return r.json().catch(function () { return { ok: false, error: "Respuesta inesperada del servidor (" + r.status + ")." }; });
+      }).then(function (data) {
+        renderRows(data.results || []);
+        if (!data.ok) { showStatus(data.error || "Algo salió mal.", "bad"); return; }
+        var msg = "Google devolvió " + data.count + " lugar" + (data.count === 1 ? "" : "es") + " para “" + data.query + "”.";
+        if (data.skipped_closed) msg += "\n" + data.skipped_closed + " cerrado(s) definitivamente no se incluyeron.";
+        if (data.saved) msg += "\nGuardado en providers: " + data.saved.inserted + " nuevo(s), " + data.saved.updated + " actualizado(s) (sin duplicados).";
+        else msg += "\nTodavía no se guardó nada. Si los resultados se ven bien, tocá “Buscar y guardar en providers”.";
+        showStatus(msg, "ok");
+      }).catch(function () {
+        showStatus("No pudimos conectarnos con el servidor. Revisá tu conexión y que estés en tu dirección de Vercel.", "bad");
+      }).then(function () {
+        buttons.forEach(function (b) { b.disabled = false; });
+      });
+    });
+  })();
+  </script>
+</body>
+</html>
