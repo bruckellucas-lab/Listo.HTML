@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>LISTO — Tu evento, resuelto</title>
+  <meta name="description" content="LISTO organiza tu evento de principio a fin. Contanos qué querés festejar y armamos las propuestas por vos.">
+  <meta name="theme-color" content="#F6F3EE">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231D1B18'/%3E%3Cpath d='M20 33l8 8 16-18' fill='none' stroke='%23F6F3EE' stroke-width='5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a href="#" class="brand" data-action="home" aria-label="LISTO, volver al inicio">LISTO<span class="brand-dot">.</span></a>
+    <ol class="steps" aria-label="Progreso">
+      <li class="step is-active" data-step="1"><span>01</span> Tu idea</li>
+      <li class="step" data-step="2"><span>02</span> Detalles</li>
+      <li class="step" data-step="3"><span>03</span> Propuestas</li>
+    </ol>
+  </header>
+
+  <main id="app">
+    <!-- PANTALLA 1: Inicio -->
+    <section class="screen is-visible" id="screen-intro" aria-labelledby="intro-title">
+      <div class="intro">
+        <p class="eyebrow">Concierge de eventos</p>
+        <h1 id="intro-title" class="display">Contanos qué querés celebrar.<br><em>Nosotros nos ocupamos del resto.</em></h1>
+
+        <form id="intro-form" class="composer" novalidate>
+          <label for="event-text" class="sr-only">Describí tu evento</label>
+          <textarea id="event-text" rows="5" placeholder="Por ejemplo: Quiero festejar mi cumpleaños para 20 personas en Palermo, tengo $700.000 y necesito lugar, comida y bebida."></textarea>
+          <div class="composer-footer">
+            <p class="hint" id="intro-hint">Escribilo como se lo contarías a un amigo.</p>
+            <button type="submit" class="btn btn-primary">Armar mi evento <span aria-hidden="true">→</span></button>
+          </div>
+        </form>
+
+        <div class="examples" aria-label="Ejemplos para empezar">
+          <span class="examples-label">Probá con</span>
+          <button type="button" class="chip-example" data-example="Quiero festejar mi cumpleaños para 20 personas en Palermo, tengo $700.000 y necesito lugar, comida y bebida.">Cumpleaños en Palermo</button>
+          <button type="button" class="chip-example" data-example="Organizo un after office para 35 personas en Microcentro, presupuesto de 1,2 millones, necesitamos barra de tragos y música.">After office</button>
+          <button type="button" class="chip-example" data-example="Queremos hacer un baby shower para 15 invitadas en Belgrano con $400 mil, necesitamos decoración, comida dulce y torta.">Baby shower</button>
+        </div>
+      </div>
+
+      <ul class="pillars" aria-label="Cómo funciona">
+        <li><span class="pillar-num">I</span><h3>Nos contás</h3><p>En tus palabras, sin formularios eternos.</p></li>
+        <li><span class="pillar-num">II</span><h3>Lo ordenamos</h3><p>Interpretamos tu idea y la podés ajustar.</p></li>
+        <li><span class="pillar-num">III</span><h3>Elegís</h3><p>Te acercamos propuestas pensadas para vos.</p></li>
+      </ul>
+    </section>
+
+    <!-- PANTALLA 2: Detalles editables -->
+    <section class="screen" id="screen-details" aria-labelledby="details-title" hidden>
+      <div class="section-head">
+        <p class="eyebrow">Paso 2 de 3</p>
+        <h2 id="details-title" class="display display-sm">Esto es lo que entendimos.</h2>
+        <p class="lead">Revisá los detalles y ajustá lo que haga falta.</p>
+      </div>
+
+      <blockquote class="quote" id="original-quote"></blockquote>
+
+      <form id="details-form" class="details" novalidate>
+        <div class="field">
+          <label for="f-type">Tipo de evento</label>
+          <input id="f-type" name="type" type="text" list="type-options" placeholder="Ej: Cumpleaños" autocomplete="off">
+          <datalist id="type-options">
+            <option value="Cumpleaños"><option value="Casamiento"><option value="Aniversario">
+            <option value="Baby shower"><option value="Bautismo"><option value="Despedida">
+            <option value="After office"><option value="Evento corporativo"><option value="Cena"><option value="Reunión"><option value="Fiesta">
+          </datalist>
+        </div>
+
+        <div class="field">
+          <label for="f-guests">Cantidad de personas</label>
+          <div class="stepper">
+            <button type="button" class="stepper-btn" data-step-by="-1" aria-label="Restar una persona">−</button>
+            <input id="f-guests" name="guests" type="number" inputmode="numeric" min="1" max="2000" placeholder="—">
+            <button type="button" class="stepper-btn" data-step-by="1" aria-label="Sumar una persona">+</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="f-zone">Zona</label>
+          <input id="f-zone" name="zone" type="text" placeholder="Ej: Palermo" autocomplete="off">
+        </div>
+
+        <div class="field">
+          <label for="f-budget">Presupuesto total</label>
+          <div class="money">
+            <span class="money-sign" aria-hidden="true">$</span>
+            <input id="f-budget" name="budget" type="text" inputmode="numeric" placeholder="Ej: 700.000" autocomplete="off">
+          </div>
+        </div>
+
+        <div class="field field-wide">
+          <span class="label" id="needs-label">Necesidades</span>
+          <div class="needs" id="needs" role="group" aria-labelledby="needs-label"></div>
+          <div class="add-need">
+            <label for="f-need-extra" class="sr-only">Agregar otra necesidad</label>
+            <input id="f-need-extra" type="text" placeholder="Agregar otra necesidad…" autocomplete="off">
+            <button type="button" class="btn btn-ghost btn-sm" id="add-need-btn">Agregar</button>
+          </div>
+        </div>
+
+        <p class="form-error" id="details-error" role="alert" hidden></p>
+
+        <div class="actions">
+          <button type="button" class="btn btn-link" data-action="home">← Volver</button>
+          <button type="submit" class="btn btn-primary">Buscar propuestas <span aria-hidden="true">→</span></button>
+        </div>
+      </form>
+    </section>
+
+    <!-- PANTALLA 3: Propuestas -->
+    <section class="screen" id="screen-proposals" aria-labelledby="proposals-title" hidden>
+      <div class="section-head">
+        <p class="eyebrow">Paso 3 de 3</p>
+        <h2 id="proposals-title" class="display display-sm">Tres caminos para tu evento.</h2>
+        <p class="lead" id="proposals-summary"></p>
+      </div>
+
+      <div class="notice" role="note">
+        <span class="notice-badge">Demo</span>
+        <p>Estas propuestas son ilustrativas. Todavía no trabajamos con proveedores reales: precios y disponibilidad se confirman antes de reservar.</p>
+      </div>
+
+      <div class="loading" id="loading" aria-live="polite" hidden>
+        <span class="loader" aria-hidden="true"></span>
+        <p>Preparando tus propuestas…</p>
+      </div>
+
+      <div class="proposals" id="proposals"></div>
+
+      <div class="actions actions-end">
+        <button type="button" class="btn btn-link" data-action="details">← Ajustar detalles</button>
+        <button type="button" class="btn btn-ghost" data-action="home">Empezar de nuevo</button>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>LISTO · Versión demo. Las propuestas son de ejemplo y no representan proveedores, precios ni disponibilidad reales.</p>
+  </footer>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
