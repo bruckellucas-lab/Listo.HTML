@@ -13,8 +13,8 @@
 
 window.LISTO_CONFIG = {
   // Ejemplo: "https://abcdefghijklmno.supabase.co"
-  supabaseUrl: "PEGAR_ACA_PROJECT_URL",
+  supabaseUrl: "https://exofavwtifiqaeyvybpc.supabase.co/rest/v1/",
 
   // Ejemplo: "sb_publishable_xxxxxxxxxxxxxxxx"  (o la clave "anon public", que empieza con eyJ)
-  supabaseKey: "PEGAR_ACA_PUBLISHABLE_KEY"
+  supabaseKey: "sb_publishable_2UGAdeMi6O40JE1dM9p-jA_fq5gwnXf"
 };
