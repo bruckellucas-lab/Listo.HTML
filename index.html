@@ -3,147 +3,268 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>LISTO — Tu evento, resuelto</title>
-  <meta name="description" content="LISTO organiza tu evento de principio a fin. Contanos qué querés festejar y armamos las propuestas por vos.">
-  <meta name="theme-color" content="#F6F3EE">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231D1B18'/%3E%3Cpath d='M20 33l8 8 16-18' fill='none' stroke='%23F6F3EE' stroke-width='5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <title>LISTO</title>
+  <meta name="description" content="Tenés el plan. Nosotros hacemos el resto. Contanos qué querés hacer, cuánto querés gastar y dónde: LISTO lo convierte en opciones concretas.">
+  <meta name="theme-color" content="#141210">
+  <meta property="og:title" content="LISTO">
+  <meta property="og:description" content="Tenés el plan. Nosotros hacemos el resto.">
+  <meta property="og:image" content="https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1200&q=70">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23141210'/%3E%3Ctext x='32' y='47' text-anchor='middle' font-family='Impact,Arial Narrow,sans-serif' font-size='40' fill='%23EFE8DC'%3EL%3C/text%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://images.unsplash.com">
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
-<body>
+<body data-screen="intro">
   <header class="topbar">
-    <a href="#" class="brand" data-action="home" aria-label="LISTO, volver al inicio">LISTO<span class="brand-dot">.</span></a>
-    <ol class="steps" aria-label="Progreso">
-      <li class="step is-active" data-step="1"><span>01</span> Tu idea</li>
-      <li class="step" data-step="2"><span>02</span> Detalles</li>
-      <li class="step" data-step="3"><span>03</span> Propuestas</li>
-    </ol>
+    <a href="#" class="brand" data-action="home" aria-label="LISTO, volver al inicio">LISTO</a>
+    <nav class="nav" aria-label="Principal">
+      <a href="#como-funciona" class="nav-link nav-how" data-action="how">Cómo funciona</a>
+      <a href="#" class="nav-link" data-action="plans">Mis planes</a>
+      <a href="#" class="nav-link nav-cta" data-action="start">Empezar <span aria-hidden="true">→</span></a>
+    </nav>
   </header>
 
   <main id="app">
-    <!-- PANTALLA 1: Inicio -->
+    <!-- =====================================================
+         PANTALLA 1 · INICIO
+         ===================================================== -->
     <section class="screen is-visible" id="screen-intro" aria-labelledby="intro-title">
-      <div class="intro">
-        <p class="eyebrow">Concierge de eventos</p>
-        <h1 id="intro-title" class="display">Contanos qué querés celebrar.<br><em>Nosotros nos ocupamos del resto.</em></h1>
 
-        <form id="intro-form" class="composer" novalidate>
-          <label for="event-text" class="sr-only">Describí tu evento</label>
-          <textarea id="event-text" rows="5" placeholder="Por ejemplo: Quiero festejar mi cumpleaños para 20 personas en Palermo, tengo $700.000 y necesito lugar, comida y bebida."></textarea>
-          <div class="composer-footer">
-            <p class="hint" id="intro-hint">Escribilo como se lo contarías a un amigo.</p>
-            <button type="submit" class="btn btn-primary">Armar mi evento <span aria-hidden="true">→</span></button>
+      <div class="hero">
+        <figure class="hero-media photo" aria-hidden="true">
+          <img src="https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=2400&q=72"
+               srcset="https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=900&h=1500&q=70 900w,
+                       https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1600&q=72 1600w,
+                       https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=2400&q=72 2400w"
+               sizes="100vw" alt="" fetchpriority="high">
+        </figure>
+
+        <div class="hero-meta hero-meta-top">
+          <span>Buenos Aires</span>
+          <span>Est. 2026</span>
+          <span class="hide-sm">01 / 03</span>
+        </div>
+
+        <div class="hero-inner">
+          <h1 id="intro-title" class="hero-title">
+            <span class="line"><span>LISTO.</span></span>
+          </h1>
+          <div class="hero-row">
+            <p class="hero-sub">
+              <span class="line"><span>Tenés el plan.</span></span>
+              <span class="line"><span>Nosotros hacemos</span></span>
+              <span class="line"><span>el resto.</span></span>
+            </p>
+
+            <div class="hero-form">
+              <form id="intro-form" class="composer" novalidate>
+                <label for="event-text" class="composer-label">01 — Tu plan, en tus palabras</label>
+                <div class="composer-row">
+                  <textarea id="event-text" rows="1" placeholder="Contanos qué querés hacer…" aria-describedby="intro-hint"></textarea>
+                  <button type="submit" class="btn btn-light">Armar mi plan <span aria-hidden="true">→</span></button>
+                </div>
+                <p class="hint" id="intro-hint">Ej: “Cumpleaños para 20, Palermo, cena y tragos, hasta $700.000.”</p>
+              </form>
+
+              <div class="examples" aria-label="Ejemplos para empezar">
+                <span class="examples-label">Probá con</span>
+                <button type="button" class="chip-example" data-example="Quiero festejar mi cumpleaños para 20 personas en Palermo, tengo $700.000 y necesito lugar, comida y bebida.">Cumple en Palermo</button>
+                <button type="button" class="chip-example" data-example="Organizo un after office para 35 personas en Microcentro, presupuesto de 1,2 millones, necesitamos barra de tragos y música.">After office</button>
+                <button type="button" class="chip-example" data-example="Cena para 8 amigos en San Telmo, hasta $300 mil, lugar lindo con vino y buena comida.">Cena de amigos</button>
+              </div>
+            </div>
           </div>
-        </form>
+        </div>
 
-        <div class="examples" aria-label="Ejemplos para empezar">
-          <span class="examples-label">Probá con</span>
-          <button type="button" class="chip-example" data-example="Quiero festejar mi cumpleaños para 20 personas en Palermo, tengo $700.000 y necesito lugar, comida y bebida.">Cumpleaños en Palermo</button>
-          <button type="button" class="chip-example" data-example="Organizo un after office para 35 personas en Microcentro, presupuesto de 1,2 millones, necesitamos barra de tragos y música.">After office</button>
-          <button type="button" class="chip-example" data-example="Queremos hacer un baby shower para 15 invitadas en Belgrano con $400 mil, necesitamos decoración, comida dulce y torta.">Baby shower</button>
+        <div class="hero-meta hero-meta-bottom">
+          <span>Find your plan</span>
+          <span class="hide-sm">Dinner / Party / Experience</span>
+          <a href="#como-funciona" class="scroll-cue" data-action="how">Scroll <span aria-hidden="true">↓</span></a>
         </div>
       </div>
 
-      <ul class="pillars" aria-label="Cómo funciona">
-        <li><span class="pillar-num">I</span><h3>Nos contás</h3><p>En tus palabras, sin formularios eternos.</p></li>
-        <li><span class="pillar-num">II</span><h3>Lo ordenamos</h3><p>Interpretamos tu idea y la podés ajustar.</p></li>
-        <li><span class="pillar-num">III</span><h3>Elegís</h3><p>Te acercamos propuestas pensadas para vos.</p></li>
-      </ul>
+      <!-- Sección editorial -->
+      <div class="editorial" id="como-funciona">
+        <div class="editorial-grid">
+          <div class="editorial-text">
+            <p class="kicker" data-reveal>02 — Cómo funciona</p>
+            <h2 class="mega" data-reveal>
+              <span class="line"><span>Decilo.</span></span>
+              <span class="line"><span>LISTO</span></span>
+              <span class="line"><span>lo arma.</span></span>
+            </h2>
+            <div class="editorial-notes" data-reveal>
+              <p class="note-list">Una cena.<br>Un cumpleaños.<br>Una juntada.<br>Una noche que querés que salga bien.</p>
+              <p>Contanos qué querés hacer, cuánto querés gastar y dónde. LISTO convierte eso en opciones concretas.</p>
+            </div>
+          </div>
+
+          <figure class="editorial-photo photo" data-reveal>
+            <img src="https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=1400&q=72"
+                 srcset="https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=800&q=70 800w,
+                         https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=1400&q=72 1400w"
+                 sizes="(max-width: 860px) 100vw, 50vw"
+                 alt="Mesa servida en un restaurante con luz cálida" loading="lazy">
+            <figcaption><span>Fig. 01</span><span>La mesa</span></figcaption>
+          </figure>
+        </div>
+
+        <ol class="howto" aria-label="Pasos">
+          <li data-reveal><span class="howto-num">01</span><h3>Decilo</h3><p>En tus palabras. Qué, para cuántos, dónde y cuánto.</p></li>
+          <li data-reveal><span class="howto-num">02</span><h3>Ajustalo</h3><p>Te mostramos lo que entendimos. Tocás y cambiás lo que quieras.</p></li>
+          <li data-reveal><span class="howto-num">03</span><h3>Elegí</h3><p>Tres formas de hacerlo. Vos elegís la que va con vos.</p></li>
+        </ol>
+      </div>
+
+      <!-- Tira de fotos -->
+      <div class="strip">
+        <figure class="strip-item strip-a photo" data-reveal>
+          <img src="https://images.unsplash.com/photo-1470337458703-46ad1756a187?auto=format&fit=crop&w=1000&q=70" alt="Trago servido en una barra" loading="lazy">
+          <figcaption><span>Fig. 02</span><span>La barra</span></figcaption>
+        </figure>
+        <figure class="strip-item strip-b photo" data-reveal>
+          <img src="https://images.unsplash.com/photo-1528605248644-14dd04022da1?auto=format&fit=crop&w=1400&q=70" alt="Amigos brindando alrededor de una mesa" loading="lazy">
+          <figcaption><span>Fig. 03</span><span>La gente</span></figcaption>
+        </figure>
+        <figure class="strip-item strip-c photo" data-reveal>
+          <img src="https://images.unsplash.com/photo-1572116469696-31de0f17cc34?auto=format&fit=crop&w=1000&q=70" alt="Interior de un bar de noche" loading="lazy">
+          <figcaption><span>Fig. 04</span><span>La noche</span></figcaption>
+        </figure>
+      </div>
+
+      <div class="closing">
+        <p class="kicker" data-reveal>03 — Tu turno</p>
+        <h2 class="mega mega-center" data-reveal>
+          <span class="line"><span>¿Cuál es</span></span>
+          <span class="line"><span>el plan?</span></span>
+        </h2>
+        <button type="button" class="btn btn-dark" data-action="start" data-reveal>Empezar <span aria-hidden="true">→</span></button>
+      </div>
     </section>
 
-    <!-- PANTALLA 2: Detalles editables -->
+    <!-- =====================================================
+         PANTALLA 2 · ESTO ENTENDIMOS
+         ===================================================== -->
     <section class="screen" id="screen-details" aria-labelledby="details-title" hidden>
-      <div class="section-head">
-        <p class="eyebrow">Paso 2 de 3</p>
-        <h2 id="details-title" class="display display-sm">Esto es lo que entendimos.</h2>
-        <p class="lead">Revisá los detalles y ajustá lo que haga falta.</p>
+      <div class="details-layout">
+        <figure class="details-photo photo" aria-hidden="true">
+          <img src="https://images.unsplash.com/photo-1470337458703-46ad1756a187?auto=format&fit=crop&w=1400&q=72" alt="" loading="lazy">
+          <figcaption><span>02 / 03</span><span>Tu plan</span></figcaption>
+        </figure>
+
+        <div class="details-content">
+          <p class="kicker">02 / 03 — Tu plan</p>
+          <h2 id="details-title" class="mega mega-sm">
+            <span class="line"><span>Esto</span></span>
+            <span class="line"><span>entendimos.</span></span>
+          </h2>
+
+          <div class="quote">
+            <span class="quote-label">Lo que escribiste</span>
+            <p id="original-quote"></p>
+          </div>
+
+          <p class="edit-hint">Tocá cualquier dato para cambiarlo.</p>
+
+          <form id="details-form" class="sheet" novalidate>
+            <div class="row">
+              <label class="row-label" for="f-type">Plan</label>
+              <input id="f-type" class="row-input" name="type" type="text" list="type-options" placeholder="¿Qué festejás?" autocomplete="off">
+              <datalist id="type-options">
+                <option value="Cumpleaños"><option value="Cena"><option value="Juntada"><option value="After office">
+                <option value="Casamiento"><option value="Aniversario"><option value="Baby shower"><option value="Bautismo">
+                <option value="Despedida"><option value="Evento corporativo"><option value="Asado"><option value="Fiesta">
+              </datalist>
+            </div>
+
+            <div class="row">
+              <label class="row-label" for="f-guests">Personas</label>
+              <div class="row-value">
+                <input id="f-guests" class="row-input row-input-num" name="guests" type="number" inputmode="numeric" min="1" max="2000" placeholder="¿Cuántos?">
+                <span class="row-suffix" id="guests-suffix">personas</span>
+                <span class="stepper">
+                  <button type="button" class="stepper-btn" data-step-by="-1" aria-label="Restar una persona">−</button>
+                  <button type="button" class="stepper-btn" data-step-by="1" aria-label="Sumar una persona">+</button>
+                </span>
+              </div>
+            </div>
+
+            <div class="row">
+              <label class="row-label" for="f-zone">Zona</label>
+              <input id="f-zone" class="row-input" name="zone" type="text" placeholder="¿Dónde?" autocomplete="off">
+            </div>
+
+            <div class="row">
+              <label class="row-label" for="f-budget">Presupuesto</label>
+              <div class="row-value">
+                <span class="row-prefix" aria-hidden="true">Hasta $</span>
+                <input id="f-budget" class="row-input" name="budget" type="text" inputmode="numeric" placeholder="¿Cuánto?" autocomplete="off">
+              </div>
+            </div>
+
+            <div class="row row-needs">
+              <span class="row-label" id="needs-label">Necesitás</span>
+              <div class="needs" id="needs" role="group" aria-labelledby="needs-label"></div>
+              <div class="add-need">
+                <label for="f-need-extra" class="sr-only">Agregar otra necesidad</label>
+                <input id="f-need-extra" type="text" placeholder="+ Agregar algo más" autocomplete="off">
+                <button type="button" class="btn-text" id="add-need-btn">Agregar</button>
+              </div>
+            </div>
+
+            <p class="form-error" id="details-error" role="alert" hidden></p>
+
+            <div class="actions">
+              <button type="submit" class="btn btn-light">Buscar opciones <span aria-hidden="true">→</span></button>
+              <button type="button" class="btn-text" data-action="home">← Volver</button>
+            </div>
+          </form>
+        </div>
       </div>
-
-      <blockquote class="quote" id="original-quote"></blockquote>
-
-      <form id="details-form" class="details" novalidate>
-        <div class="field">
-          <label for="f-type">Tipo de evento</label>
-          <input id="f-type" name="type" type="text" list="type-options" placeholder="Ej: Cumpleaños" autocomplete="off">
-          <datalist id="type-options">
-            <option value="Cumpleaños"><option value="Casamiento"><option value="Aniversario">
-            <option value="Baby shower"><option value="Bautismo"><option value="Despedida">
-            <option value="After office"><option value="Evento corporativo"><option value="Cena"><option value="Reunión"><option value="Fiesta">
-          </datalist>
-        </div>
-
-        <div class="field">
-          <label for="f-guests">Cantidad de personas</label>
-          <div class="stepper">
-            <button type="button" class="stepper-btn" data-step-by="-1" aria-label="Restar una persona">−</button>
-            <input id="f-guests" name="guests" type="number" inputmode="numeric" min="1" max="2000" placeholder="—">
-            <button type="button" class="stepper-btn" data-step-by="1" aria-label="Sumar una persona">+</button>
-          </div>
-        </div>
-
-        <div class="field">
-          <label for="f-zone">Zona</label>
-          <input id="f-zone" name="zone" type="text" placeholder="Ej: Palermo" autocomplete="off">
-        </div>
-
-        <div class="field">
-          <label for="f-budget">Presupuesto total</label>
-          <div class="money">
-            <span class="money-sign" aria-hidden="true">$</span>
-            <input id="f-budget" name="budget" type="text" inputmode="numeric" placeholder="Ej: 700.000" autocomplete="off">
-          </div>
-        </div>
-
-        <div class="field field-wide">
-          <span class="label" id="needs-label">Necesidades</span>
-          <div class="needs" id="needs" role="group" aria-labelledby="needs-label"></div>
-          <div class="add-need">
-            <label for="f-need-extra" class="sr-only">Agregar otra necesidad</label>
-            <input id="f-need-extra" type="text" placeholder="Agregar otra necesidad…" autocomplete="off">
-            <button type="button" class="btn btn-ghost btn-sm" id="add-need-btn">Agregar</button>
-          </div>
-        </div>
-
-        <p class="form-error" id="details-error" role="alert" hidden></p>
-
-        <div class="actions">
-          <button type="button" class="btn btn-link" data-action="home">← Volver</button>
-          <button type="submit" class="btn btn-primary">Buscar propuestas <span aria-hidden="true">→</span></button>
-        </div>
-      </form>
     </section>
 
-    <!-- PANTALLA 3: Propuestas -->
+    <!-- =====================================================
+         PANTALLA 3 · PROPUESTAS
+         ===================================================== -->
     <section class="screen" id="screen-proposals" aria-labelledby="proposals-title" hidden>
-      <div class="section-head">
-        <p class="eyebrow">Paso 3 de 3</p>
-        <h2 id="proposals-title" class="display display-sm">Tres caminos para tu evento.</h2>
-        <p class="lead" id="proposals-summary"></p>
-      </div>
-
-      <div class="notice" role="note">
-        <span class="notice-badge">Demo</span>
-        <p>Estas propuestas son ilustrativas. Todavía no trabajamos con proveedores reales: precios y disponibilidad se confirman antes de reservar.</p>
+      <div class="proposals-head">
+        <div class="proposals-head-top">
+          <p class="kicker">03 / 03 — Opciones</p>
+          <p class="kicker kicker-right hide-sm">Dinner / Party / Experience</p>
+        </div>
+        <h2 id="proposals-title" class="mega">
+          <span class="line"><span>3 formas</span></span>
+          <span class="line"><span>de hacerlo.</span></span>
+        </h2>
+        <div class="proposals-sub">
+          <p class="summary" id="proposals-summary"></p>
+          <p class="notice" role="note"><span class="notice-badge">Demo</span> Opciones ilustrativas. Todavía no trabajamos con proveedores reales: precio y disponibilidad se confirman antes de reservar.</p>
+        </div>
       </div>
 
       <div class="loading" id="loading" aria-live="polite" hidden>
-        <span class="loader" aria-hidden="true"></span>
-        <p>Preparando tus propuestas…</p>
+        <p>Armando tus opciones</p>
+        <span class="loading-bar" aria-hidden="true"></span>
       </div>
 
       <div class="proposals" id="proposals"></div>
 
-      <div class="actions actions-end">
-        <button type="button" class="btn btn-link" data-action="details">← Ajustar detalles</button>
-        <button type="button" class="btn btn-ghost" data-action="home">Empezar de nuevo</button>
+      <div class="proposals-actions">
+        <button type="button" class="btn-text" data-action="details">← Ajustar el plan</button>
+        <button type="button" class="btn btn-dark" data-action="home">Empezar de nuevo</button>
       </div>
     </section>
   </main>
 
   <footer class="footer">
-    <p>LISTO · Versión demo. Las propuestas son de ejemplo y no representan proveedores, precios ni disponibilidad reales.</p>
+    <div class="footer-brand">LISTO</div>
+    <div class="footer-meta">
+      <span>Buenos Aires — Est. 2026</span>
+      <span>Versión demo. Las opciones son de ejemplo: no representan proveedores, precios ni disponibilidad reales.</span>
+      <span>Fotos: Unsplash</span>
+    </div>
   </footer>
 
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>

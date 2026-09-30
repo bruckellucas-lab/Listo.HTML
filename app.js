@@ -1,15 +1,18 @@
 /* =========================================================
    LISTO — Lógica de la demo
    1) Lee el texto libre del usuario y detecta los datos.
-   2) Muestra los datos para que se puedan editar.
-   3) Genera 3 propuestas DEMO (sin proveedores ni precios reales).
+   2) Muestra lo que entendimos, editable con un toque.
+   3) Genera 3 opciones DEMO (sin proveedores, precios ni
+      disponibilidad reales).
    ========================================================= */
 (function () {
   "use strict";
 
+  document.documentElement.classList.add("js");
+
   /* ---------- Catálogos ---------- */
 
-  // Tipos de evento: el primero que coincida gana, por eso el orden importa.
+  // Tipos de plan: el primero que coincida gana, por eso el orden importa.
   var EVENT_TYPES = [
     { label: "Baby shower", words: ["baby shower", "babyshower"] },
     { label: "Despedida de soltero/a", words: ["despedida de soltero", "despedida de soltera"] },
@@ -24,21 +27,24 @@
     { label: "Evento corporativo", words: ["corporativo", "empresa", "empresarial", "lanzamiento", "fin de ano laboral", "equipo de trabajo"] },
     { label: "Cumpleaños", words: ["cumpleanos", "cumple", "cumplo"] },
     { label: "Asado", words: ["asado"] },
-    { label: "Cena", words: ["cena"] },
-    { label: "Reunión", words: ["reunion", "juntada", "encuentro"] },
+    { label: "Cena", words: ["cena", "cenar"] },
+    { label: "Juntada", words: ["juntada", "juntarnos", "encuentro"] },
+    { label: "Reunión", words: ["reunion"] },
     { label: "Fiesta", words: ["fiesta", "festejo", "festejar", "celebrar", "celebracion"] }
   ];
 
-  // Necesidades que LISTO reconoce.
+  // Necesidades que LISTO reconoce. "alt" cambia la etiqueta según cómo lo dijo el usuario.
   var NEEDS = [
     { id: "lugar", label: "Lugar", words: ["lugar", "salon", "espacio", "quinta", "terraza", "local", "venue"] },
-    { id: "comida", label: "Comida", words: ["comida", "catering", "picada", "lunch", "finger food", "menu", "cena", "almuerzo", "comer"] },
-    { id: "bebida", label: "Bebida", words: ["bebida", "tragos", "barra", "vino", "cerveza", "drinks", "tomar", "brindis"] },
-    { id: "musica", label: "Música / DJ", words: ["musica", "dj", "banda", "sonido"] },
-    { id: "deco", label: "Decoración", words: ["decoracion", "deco", "ambientacion", "flores", "globos"] },
-    { id: "foto", label: "Fotografía", words: ["fotografo", "fotografia", "fotos", "video"] },
-    { id: "torta", label: "Torta / mesa dulce", words: ["torta", "pastel", "mesa dulce", "postre"] },
-    { id: "staff", label: "Mozos / staff", words: ["mozos", "mozo", "personal", "meseros", "staff", "servicio"] },
+    { id: "comida", label: "Comida", words: ["comida", "catering", "picada", "lunch", "finger food", "menu", "cena", "almuerzo", "comer"],
+      alt: [{ label: "Cena", words: ["cena", "cenar"] }] },
+    { id: "bebida", label: "Bebida", words: ["bebida", "bebidas", "tragos", "barra", "vino", "cerveza", "drinks", "tomar", "brindis"],
+      alt: [{ label: "Tragos", words: ["tragos", "barra", "drinks"] }] },
+    { id: "musica", label: "Música", words: ["musica", "dj", "banda", "sonido"] },
+    { id: "deco", label: "Deco", words: ["decoracion", "deco", "ambientacion", "flores", "globos"] },
+    { id: "foto", label: "Fotos", words: ["fotografo", "fotografia", "fotos", "video"] },
+    { id: "torta", label: "Torta", words: ["torta", "pastel", "mesa dulce", "postre"] },
+    { id: "staff", label: "Staff", words: ["mozos", "mozo", "personal", "meseros", "staff", "servicio"] },
     { id: "animacion", label: "Animación", words: ["animacion", "animador", "show", "entretenimiento"] }
   ];
 
@@ -87,6 +93,9 @@
   function digitsOnly(str) { return String(str || "").replace(/\D/g, ""); }
 
   function $(sel) { return document.querySelector(sel); }
+  function $all(sel) { return Array.prototype.slice.call(document.querySelectorAll(sel)); }
+
+  var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   /* ---------- Interpretación del texto ---------- */
 
@@ -138,6 +147,17 @@
     }).map(function (need) { return need.id; });
   }
 
+  // Etiquetas que respetan cómo lo dijo el usuario ("cena" en vez de "comida", "tragos" en vez de "bebida").
+  function detectNeedLabels(t) {
+    var labels = {};
+    NEEDS.forEach(function (need) {
+      (need.alt || []).forEach(function (alt) {
+        if (!labels[need.id] && alt.words.some(function (w) { return hasWord(t, w); })) labels[need.id] = alt.label;
+      });
+    });
+    return labels;
+  }
+
   function interpret(text) {
     var t = normalize(text);
     return {
@@ -146,39 +166,123 @@
       zone: detectZone(text, t),
       budget: detectBudget(t),
       needs: detectNeeds(t),
+      needLabels: detectNeedLabels(t),
       customNeeds: []
     };
   }
 
-  /* ---------- Estado ---------- */
+  function needLabel(need) {
+    return (state.data && state.data.needLabels && state.data.needLabels[need.id]) || need.label;
+  }
+
+  /* ---------- Estado (y último plan guardado en este navegador) ---------- */
+
+  var STORAGE_KEY = "listo:last-plan";
 
   var state = {
     text: "",
     data: null,
-    selected: null
+    selected: null,
+    hasProposals: false
   };
+
+  function savePlan() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ text: state.text, data: state.data, selected: state.selected }));
+    } catch (e) { /* sin almacenamiento: no pasa nada */ }
+  }
+
+  function loadPlan() {
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return false;
+      var saved = JSON.parse(raw);
+      if (!saved || !saved.data || !Array.isArray(saved.data.needs)) return false;
+      state.text = saved.text || "";
+      state.data = saved.data;
+      state.data.customNeeds = state.data.customNeeds || [];
+      state.data.needLabels = state.data.needLabels || {};
+      state.selected = typeof saved.selected === "number" ? saved.selected : null;
+      return true;
+    } catch (e) { return false; }
+  }
+
+  /* ---------- Fotos: aparecen suavemente al cargar ---------- */
+
+  function watchImage(img) {
+    var fig = img.closest(".photo");
+    function done() { img.classList.add("is-loaded"); }
+    function fail() { if (fig) fig.classList.add("img-failed"); }
+    if (img.complete) {
+      if (img.naturalWidth) done(); else fail();
+    } else {
+      img.addEventListener("load", done, { once: true });
+      img.addEventListener("error", fail, { once: true });
+    }
+  }
+  $all(".photo img").forEach(watchImage);
+
+  /* ---------- Aparición al hacer scroll ---------- */
+
+  var revealObserver = null;
+  if ("IntersectionObserver" in window && !reduceMotion) {
+    revealObserver = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) {
+          entry.target.classList.add("in-view");
+          revealObserver.unobserve(entry.target);
+        }
+      });
+    }, { rootMargin: "0px 0px -8% 0px", threshold: 0.08 });
+    $all("[data-reveal]").forEach(function (el) { revealObserver.observe(el); });
+  } else {
+    $all("[data-reveal]").forEach(function (el) { el.classList.add("in-view"); });
+  }
 
   /* ---------- Navegación entre pantallas ---------- */
 
-  var SCREENS = { intro: 1, details: 2, proposals: 3 };
+  var toastEl = $("#toast");
+  var SCREENS = ["intro", "details", "proposals"];
+  var ENTER_TARGET = { intro: ".hero", details: ".details-content", proposals: ".proposals-head" };
+  var current = "intro";
+  var switching = null;
 
-  function show(name) {
-    Object.keys(SCREENS).forEach(function (key) {
-      var el = document.getElementById("screen-" + key);
-      var active = key === name;
-      el.hidden = !active;
-      el.classList.toggle("is-visible", active);
+  function enter(name) {
+    var target = document.querySelector("#screen-" + name + " " + ENTER_TARGET[name]);
+    if (!target) return;
+    target.classList.remove("is-in");
+    // Doble frame para que el navegador registre el estado inicial y anime.
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () { target.classList.add("is-in"); });
     });
-    var current = SCREENS[name];
-    document.querySelectorAll(".step").forEach(function (step) {
-      var n = parseInt(step.getAttribute("data-step"), 10);
-      step.classList.toggle("is-active", n === current);
-      step.classList.toggle("is-done", n < current);
-      if (n === current) step.setAttribute("aria-current", "step");
-      else step.removeAttribute("aria-current");
-    });
-    window.scrollTo({ top: 0, behavior: "smooth" });
   }
+
+  function show(name, after) {
+    var from = document.getElementById("screen-" + current);
+    var to = document.getElementById("screen-" + name);
+
+    function swap() {
+      SCREENS.forEach(function (key) {
+        var el = document.getElementById("screen-" + key);
+        el.hidden = key !== name;
+        el.classList.remove("is-leaving", "is-entering", "is-visible");
+      });
+      to.classList.add("is-visible", "is-entering");
+      document.body.setAttribute("data-screen", name);
+      toastEl.hidden = true;
+      current = name;
+      window.scrollTo(0, 0);
+      enter(name);
+      if (after) after();
+    }
+
+    clearTimeout(switching);
+    if (from === to || reduceMotion) { swap(); return; }
+    from.classList.add("is-leaving");
+    switching = setTimeout(swap, 380);
+  }
+
+  enter("intro");
 
   /* ---------- Pantalla 1 ---------- */
 
@@ -193,20 +297,27 @@
     hint.textContent = HINT_DEFAULT;
   }
 
-  textarea.addEventListener("input", clearIntroError);
+  function autoGrow() {
+    textarea.style.height = "auto";
+    textarea.style.height = Math.min(textarea.scrollHeight, 180) + "px";
+  }
+
+  textarea.addEventListener("input", function () { clearIntroError(); autoGrow(); });
 
   // Enter envía; Shift+Enter hace salto de línea.
   textarea.addEventListener("keydown", function (e) {
     if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
       e.preventDefault();
-      composer.requestSubmit ? composer.requestSubmit() : composer.dispatchEvent(new Event("submit", { cancelable: true }));
+      if (composer.requestSubmit) composer.requestSubmit();
+      else composer.dispatchEvent(new Event("submit", { cancelable: true }));
     }
   });
 
-  document.querySelectorAll(".chip-example").forEach(function (chip) {
+  $all(".chip-example").forEach(function (chip) {
     chip.addEventListener("click", function () {
       textarea.value = chip.getAttribute("data-example");
       clearIntroError();
+      autoGrow();
       textarea.focus();
     });
   });
@@ -217,17 +328,19 @@
     if (text.length < 8) {
       composer.classList.add("has-error");
       hint.classList.add("is-error");
-      hint.textContent = "Contanos un poco más: qué festejás, para cuántos y dónde.";
+      hint.textContent = "Contanos un poco más: qué querés hacer, para cuántos y dónde.";
       textarea.focus();
       return;
     }
     state.text = text;
     state.data = interpret(text);
+    state.selected = null;
+    state.hasProposals = false;
     fillDetails();
     show("details");
   });
 
-  /* ---------- Pantalla 2 ---------- */
+  /* ---------- Pantalla 2: esto entendimos ---------- */
 
   var fType = $("#f-type");
   var fGuests = $("#f-guests");
@@ -236,9 +349,15 @@
   var needsBox = $("#needs");
   var fNeedExtra = $("#f-need-extra");
   var detailsError = $("#details-error");
+  var guestsSuffix = $("#guests-suffix");
 
-  function markEmpty(input) {
-    input.classList.toggle("is-empty", !input.value.trim());
+  // El número de personas ocupa sólo el ancho que necesita, así se lee "20 PERSONAS".
+  function sizeGuests() {
+    var len = fGuests.value ? String(fGuests.value).length : 7;
+    fGuests.style.width = (len + 0.4) + "ch";
+    var n = parseInt(fGuests.value, 10);
+    guestsSuffix.textContent = n === 1 ? "persona" : "personas";
+    guestsSuffix.hidden = !fGuests.value;
   }
 
   function fillDetails() {
@@ -248,8 +367,8 @@
     fGuests.value = d.guests || "";
     fZone.value = d.zone;
     fBudget.value = d.budget ? d.budget.toLocaleString("es-AR") : "";
+    sizeGuests();
     renderNeeds();
-    [fType, fGuests, fZone, fBudget].forEach(markEmpty);
     detailsError.hidden = true;
   }
 
@@ -257,7 +376,7 @@
     var d = state.data;
     needsBox.innerHTML = "";
     NEEDS.forEach(function (need) {
-      needsBox.appendChild(makeNeedChip(need.label, d.needs.indexOf(need.id) !== -1, function (on) {
+      needsBox.appendChild(makeNeedChip(needLabel(need), d.needs.indexOf(need.id) !== -1, function (on) {
         var i = d.needs.indexOf(need.id);
         if (on && i === -1) d.needs.push(need.id);
         if (!on && i !== -1) d.needs.splice(i, 1);
@@ -288,7 +407,7 @@
     if (!label) { fNeedExtra.focus(); return; }
     label = label.charAt(0).toUpperCase() + label.slice(1);
     var exists = state.data.customNeeds.some(function (c) { return normalize(c.label) === normalize(label); }) ||
-      NEEDS.some(function (n) { return normalize(n.label) === normalize(label); });
+      NEEDS.some(function (n) { return normalize(needLabel(n)) === normalize(label); });
     if (!exists) state.data.customNeeds.push({ label: label, on: true });
     fNeedExtra.value = "";
     renderNeeds();
@@ -300,28 +419,38 @@
     if (e.key === "Enter") { e.preventDefault(); addCustomNeed(); }
   });
 
-  document.querySelectorAll(".stepper-btn").forEach(function (btn) {
+  $all(".stepper-btn").forEach(function (btn) {
     btn.addEventListener("click", function () {
       var delta = parseInt(btn.getAttribute("data-step-by"), 10);
-      var current = parseInt(fGuests.value, 10) || 0;
-      fGuests.value = Math.min(2000, Math.max(1, current + delta));
-      markEmpty(fGuests);
+      var value = parseInt(fGuests.value, 10) || 0;
+      fGuests.value = Math.min(2000, Math.max(1, value + delta));
+      sizeGuests();
     });
+  });
+
+  fGuests.addEventListener("input", function () {
+    var digits = digitsOnly(fGuests.value).slice(0, 4);
+    if (fGuests.value !== digits) fGuests.value = digits;
+    sizeGuests();
   });
 
   // Formatea el presupuesto con puntos de miles mientras se escribe.
   fBudget.addEventListener("input", function () {
     var digits = digitsOnly(fBudget.value).slice(0, 12);
     fBudget.value = digits ? parseInt(digits, 10).toLocaleString("es-AR") : "";
-    markEmpty(fBudget);
   });
 
-  [fType, fGuests, fZone].forEach(function (input) {
-    input.addEventListener("input", function () { markEmpty(input); });
+  // Enter en un dato pasa al siguiente, como en una revista que se completa sola.
+  [fType, fGuests, fZone, fBudget].forEach(function (input, i, list) {
+    input.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        if (list[i + 1]) list[i + 1].focus(); else input.blur();
+      }
+    });
   });
 
-  $("#details-form").addEventListener("submit", function (e) {
-    e.preventDefault();
+  function readDetails() {
     var d = state.data;
     d.type = fType.value.trim();
     var g = parseInt(fGuests.value, 10);
@@ -329,102 +458,87 @@
     d.zone = fZone.value.trim();
     var b = parseInt(digitsOnly(fBudget.value), 10);
     d.budget = b > 0 ? b : null;
+  }
 
-    var activeNeeds = getActiveNeeds();
-    if (!activeNeeds.length) {
-      detailsError.textContent = "Elegí al menos una necesidad para poder armar propuestas.";
+  $("#details-form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    readDetails();
+    if (!getActiveNeeds().length) {
+      detailsError.textContent = "Elegí al menos una cosa que necesites para poder armar opciones.";
       detailsError.hidden = false;
       return;
     }
     detailsError.hidden = true;
     state.selected = null;
-    show("proposals");
-    renderProposals();
+    show("proposals", renderProposals);
   });
 
   function getActiveNeeds() {
     var d = state.data;
     var list = NEEDS.filter(function (n) { return d.needs.indexOf(n.id) !== -1; })
-      .map(function (n) { return { id: n.id, label: n.label }; });
+      .map(function (n) { return { id: n.id, label: needLabel(n) }; });
     d.customNeeds.forEach(function (c) { if (c.on) list.push({ id: "custom", label: c.label }); });
     return list;
   }
 
-  /* ---------- Pantalla 3: propuestas DEMO ---------- */
+  /* ---------- Pantalla 3: opciones DEMO ---------- */
 
-  // Descripciones genéricas por necesidad para cada estilo de propuesta.
+  // Descripciones genéricas por necesidad para cada opción.
   // Nada de nombres de proveedores ni precios: son ideas de ejemplo.
   var NEED_DETAILS = {
-    lugar:     ["Espacio privado y cómodo", "Terraza o patio con ambientación", "Salón exclusivo con servicio completo"],
-    comida:    ["Picada y finger food", "Catering de pasos informal", "Menú de autor servido"],
-    bebida:    ["Bebidas sin alcohol, cerveza y vino", "Barra con tragos clásicos", "Barra premium con bartender"],
-    musica:    ["Playlist curada y sonido", "DJ con set a medida", "DJ y show en vivo"],
-    deco:      ["Detalles simples y cálidos", "Ambientación temática", "Diseño floral y de iluminación"],
-    foto:      ["Cobertura en momentos clave", "Fotógrafo durante el evento", "Foto y video profesional"],
-    torta:     ["Torta clásica", "Torta y mesa dulce", "Mesa dulce de autor"],
-    staff:     ["Asistencia básica", "Mozos durante todo el evento", "Equipo completo de servicio"],
-    animacion: ["Juegos y dinámicas", "Animador profesional", "Show sorpresa"],
+    lugar:     ["Espacio reservado, íntimo", "Barra o terraza con ambiente", "Salón con una mesa larga"],
+    comida:    ["Menú de pasos para compartir", "Finger food y platos de barra", "Cena servida al centro de la mesa"],
+    bebida:    ["Vinos para acompañar la cena", "Barra de tragos toda la noche", "Vino, cerveza y un trago de bienvenida"],
+    musica:    ["Playlist curada, volumen de charla", "DJ con set a medida", "Música en vivo o playlist propia"],
+    deco:      ["Velas y detalles simples", "Luces cálidas y ambientación", "Centros de mesa y guirnaldas de luz"],
+    foto:      ["Fotos en momentos clave", "Fotógrafo durante la noche", "Foto y video de la mesa"],
+    torta:     ["Torta clásica", "Torta y mesa dulce", "Postre para compartir"],
+    staff:     ["Atención de sala", "Bartender y staff de barra", "Mozos durante toda la cena"],
+    animacion: ["Dinámicas simples", "Show sorpresa", "Animación a medida"],
     custom:    ["Opción esencial", "Opción recomendada", "Opción especial"]
   };
 
+  var UNSPLASH = "https://images.unsplash.com/photo-";
+
   var STYLES = [
     {
-      tag: "Esencial",
+      title: "Cena íntima",
       kicker: "Simple y bien resuelto",
-      title: "Íntima",
-      desc: "Lo importante, sin excesos. Un encuentro cálido para disfrutar con tu gente.",
+      desc: "Pocas personas, buena mesa, luz baja. Lo importante, sin excesos.",
       price: "Cotización requerida",
-      palette: ["#E9E1D3", "#D8C8AE", "#B89B72", "#F6F1E8"]
+      photo: "1559339352-11d035aa65de",
+      alt: "Salón de restaurante con luz cálida"
     },
     {
-      tag: "Recomendada",
-      kicker: "El equilibrio justo",
-      title: "Equilibrada",
-      desc: "Una propuesta completa y armoniosa, pensada para que no tengas que ocuparte de nada.",
+      title: "Noche abierta",
+      kicker: "Barra, música y gente",
+      desc: "Un plan que arranca con un trago y termina tarde. Para moverse y encontrarse.",
       price: "Precio y disponibilidad a confirmar",
-      palette: ["#DCE0D6", "#B7BFAC", "#6F7B63", "#F2F3EE"]
+      photo: "1514933651103-005eec06c04b",
+      alt: "Barra de noche con luces ámbar"
     },
     {
-      tag: "Experiencia",
-      kicker: "Para que se recuerde",
-      title: "Memorable",
-      desc: "Cada detalle cuidado. Una experiencia que se siente especial de principio a fin.",
+      title: "Mesa larga",
+      kicker: "Todos en la misma mesa",
+      desc: "Una sola mesa, platos al centro y guirnaldas de luz. La cena que se comparte.",
       price: "Cotización requerida",
-      palette: ["#2A2724", "#4A423A", "#B08D5B", "#EADFCB"]
+      photo: "1555396273-367ea4eb4db5",
+      alt: "Mesas largas con guirnaldas de luces de noche"
     }
   ];
 
-  // Ilustraciones abstractas generadas con SVG (sin fotos de terceros).
-  function visual(index, p) {
-    var shapes = [
-      // Arco + sol
-      '<rect width="400" height="250" fill="' + p[0] + '"/>' +
-      '<circle cx="290" cy="92" r="46" fill="' + p[2] + '" opacity=".85"/>' +
-      '<path d="M60 250V150a80 80 0 0 1 160 0v100z" fill="' + p[1] + '"/>' +
-      '<path d="M92 250V156a48 48 0 0 1 96 0v94z" fill="' + p[3] + '"/>' +
-      '<line x1="0" y1="232" x2="400" y2="232" stroke="' + p[2] + '" stroke-width="1" opacity=".5"/>',
-      // Mesa larga con velas
-      '<rect width="400" height="250" fill="' + p[0] + '"/>' +
-      '<rect x="0" y="165" width="400" height="85" fill="' + p[1] + '"/>' +
-      '<rect x="40" y="150" width="320" height="16" rx="8" fill="' + p[2] + '"/>' +
-      '<g fill="' + p[3] + '">' +
-        '<rect x="110" y="96" width="10" height="54" rx="3"/><rect x="170" y="80" width="10" height="70" rx="3"/>' +
-        '<rect x="230" y="88" width="10" height="62" rx="3"/><rect x="290" y="100" width="10" height="50" rx="3"/>' +
-      '</g>' +
-      '<g fill="#E8B96A"><ellipse cx="115" cy="88" rx="4" ry="7"/><ellipse cx="175" cy="72" rx="4" ry="7"/>' +
-      '<ellipse cx="235" cy="80" rx="4" ry="7"/><ellipse cx="295" cy="92" rx="4" ry="7"/></g>',
-      // Noche con guirnalda de luces
-      '<rect width="400" height="250" fill="' + p[0] + '"/>' +
-      '<circle cx="320" cy="70" r="28" fill="' + p[3] + '" opacity=".9"/>' +
-      '<circle cx="332" cy="62" r="26" fill="' + p[0] + '"/>' +
-      '<path d="M0 60 Q100 130 200 70 T400 80" fill="none" stroke="' + p[2] + '" stroke-width="1.2" opacity=".7"/>' +
-      [[30,78],[70,98],[110,108],[150,100],[190,78],[240,62],[290,70],[340,82],[380,82]].map(function (c) {
-        return '<circle cx="' + c[0] + '" cy="' + c[1] + '" r="4" fill="#E8B96A"/><circle cx="' + c[0] + '" cy="' + c[1] + '" r="10" fill="#E8B96A" opacity=".15"/>';
-      }).join("") +
-      '<path d="M0 250V190l60-26 70 18 80-34 90 30 100-22v94z" fill="' + p[1] + '"/>' +
-      '<path d="M0 250v-30l90-14 110 16 90-12 110 10v30z" fill="' + p[2] + '" opacity=".35"/>'
-    ];
-    return '<svg viewBox="0 0 400 250" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">' + shapes[index] + '</svg>';
+  function photoURL(id, w) {
+    return UNSPLASH + id + "?auto=format&fit=crop&w=" + w + "&h=" + Math.round(w * 1.25) + "&q=72";
+  }
+
+  function renderSummary() {
+    var d = state.data;
+    var parts = [];
+    parts.push(d.type || "Tu plan");
+    if (d.guests) parts.push(d.guests + (d.guests === 1 ? " persona" : " personas"));
+    if (d.zone) parts.push(d.zone);
+    if (d.budget) parts.push("Hasta " + formatMoney(d.budget));
+    $("#proposals-summary").textContent = parts.join("  —  ");
   }
 
   function renderProposals() {
@@ -433,80 +547,138 @@
     var box = $("#proposals");
     var loading = $("#loading");
 
-    var parts = [];
-    parts.push(d.type || "Tu evento");
-    if (d.guests) parts.push(d.guests + (d.guests === 1 ? " persona" : " personas"));
-    if (d.zone) parts.push(d.zone);
-    if (d.budget) parts.push("presupuesto " + formatMoney(d.budget));
-    $("#proposals-summary").textContent = parts.join(" · ");
-
+    renderSummary();
     box.innerHTML = "";
     loading.hidden = false;
 
-    // Pequeña espera para que se sienta como un concierge trabajando.
+    // Una pausa corta: se siente como alguien armando el plan.
     setTimeout(function () {
       loading.hidden = true;
       box.innerHTML = STYLES.map(function (style, i) {
-        var items = needs.map(function (n) {
+        var num = "0" + (i + 1);
+        var names = needs.map(function (n) { return "<li>" + escapeHTML(n.label) + "</li>"; }).join("");
+        var details = needs.map(function (n) {
           var detail = (NEED_DETAILS[n.id] || NEED_DETAILS.custom)[i];
-          if (n.id === "lugar" && d.zone) detail += " en " + d.zone;
-          return '<li><span class="item-name">' + escapeHTML(n.label) + '</span>' +
-            '<span class="item-detail">' + escapeHTML(detail) + '</span></li>';
+          return "<li><span>" + escapeHTML(n.label) + "</span><span>" + escapeHTML(detail) + "</span></li>";
         }).join("");
 
-        return '' +
+        return "" +
           '<article class="card" data-index="' + i + '">' +
-            '<div class="card-visual">' + visual(i, style.palette) +
-              '<span class="card-tag">' + style.tag + '</span></div>' +
+            '<figure class="card-photo photo">' +
+              '<img src="' + photoURL(style.photo, 900) + '" srcset="' + photoURL(style.photo, 600) + ' 600w, ' + photoURL(style.photo, 900) + ' 900w, ' + photoURL(style.photo, 1200) + ' 1200w" sizes="(max-width: 720px) 100vw, (max-width: 1024px) 50vw, 33vw" alt="' + style.alt + '" loading="lazy">' +
+              '<span class="card-chosen">Elegido</span>' +
+              '<figcaption><span>Fig. ' + num + '</span><span>Demo</span></figcaption>' +
+            '</figure>' +
             '<div class="card-body">' +
-              '<p class="card-kicker">' + style.kicker + '</p>' +
+              '<div class="card-top"><span>' + num + '</span><span>' + style.kicker + '</span></div>' +
               '<h3 class="card-title">' + style.title + '</h3>' +
+              '<p class="card-zone">' + escapeHTML(d.zone || "Zona a definir") + '</p>' +
               '<p class="card-desc">' + style.desc + '</p>' +
-              '<ul class="card-list">' + items + '</ul>' +
-              '<div class="card-price"><small>Precio estimado</small><strong>' + style.price + '</strong></div>' +
-              '<button type="button" class="btn btn-ghost" data-choose="' + i + '">Me interesa</button>' +
+              '<ul class="card-needs">' + names + '</ul>' +
+              '<p class="card-price">' + style.price + '</p>' +
+              '<div class="card-more" id="card-more-' + i + '">' +
+                '<div class="card-more-inner">' +
+                  '<ul class="card-detail">' + details + '</ul>' +
+                  '<p class="card-more-note">Ideas de ejemplo. Precio y disponibilidad a confirmar antes de reservar.</p>' +
+                  '<button type="button" class="btn btn-dark card-choose" data-choose="' + i + '">Elegir este plan</button>' +
+                '</div>' +
+              '</div>' +
+              '<button type="button" class="card-cta" data-open="' + i + '" aria-expanded="false" aria-controls="card-more-' + i + '">Ver plan <span aria-hidden="true">→</span></button>' +
             '</div>' +
           '</article>';
       }).join("");
-    }, 900);
+
+      $all("#proposals .photo img").forEach(watchImage);
+      state.hasProposals = true;
+      if (state.selected !== null) markSelected(state.selected);
+      savePlan();
+    }, reduceMotion ? 0 : 1000);
   }
 
-  $("#proposals").addEventListener("click", function (e) {
-    var btn = e.target.closest("[data-choose]");
-    if (!btn) return;
-    var i = parseInt(btn.getAttribute("data-choose"), 10);
-    state.selected = i;
-    document.querySelectorAll(".card").forEach(function (card, idx) {
+  function markSelected(i) {
+    $all(".card").forEach(function (card, idx) {
       var on = idx === i;
       card.classList.toggle("is-selected", on);
       var b = card.querySelector("[data-choose]");
-      b.textContent = on ? "Elegida ✓" : "Me interesa";
-      b.className = on ? "btn btn-primary" : "btn btn-ghost";
+      if (b) b.innerHTML = on ? "Elegido ✓" : "Elegir este plan";
     });
-    toast("Anotado. En la versión completa, te confirmaríamos precios y disponibilidad de la propuesta “" + STYLES[i].title + "”.");
+  }
+
+  $("#proposals").addEventListener("click", function (e) {
+    var open = e.target.closest("[data-open]");
+    if (open) {
+      var card = open.closest(".card");
+      var isOpen = card.classList.toggle("is-open");
+      open.setAttribute("aria-expanded", isOpen ? "true" : "false");
+      open.innerHTML = (isOpen ? "Cerrar" : "Ver plan") + ' <span aria-hidden="true">→</span>';
+      return;
+    }
+    var choose = e.target.closest("[data-choose]");
+    if (!choose) return;
+    var i = parseInt(choose.getAttribute("data-choose"), 10);
+    state.selected = i;
+    markSelected(i);
+    savePlan();
+    toast("Anotado. En la versión completa te confirmaríamos precio y disponibilidad de “" + STYLES[i].title + "”.");
   });
 
   /* ---------- Aviso flotante ---------- */
 
-  var toastEl = $("#toast");
   var toastTimer = null;
   function toast(msg) {
+    toastEl.hidden = true;
     toastEl.textContent = msg;
+    void toastEl.offsetWidth; // reinicia la animación
     toastEl.hidden = false;
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(function () { toastEl.hidden = true; }, 4200);
+    toastTimer = setTimeout(function () { toastEl.hidden = true; }, 4600);
   }
 
-  /* ---------- Botones generales ---------- */
+  /* ---------- Botones generales y menú ---------- */
+
+  function goStart() {
+    if (current !== "intro") {
+      show("intro", function () { setTimeout(function () { textarea.focus({ preventScroll: true }); }, 60); });
+    } else {
+      window.scrollTo({ top: 0, behavior: reduceMotion ? "auto" : "smooth" });
+      setTimeout(function () { textarea.focus({ preventScroll: true }); }, 450);
+    }
+  }
+
+  function goHow() {
+    function scroll() {
+      var target = document.getElementById("como-funciona");
+      if (target) target.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth" });
+    }
+    if (current !== "intro") show("intro", function () { setTimeout(scroll, 60); });
+    else scroll();
+  }
+
+  function goPlans() {
+    if (state.data && state.hasProposals) {
+      if (current !== "proposals") show("proposals", renderProposals);
+      return;
+    }
+    if (loadPlan()) {
+      state.hasProposals = false;
+      show("proposals", renderProposals);
+      return;
+    }
+    toast("Todavía no armaste ningún plan. Contanos qué querés hacer y empezamos.");
+    goStart();
+  }
 
   document.addEventListener("click", function (e) {
     var el = e.target.closest("[data-action]");
     if (!el) return;
     e.preventDefault();
     var action = el.getAttribute("data-action");
-    if (action === "home") {
-      show("intro");
-      setTimeout(function () { textarea.focus({ preventScroll: true }); }, 50);
+    if (action === "home" || action === "start") {
+      goStart();
+    } else if (action === "how") {
+      goHow();
+    } else if (action === "plans") {
+      goPlans();
     } else if (action === "details" && state.data) {
       fillDetails();
       show("details");
