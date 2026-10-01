@@ -8,7 +8,7 @@
 var SEARCH_URL = "https://places.googleapis.com/v1/places:searchText";
 
 // Pedimos únicamente los campos que vamos a guardar (menos campos = menos costo).
-// No pedimos precios, horarios, fotos, reseñas ni nada de disponibilidad o capacidad.
+// No pedimos precios, horarios, reseñas ni nada de disponibilidad o capacidad.
 var FIELD_MASK = [
   "places.id",
   "places.displayName",
@@ -21,7 +21,10 @@ var FIELD_MASK = [
   "places.googleMapsUri",
   "places.websiteUri",
   "places.rating",
-  "places.userRatingCount"
+  "places.userRatingCount",
+  // Referencias de fotos: no cambian el costo de la búsqueda (ya es Enterprise por rating/web).
+  // Se usan sólo para mostrar, nunca se guardan (Google no permite guardarlas).
+  "places.photos"
 ].join(",");
 
 var MAX_RESULTS = 20;

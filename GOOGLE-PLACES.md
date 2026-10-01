@@ -139,3 +139,55 @@ También podés probar `bares en Belgrano` o `salones para eventos en Núñez`.
 | "Supabase rechazó la clave…" | En `SUPABASE_SECRET_KEY` tiene que ir la **secreta** (`sb_secret_...` o `service_role`), no la pública. |
 | "Una columna de providers no coincide…" | Revisá que los nombres de columna sean exactamente los de la lista. |
 | "No se encontró la función /api/places-search" | La página tiene que abrirse desde tu dirección de Vercel, no desde GitHub Pages ni desde tu computadora. |
+
+---
+
+# Fotos reales de Google Places
+
+## Cómo funciona
+
+1. **La búsqueda trae las referencias de fotos** (campo `places.photos`). No cambia el costo de la búsqueda: ya se cobraba como *Text Search Enterprise* por pedir rating y sitio web.
+2. **Por cada foto, el servidor arma un link propio y firmado**: `/api/place-photo?name=…&w=…&exp=…&sig=…`.
+   - La firma usa tu `LISTO_ADMIN_TOKEN`, así que **no hace falta ninguna variable nueva**.
+   - Vence en **1 hora**.
+   - Nadie puede cambiarle el tamaño ni usarlo para otra foto.
+3. **Cuando el navegador muestra la foto**, `/api/place-photo` le pide a Google la imagen (*Place Photos New*, con la clave en el servidor) y redirige a la URL temporal de Google. Esa URL **no contiene la clave**.
+4. **Nada de esto se guarda en Supabase.** Solo queda el `google_place_id`. Las fotos se resuelven en el momento, porque las referencias y las URLs de Google pueden vencer y Google no permite guardarlas.
+5. **Detalle de proveedor (preparado para el futuro):** `/api/place-photos?place_id=…` toma el `google_place_id` guardado, le pide a Google **solo el campo `photos`** y devuelve hasta **6 fotos** firmadas, con sus autores. Por ahora pide la contraseña de prueba.
+
+## Atribuciones (lo que pide Google)
+
+- Debajo de cada foto se muestra **"Foto: _Autor_ · Google Maps"**, con link al perfil del autor cuando Google lo informa.
+- Si Google no informa autor, se muestra **"Foto: Google Maps"**.
+- La lista de resultados indica **"Datos y fotos: Google Maps"**.
+
+## Si no hay fotos
+
+Se muestra un **placeholder de LISTO** (fondo madera oscuro con "LISTO · Sin fotos en Google"). Nunca se usa otra imagen ni se inventa una foto. Si una foto falla al cargar, se ve "Foto no disponible".
+
+## Costo de las fotos
+
+| Acción | Consulta a Google | Costo aproximado |
+|---|---|---|
+| Buscar (con referencias de fotos) | 1 *Text Search* (igual que antes) | sin cambio |
+| Mostrar 1 foto | 1 *Place Details Photos* | ~USD 7 cada 1.000, con **1.000 gratis por mes** |
+| Abrir el detalle de un proveedor guardado | 1 *Place Details* (solo `photos`) + 1 por cada foto que se vea | según la tabla de precios de Google |
+
+Medidas para no gastar de más:
+
+- **Fotos solo cuando se ven:** las fotos se cargan recién cuando aparecen en pantalla.
+- **Galería a pedido:** la galería solo se pide al tocar "Ver fotos".
+- **Tope de fotos:** como máximo 6 fotos por lugar.
+- **Tamaños fijos:** 480 px en la lista y 1200 px en la galería.
+- **Sin pagar dos veces la misma foto:** el navegador recuerda cada foto 30 minutos.
+- **Links protegidos:** firmados y con vencimiento, así nadie los usa para gastar tu cuota.
+
+**Recomendado:** en Google Cloud → **APIs y servicios** → **Places API (New)** → **Cuotas**, limitá también las consultas de fotos por día (por ejemplo, **"GetPhotoMedia per day" = 300**).
+
+## Probar las fotos
+
+1. Abrí `https://TU-DIRECCION-DE-VERCEL/prueba-google.html` y buscá **restaurantes en Palermo**.
+2. Cada tarjeta tiene que mostrar una **foto real** con su autor debajo. Si el lugar no tiene fotos, aparece el placeholder de LISTO.
+3. Tocá **Ver fotos (N)**: se abre la galería con hasta 6 fotos, cada una con su autor.
+4. Sección **3**: pegá un `google_place_id` de la tabla `providers` y tocá **Ver fotos**. Así va a funcionar el detalle de un proveedor guardado.
+5. Probalo también en el celular.

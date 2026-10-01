@@ -18,6 +18,7 @@
 var crypto = require("crypto");
 var places = require("./_lib/google-places");
 var store = require("./_lib/providers-store");
+var photos = require("./_lib/photos");
 
 function env(name) { return String(process.env[name] || "").trim(); }
 
@@ -113,12 +114,24 @@ module.exports = async function handler(req, res) {
   }
 
   var converted = places.toProviderRows(found, new Date().toISOString());
+
+  // Fotos: links firmados para mostrarlas. Van sólo en la respuesta, NO a Supabase.
+  var byId = {};
+  found.forEach(function (p) { if (p && p.id && !byId[p.id]) byId[p.id] = p; });
+  var secret = env("LISTO_ADMIN_TOKEN");
+  var results = converted.rows.map(function (row) {
+    var shown = {};
+    Object.keys(row).forEach(function (k) { shown[k] = row[k]; });
+    shown.photos = photos.photosForPlace(byId[row.google_place_id], secret);
+    return shown;
+  });
+
   var result = {
     ok: true,
     query: query,
     count: converted.rows.length,
     skipped_closed: converted.skippedClosed,
-    results: converted.rows,
+    results: results,
     saved: null
   };
 

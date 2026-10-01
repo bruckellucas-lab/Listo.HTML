@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
+  <meta name="referrer" content="no-referrer">
   <title>LISTO · Prueba Google Places</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -11,20 +12,23 @@
   <style>
     :root { --ink: #141210; --cream: #EFE8DC; --bone: #F5F1EA; --wood: #5E4431; --ok: #3F6B45; --bad: #A4462F; }
     * { box-sizing: border-box; }
+    html, body { overflow-x: clip; }
     body { margin: 0; background: var(--bone); color: var(--ink); font-family: Inter, system-ui, sans-serif; font-size: 15px; line-height: 1.5; }
-    main { max-width: 1100px; margin: 0 auto; padding: 32px 18px 80px; }
+    main { max-width: 1180px; margin: 0 auto; padding: 32px 18px 80px; }
     h1 { font-family: Anton, Impact, sans-serif; font-weight: 400; text-transform: uppercase; font-size: clamp(40px, 7vw, 76px); line-height: .9; margin: 8px 0 12px; }
     .kicker { font-size: 11px; letter-spacing: .2em; text-transform: uppercase; opacity: .65; margin: 0; }
-    .lead { max-width: 640px; color: #4A4138; margin: 0 0 28px; }
+    .lead { max-width: 680px; color: #4A4138; margin: 0 0 28px; }
     section { border-top: 1px solid var(--ink); padding: 18px 0 26px; }
     h2 { font-size: 11px; letter-spacing: .2em; text-transform: uppercase; margin: 0 0 14px; }
+    .note { font-size: 13px; color: #5A5046; margin: 0 0 14px; max-width: 720px; }
     ul.checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
     ul.checks li::before { content: "…"; display: inline-block; width: 22px; font-weight: 600; }
     ul.checks li.ok::before { content: "✓"; color: var(--ok); }
     ul.checks li.bad::before { content: "✗"; color: var(--bad); }
     label { display: block; font-size: 11px; letter-spacing: .16em; text-transform: uppercase; opacity: .7; margin: 0 0 6px; }
     .grid { display: grid; grid-template-columns: 2fr 1fr 110px; gap: 14px; align-items: end; }
-    input, select { width: 100%; padding: 12px 12px; border: 1px solid #CFC5B6; background: #fff; font: inherit; font-size: 16px; border-radius: 0; }
+    .grid-2 { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: end; }
+    input, select { width: 100%; padding: 12px; border: 1px solid #CFC5B6; background: #fff; font: inherit; font-size: 16px; border-radius: 0; min-width: 0; }
     .buttons { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 16px; }
     button { font: inherit; font-size: 12px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; padding: 15px 20px; border: 1px solid var(--ink); background: transparent; color: var(--ink); cursor: pointer; }
     button.primary { background: var(--ink); color: var(--cream); }
@@ -32,20 +36,61 @@
     .status { margin: 16px 0 0; padding: 12px 14px; background: #fff; border-left: 3px solid var(--wood); white-space: pre-line; }
     .status.ok { border-color: var(--ok); }
     .status.bad { border-color: var(--bad); color: var(--bad); }
-    .table-wrap { overflow-x: auto; margin-top: 16px; }
-    table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 760px; }
-    th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid #DDD3C4; vertical-align: top; }
-    th { font-size: 10px; letter-spacing: .16em; text-transform: uppercase; font-weight: 600; }
-    td a { color: var(--wood); }
+
+    /* Tarjetas de resultados */
+    .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 22px; margin-top: 20px; }
+    .card { background: #fff; border: 1px solid #E2D9CB; display: flex; flex-direction: column; min-width: 0; }
+    .card-body { padding: 14px 14px 16px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+    .card h3 { font-family: Anton, Impact, sans-serif; font-weight: 400; text-transform: uppercase; font-size: 26px; line-height: 1; margin: 2px 0 2px; overflow-wrap: anywhere; }
+    .meta { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; opacity: .65; }
+    .addr { font-size: 13px; color: #4A4138; margin: 0; }
+    .facts { display: flex; gap: 14px; font-size: 13px; margin: 4px 0 0; }
+    .links { display: flex; gap: 14px; flex-wrap: wrap; margin-top: auto; padding-top: 8px; font-size: 13px; }
+    .links a { color: var(--wood); }
+    .links button { padding: 8px 12px; font-size: 11px; }
     .muted { opacity: .55; }
-    @media (max-width: 640px) { .grid { grid-template-columns: 1fr; } .buttons button { width: 100%; } }
+
+    /* Foto + atribución */
+    .photo { position: relative; aspect-ratio: 4 / 3; background: #2A1F16; overflow: hidden; }
+    .photo img { width: 100%; height: 100%; object-fit: cover; display: block; opacity: 0; transition: opacity .6s ease; }
+    .photo img.is-loaded { opacity: 1; }
+    .attr { font-size: 11px; color: #5A5046; padding: 6px 14px 0; line-height: 1.4; overflow-wrap: anywhere; }
+    .attr a { color: inherit; }
+    .count { position: absolute; right: 8px; bottom: 8px; background: rgba(20,18,16,.75); color: var(--cream); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; padding: 4px 8px; }
+
+    /* Placeholder cuando Google no tiene fotos (no es una foto inventada) */
+    .placeholder { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+      background: radial-gradient(120% 90% at 30% 20%, #4A3524 0%, #241A12 55%, #120E0B 100%); color: var(--cream); text-align: center; padding: 12px; }
+    .placeholder b { font-family: Anton, Impact, sans-serif; font-weight: 400; font-size: 30px; letter-spacing: .02em; }
+    .placeholder span { font-size: 10px; letter-spacing: .2em; text-transform: uppercase; opacity: .7; }
+
+    /* Galería */
+    dialog { border: 0; padding: 0; width: min(1100px, 100vw - 24px); max-height: calc(100vh - 24px); background: var(--bone); color: var(--ink); }
+    dialog::backdrop { background: rgba(20,18,16,.8); }
+    .gal-head { position: sticky; top: 0; z-index: 2; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 16px; background: var(--bone); border-bottom: 1px solid var(--ink); }
+    .gal-head h3 { font-family: Anton, Impact, sans-serif; font-weight: 400; text-transform: uppercase; font-size: 24px; margin: 0; line-height: 1; overflow-wrap: anywhere; }
+    .gal-head button { padding: 10px 14px; flex: none; }
+    .gal-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; padding: 16px; }
+    .gal-grid figure { margin: 0; background: #fff; }
+    .gal-grid .photo { aspect-ratio: 3 / 2; }
+    .gal-grid .attr { padding: 6px 10px 10px; }
+    .gal-foot { padding: 0 16px 16px; font-size: 12px; color: #5A5046; }
+
+    .google-credit { font-size: 12px; color: #5A5046; margin: 14px 0 0; }
+
+    @media (max-width: 640px) {
+      .grid, .grid-2 { grid-template-columns: 1fr; }
+      .buttons button { width: 100%; }
+      .gal-grid { grid-template-columns: 1fr; padding: 10px; }
+      dialog { width: 100vw; max-width: 100vw; max-height: 100vh; height: 100vh; margin: 0; }
+    }
   </style>
 </head>
 <body>
   <main>
     <p class="kicker">LISTO — Herramienta interna</p>
     <h1>Prueba<br>Google Places</h1>
-    <p class="lead">Busca lugares reales en Google Places desde el servidor (la clave de Google nunca pasa por acá) y, si querés, los guarda en la tabla <strong>providers</strong> de Supabase. Esta página no está conectada a la web de LISTO.</p>
+    <p class="lead">Busca lugares reales en Google Places desde el servidor (la clave de Google nunca pasa por acá), muestra sus fotos reales y, si querés, los guarda en la tabla <strong>providers</strong> de Supabase. Esta página no está conectada a la web de LISTO.</p>
 
     <section>
       <h2>1 · Configuración en Vercel</h2>
@@ -54,6 +99,7 @@
 
     <section>
       <h2>2 · Buscar</h2>
+      <p class="note">Cada foto que aparece en pantalla es 1 consulta “Place Details Photos” en Google. Las fotos se cargan recién cuando entran en pantalla, y la galería sólo cuando tocás “Ver fotos”.</p>
       <form id="form" novalidate>
         <div class="grid">
           <div>
@@ -75,14 +121,32 @@
         </div>
       </form>
       <p class="status" id="status" hidden></p>
-      <div class="table-wrap" id="table-wrap" hidden>
-        <table>
-          <thead><tr><th>Nombre</th><th>Categoría</th><th>Zona</th><th>Dirección</th><th>Rating</th><th>Reseñas</th><th>Links</th></tr></thead>
-          <tbody id="rows"></tbody>
-        </table>
-      </div>
+      <div class="cards" id="cards"></div>
+      <p class="google-credit" id="credit" hidden>Datos y fotos: Google Maps. Cada foto muestra a su autor, como pide Google.</p>
+    </section>
+
+    <section>
+      <h2>3 · Fotos de un proveedor guardado (detalle)</h2>
+      <p class="note">Así va a funcionar el detalle de un proveedor: con el <strong>google_place_id</strong> guardado en Supabase, LISTO le pide a Google las fotos actuales del lugar. Costo: 1 consulta de detalle + 1 por cada foto que se muestre.</p>
+      <form id="detail-form" class="grid-2" novalidate>
+        <div>
+          <label for="place-id">google_place_id</label>
+          <input id="place-id" placeholder="ChIJ…" autocomplete="off" spellcheck="false">
+        </div>
+        <button type="submit" class="primary">Ver fotos</button>
+      </form>
+      <p class="status" id="detail-status" hidden></p>
     </section>
   </main>
+
+  <dialog id="gallery" aria-labelledby="gal-title">
+    <div class="gal-head">
+      <h3 id="gal-title">Fotos</h3>
+      <button type="button" id="gal-close">Cerrar ✕</button>
+    </div>
+    <div class="gal-grid" id="gal-grid"></div>
+    <p class="gal-foot">Fotos: Google Maps. Cada foto es de su autor, indicado debajo.</p>
+  </dialog>
 
   <script>
   (function () {
@@ -91,7 +155,8 @@
     var checks = document.getElementById("checks");
     var statusEl = document.getElementById("status");
     var tokenInput = document.getElementById("token");
-    var buttons = document.querySelectorAll("button[type=submit]");
+    var buttons = document.querySelectorAll("#form button[type=submit]");
+    var gallery = document.getElementById("gallery");
     var lastSave = false;
 
     try { tokenInput.value = sessionStorage.getItem("listo-token") || ""; } catch (e) {}
@@ -104,61 +169,136 @@
       LISTO_ADMIN_TOKEN: "LISTO_ADMIN_TOKEN (tu contraseña de prueba, 12+ caracteres)"
     };
 
-    function li(text, cls) {
-      var el = document.createElement("li");
-      el.textContent = text;
-      if (cls) el.className = cls;
-      return el;
+    function el(tag, cls, text) {
+      var n = document.createElement(tag);
+      if (cls) n.className = cls;
+      if (text !== undefined && text !== null) n.textContent = text;
+      return n;
+    }
+
+    function safeLink(href, text) {
+      var a = el("a", "", text);
+      if (/^https:\/\//.test(href || "")) { a.href = href; a.target = "_blank"; a.rel = "noopener noreferrer"; }
+      return a;
     }
 
     fetch(ENDPOINT).then(function (r) { return r.json(); }).then(function (data) {
       checks.innerHTML = "";
       Object.keys(LABELS).forEach(function (k) {
         var v = data.config[k];
-        checks.appendChild(li(LABELS[k], v === true ? "ok" : v === false ? "bad" : ""));
+        var li = el("li", v === true ? "ok" : v === false ? "bad" : "", LABELS[k]);
+        checks.appendChild(li);
       });
-      checks.appendChild(li(data.ready ? "Todo listo para probar." : "Falta completar lo marcado con ✗ en Vercel (y volver a publicar).", data.ready ? "ok" : "bad"));
+      checks.appendChild(el("li", data.ready ? "ok" : "bad", data.ready ? "Todo listo para probar." : "Falta completar lo marcado con ✗ en Vercel (y volver a publicar)."));
     }).catch(function () {
       checks.innerHTML = "";
-      checks.appendChild(li("No se encontró la función /api/places-search. Esta página tiene que abrirse desde tu dirección de Vercel.", "bad"));
+      checks.appendChild(el("li", "bad", "No se encontró la función /api/places-search. Esta página tiene que abrirse desde tu dirección de Vercel."));
     });
 
-    function showStatus(text, kind) {
-      statusEl.textContent = text;
-      statusEl.className = "status" + (kind ? " " + kind : "");
-      statusEl.hidden = false;
+    function showStatus(target, text, kind) {
+      target.textContent = text;
+      target.className = "status" + (kind ? " " + kind : "");
+      target.hidden = false;
     }
 
-    function cell(tr, value) {
-      var td = document.createElement("td");
-      if (value === null || value === undefined || value === "") { td.textContent = "—"; td.className = "muted"; }
-      else td.textContent = value;
-      tr.appendChild(td);
-      return td;
+    /* ---------- Fotos ---------- */
+
+    function placeholder(text) {
+      var p = el("div", "placeholder");
+      p.appendChild(el("b", "", "LISTO"));
+      p.appendChild(el("span", "", text || "Sin fotos en Google"));
+      return p;
     }
 
-    function link(td, href, text) {
-      if (!href) return;
-      var a = document.createElement("a");
-      a.href = href; a.target = "_blank"; a.rel = "noopener noreferrer"; a.textContent = text;
-      td.appendChild(a);
-      td.appendChild(document.createTextNode(" "));
+    // Foto con su atribución. Si falla al cargar, muestra el placeholder (nunca otra imagen).
+    function photoBlock(photo, size, alt) {
+      var wrap = el("div", "photo");
+      if (!photo) { wrap.appendChild(placeholder()); return { box: wrap, attr: null }; }
+      var img = el("img");
+      img.alt = alt || "";
+      img.loading = "lazy";
+      img.decoding = "async";
+      img.referrerPolicy = "no-referrer";
+      img.src = size === "large" ? photo.large : photo.thumb;
+      img.addEventListener("load", function () { img.classList.add("is-loaded"); });
+      img.addEventListener("error", function () { img.remove(); wrap.appendChild(placeholder("Foto no disponible")); });
+      wrap.appendChild(img);
+      return { box: wrap, attr: attribution(photo) };
     }
 
-    function renderRows(rows) {
-      var tbody = document.getElementById("rows");
-      tbody.innerHTML = "";
-      rows.forEach(function (r) {
-        var tr = document.createElement("tr");
-        cell(tr, r.name); cell(tr, r.category); cell(tr, r.zone); cell(tr, r.address);
-        cell(tr, r.rating); cell(tr, r.review_count);
-        var td = document.createElement("td");
-        link(td, r.maps_url, "Maps"); link(td, r.website, "Web");
-        if (!td.childNodes.length) { td.textContent = "—"; td.className = "muted"; }
-        tr.appendChild(td);
-        tbody.appendChild(tr);
+    function attribution(photo) {
+      var p = el("p", "attr");
+      p.appendChild(document.createTextNode("Foto: "));
+      var authors = photo.attributions || [];
+      if (!authors.length) p.appendChild(document.createTextNode("Google Maps"));
+      authors.forEach(function (a, i) {
+        if (i) p.appendChild(document.createTextNode(", "));
+        p.appendChild(a.uri ? safeLink(a.uri, a.name) : document.createTextNode(a.name));
       });
-      document.getElementById("table-wrap").hidden = !rows.length;
+      if (authors.length) p.appendChild(document.createTextNode(" · Google Maps"));
+      return p;
+    }
+
+    function openGallery(title, photos) {
+      document.getElementById("gal-title").textContent = title;
+      var grid = document.getElementById("gal-grid");
+      grid.innerHTML = "";
+      if (!photos.length) {
+        var fig = el("figure");
+        fig.appendChild(photoBlock(null).box);
+        grid.appendChild(fig);
+      }
+      photos.forEach(function (ph, i) {
+        var fig = el("figure");
+        var b = photoBlock(ph, "large", title + " — foto " + (i + 1));
+        fig.appendChild(b.box);
+        if (b.attr) fig.appendChild(b.attr);
+        grid.appendChild(fig);
+      });
+      if (gallery.showModal) gallery.showModal(); else gallery.setAttribute("open", "");
+    }
+
+    document.getElementById("gal-close").addEventListener("click", function () {
+      if (gallery.close) gallery.close(); else gallery.removeAttribute("open");
+    });
+    gallery.addEventListener("click", function (e) { if (e.target === gallery && gallery.close) gallery.close(); });
+
+    /* ---------- Resultados ---------- */
+
+    function renderCards(rows) {
+      var box = document.getElementById("cards");
+      box.innerHTML = "";
+      rows.forEach(function (r) {
+        var card = el("article", "card");
+        var photos = r.photos || [];
+        var b = photoBlock(photos[0], "thumb", r.name);
+        if (photos.length > 1) b.box.appendChild(el("span", "count", photos.length + " fotos"));
+        card.appendChild(b.box);
+        if (b.attr) card.appendChild(b.attr);
+
+        var body = el("div", "card-body");
+        body.appendChild(el("span", "meta", [r.category, r.zone].filter(Boolean).join(" · ") || "Sin categoría"));
+        body.appendChild(el("h3", "", r.name));
+        body.appendChild(el("p", "addr", r.address || "Dirección no informada"));
+        var facts = el("p", "facts");
+        facts.appendChild(el("span", r.rating === null ? "muted" : "", r.rating === null ? "Sin rating" : "★ " + r.rating));
+        facts.appendChild(el("span", r.review_count === null ? "muted" : "", r.review_count === null ? "Sin reseñas" : r.review_count + " reseñas"));
+        body.appendChild(facts);
+
+        var links = el("div", "links");
+        if (r.maps_url) links.appendChild(safeLink(r.maps_url, "Ver en Maps"));
+        if (r.website) links.appendChild(safeLink(r.website, "Sitio web"));
+        if (photos.length) {
+          var btn = el("button", "", "Ver fotos (" + photos.length + ")");
+          btn.type = "button";
+          btn.addEventListener("click", function () { openGallery(r.name, photos); });
+          links.appendChild(btn);
+        }
+        body.appendChild(links);
+        card.appendChild(body);
+        box.appendChild(card);
+      });
+      document.getElementById("credit").hidden = !rows.length;
     }
 
     buttons.forEach(function (b) { b.addEventListener("click", function () { lastSave = b.getAttribute("data-save") === "true"; }); });
@@ -167,12 +307,12 @@
       e.preventDefault();
       var token = tokenInput.value.trim();
       var query = document.getElementById("query").value.trim();
-      if (!token) { showStatus("Escribí la contraseña de prueba (la que cargaste en Vercel como LISTO_ADMIN_TOKEN).", "bad"); return; }
-      if (query.length < 3) { showStatus("Escribí una búsqueda, por ejemplo: restaurantes en Palermo.", "bad"); return; }
+      if (!token) { showStatus(statusEl, "Escribí la contraseña de prueba (la que cargaste en Vercel como LISTO_ADMIN_TOKEN).", "bad"); return; }
+      if (query.length < 3) { showStatus(statusEl, "Escribí una búsqueda, por ejemplo: restaurantes en Palermo.", "bad"); return; }
       try { sessionStorage.setItem("listo-token", token); } catch (err) {}
 
       buttons.forEach(function (b) { b.disabled = true; });
-      showStatus(lastSave ? "Buscando en Google y guardando en Supabase…" : "Buscando en Google…");
+      showStatus(statusEl, lastSave ? "Buscando en Google y guardando en Supabase…" : "Buscando en Google…");
 
       fetch(ENDPOINT, {
         method: "POST",
@@ -181,18 +321,42 @@
       }).then(function (r) {
         return r.json().catch(function () { return { ok: false, error: "Respuesta inesperada del servidor (" + r.status + ")." }; });
       }).then(function (data) {
-        renderRows(data.results || []);
-        if (!data.ok) { showStatus(data.error || "Algo salió mal.", "bad"); return; }
-        var msg = "Google devolvió " + data.count + " lugar" + (data.count === 1 ? "" : "es") + " para “" + data.query + "”.";
+        renderCards(data.results || []);
+        if (!data.ok) { showStatus(statusEl, data.error || "Algo salió mal.", "bad"); return; }
+        var withPhotos = (data.results || []).filter(function (r) { return r.photos && r.photos.length; }).length;
+        var msg = "Google devolvió " + data.count + " lugar" + (data.count === 1 ? "" : "es") + " para “" + data.query + "” (" + withPhotos + " con fotos).";
         if (data.skipped_closed) msg += "\n" + data.skipped_closed + " cerrado(s) definitivamente no se incluyeron.";
         if (data.saved) msg += "\nGuardado en providers: " + data.saved.inserted + " nuevo(s), " + data.saved.updated + " actualizado(s) (sin duplicados).";
         else msg += "\nTodavía no se guardó nada. Si los resultados se ven bien, tocá “Buscar y guardar en providers”.";
-        showStatus(msg, "ok");
+        showStatus(statusEl, msg, "ok");
       }).catch(function () {
-        showStatus("No pudimos conectarnos con el servidor. Revisá tu conexión y que estés en tu dirección de Vercel.", "bad");
+        showStatus(statusEl, "No pudimos conectarnos con el servidor. Revisá tu conexión y que estés en tu dirección de Vercel.", "bad");
       }).then(function () {
         buttons.forEach(function (b) { b.disabled = false; });
       });
+    });
+
+    /* ---------- Detalle de un proveedor guardado ---------- */
+
+    document.getElementById("detail-form").addEventListener("submit", function (e) {
+      e.preventDefault();
+      var status = document.getElementById("detail-status");
+      var token = tokenInput.value.trim();
+      var placeId = document.getElementById("place-id").value.trim();
+      if (!token) { showStatus(status, "Escribí la contraseña de prueba en la sección 2.", "bad"); return; }
+      if (!placeId) { showStatus(status, "Pegá un google_place_id de la tabla providers.", "bad"); return; }
+      var btn = e.target.querySelector("button");
+      btn.disabled = true;
+      showStatus(status, "Pidiendo fotos a Google…");
+      fetch("/api/place-photos?place_id=" + encodeURIComponent(placeId), { headers: { "x-listo-token": token } })
+        .then(function (r) { return r.json().catch(function () { return { ok: false, error: "Respuesta inesperada (" + r.status + ")." }; }); })
+        .then(function (data) {
+          if (!data.ok) { showStatus(status, data.error || "Algo salió mal.", "bad"); return; }
+          showStatus(status, data.count ? "Google tiene " + data.count + " foto(s) para mostrar de este lugar." : "Este lugar no tiene fotos en Google: se muestra el placeholder de LISTO.", "ok");
+          openGallery("Proveedor " + placeId.slice(0, 12) + "…", data.photos || []);
+        })
+        .catch(function () { showStatus(status, "No pudimos conectarnos con el servidor.", "bad"); })
+        .then(function () { btn.disabled = false; });
     });
   })();
   </script>
