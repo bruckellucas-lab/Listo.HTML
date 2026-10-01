@@ -182,13 +182,20 @@
   var state = {
     text: "",
     data: null,
-    selected: null,
+    selected: null,       // google_place_id de la opción elegida
+    selectedAt: null,
+    options: null,        // las 3 opciones reales que se mostraron
+    optionsAt: 0,
     hasProposals: false
   };
 
   function savePlan() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ text: state.text, data: state.data, selected: state.selected }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        text: state.text, data: state.data,
+        selected: state.selected, selectedAt: state.selectedAt,
+        options: state.options, optionsAt: state.optionsAt
+      }));
     } catch (e) { /* sin almacenamiento: no pasa nada */ }
   }
 
@@ -202,7 +209,10 @@
       state.data = saved.data;
       state.data.customNeeds = state.data.customNeeds || [];
       state.data.needLabels = state.data.needLabels || {};
-      state.selected = typeof saved.selected === "number" ? saved.selected : null;
+      state.selected = typeof saved.selected === "string" ? saved.selected : null;
+      state.selectedAt = saved.selectedAt || null;
+      state.options = Array.isArray(saved.options) ? saved.options : null;
+      state.optionsAt = typeof saved.optionsAt === "number" ? saved.optionsAt : 0;
       return true;
     } catch (e) { return false; }
   }
@@ -335,6 +345,7 @@
     state.text = text;
     state.data = interpret(text);
     state.selected = null;
+    state.options = null;
     state.hasProposals = false;
     fillDetails();
     show("details");
@@ -462,16 +473,18 @@
 
   $("#details-form").addEventListener("submit", function (e) {
     e.preventDefault();
+    if (searching) return;           // ya hay una búsqueda en curso: no se duplica
     readDetails();
-    if (!getActiveNeeds().length) {
-      detailsError.textContent = "Elegí al menos una cosa que necesites para poder armar opciones.";
+    if (!getActiveNeeds().length && !state.data.type) {
+      detailsError.textContent = "Contanos qué plan es o elegí al menos una cosa que necesites.";
       detailsError.hidden = false;
       return;
     }
     detailsError.hidden = true;
     state.selected = null;
+    setSearching(true);              // se bloquea ya mismo, antes de la transición
     show("proposals", function () {
-      renderProposals();
+      runSearch();
       saveRequest();
     });
   });
@@ -529,54 +542,22 @@
     return list;
   }
 
-  /* ---------- Pantalla 3: opciones DEMO ---------- */
+  /* ---------- Pantalla 3: lugares reales (Google Places vía Vercel) ---------- */
 
-  // Descripciones genéricas por necesidad para cada opción.
-  // Nada de nombres de proveedores ni precios: son ideas de ejemplo.
-  var NEED_DETAILS = {
-    lugar:     ["Espacio reservado, íntimo", "Barra o terraza con ambiente", "Salón con una mesa larga"],
-    comida:    ["Menú de pasos para compartir", "Finger food y platos de barra", "Cena servida al centro de la mesa"],
-    bebida:    ["Vinos para acompañar la cena", "Barra de tragos toda la noche", "Vino, cerveza y un trago de bienvenida"],
-    musica:    ["Playlist curada, volumen de charla", "DJ con set a medida", "Música en vivo o playlist propia"],
-    deco:      ["Velas y detalles simples", "Luces cálidas y ambientación", "Centros de mesa y guirnaldas de luz"],
-    foto:      ["Fotos en momentos clave", "Fotógrafo durante la noche", "Foto y video de la mesa"],
-    torta:     ["Torta clásica", "Torta y mesa dulce", "Postre para compartir"],
-    staff:     ["Atención de sala", "Bartender y staff de barra", "Mozos durante toda la cena"],
-    animacion: ["Dinámicas simples", "Show sorpresa", "Animación a medida"],
-    custom:    ["Opción esencial", "Opción recomendada", "Opción especial"]
-  };
+  var OPTIONS_TTL_MS = 50 * 60 * 1000;   // los links de fotos duran 1 hora: re-buscamos antes
+  var SEARCH_TIMEOUT_MS = 20000;
+  var searching = false;
+  var searchButton = $("#details-form button[type=submit]");
+  var PRICE_NOTE = "Precio y disponibilidad a confirmar";
 
-  var UNSPLASH = "https://images.unsplash.com/photo-";
-
-  var STYLES = [
-    {
-      title: "Cena íntima",
-      kicker: "Simple y bien resuelto",
-      desc: "Pocas personas, buena mesa, luz baja. Lo importante, sin excesos.",
-      price: "Cotización requerida",
-      photo: "1559339352-11d035aa65de",
-      alt: "Salón de restaurante con luz cálida"
-    },
-    {
-      title: "Noche abierta",
-      kicker: "Barra, música y gente",
-      desc: "Un plan que arranca con un trago y termina tarde. Para moverse y encontrarse.",
-      price: "Precio y disponibilidad a confirmar",
-      photo: "1514933651103-005eec06c04b",
-      alt: "Barra de noche con luces ámbar"
-    },
-    {
-      title: "Mesa larga",
-      kicker: "Todos en la misma mesa",
-      desc: "Una sola mesa, platos al centro y guirnaldas de luz. La cena que se comparte.",
-      price: "Cotización requerida",
-      photo: "1555396273-367ea4eb4db5",
-      alt: "Mesas largas con guirnaldas de luces de noche"
-    }
-  ];
-
-  function photoURL(id, w) {
-    return UNSPLASH + id + "?auto=format&fit=crop&w=" + w + "&h=" + Math.round(w * 1.25) + "&q=72";
+  // Lógica simple: tragos → bares; eventos grandes → salones; el resto → restaurantes.
+  function chooseCategory(d) {
+    var ids = d.needs || [];
+    var type = normalize(d.type);
+    if (/after office|despedida/.test(type)) return "bares";
+    if (ids.indexOf("bebida") !== -1 && ids.indexOf("comida") === -1 && !/cena|cumple|asado/.test(type)) return "bares";
+    if ((d.guests || 0) >= 40 || /casamiento|fiesta de 15|corporativo|graduacion|bautismo|comunion/.test(type)) return "salones";
+    return "restaurantes";
   }
 
   function renderSummary() {
@@ -589,85 +570,220 @@
     $("#proposals-summary").textContent = parts.join("  —  ");
   }
 
-  function renderProposals() {
-    var d = state.data;
-    var needs = getActiveNeeds();
-    var box = $("#proposals");
-    var loading = $("#loading");
-
-    renderSummary();
-    box.innerHTML = "";
-    loading.hidden = false;
-
-    // Una pausa corta: se siente como alguien armando el plan.
-    setTimeout(function () {
-      loading.hidden = true;
-      box.innerHTML = STYLES.map(function (style, i) {
-        var num = "0" + (i + 1);
-        var names = needs.map(function (n) { return "<li>" + escapeHTML(n.label) + "</li>"; }).join("");
-        var details = needs.map(function (n) {
-          var detail = (NEED_DETAILS[n.id] || NEED_DETAILS.custom)[i];
-          return "<li><span>" + escapeHTML(n.label) + "</span><span>" + escapeHTML(detail) + "</span></li>";
-        }).join("");
-
-        return "" +
-          '<article class="card" data-index="' + i + '">' +
-            '<figure class="card-photo photo">' +
-              '<img src="' + photoURL(style.photo, 900) + '" srcset="' + photoURL(style.photo, 600) + ' 600w, ' + photoURL(style.photo, 900) + ' 900w, ' + photoURL(style.photo, 1200) + ' 1200w" sizes="(max-width: 720px) 100vw, (max-width: 1024px) 50vw, 33vw" alt="' + style.alt + '" loading="lazy">' +
-              '<span class="card-chosen">Elegido</span>' +
-              '<figcaption><span>Fig. ' + num + '</span><span>Demo</span></figcaption>' +
-            '</figure>' +
-            '<div class="card-body">' +
-              '<div class="card-top"><span>' + num + '</span><span>' + style.kicker + '</span></div>' +
-              '<h3 class="card-title">' + style.title + '</h3>' +
-              '<p class="card-zone">' + escapeHTML(d.zone || "Zona a definir") + '</p>' +
-              '<p class="card-desc">' + style.desc + '</p>' +
-              '<ul class="card-needs">' + names + '</ul>' +
-              '<p class="card-price">' + style.price + '</p>' +
-              '<div class="card-more" id="card-more-' + i + '">' +
-                '<div class="card-more-inner">' +
-                  '<ul class="card-detail">' + details + '</ul>' +
-                  '<p class="card-more-note">Ideas de ejemplo. Precio y disponibilidad a confirmar antes de reservar.</p>' +
-                  '<button type="button" class="btn btn-dark card-choose" data-choose="' + i + '">Elegir este plan</button>' +
-                '</div>' +
-              '</div>' +
-              '<button type="button" class="card-cta" data-open="' + i + '" aria-expanded="false" aria-controls="card-more-' + i + '">Ver plan <span aria-hidden="true">→</span></button>' +
-            '</div>' +
-          '</article>';
-      }).join("");
-
-      $all("#proposals .photo img").forEach(watchImage);
-      state.hasProposals = true;
-      if (state.selected !== null) markSelected(state.selected);
-      savePlan();
-    }, reduceMotion ? 0 : 1000);
+  function setSearching(on) {
+    searching = on;
+    if (searchButton) {
+      searchButton.disabled = on;
+      searchButton.setAttribute("aria-busy", on ? "true" : "false");
+    }
+    $("#loading").hidden = !on;
   }
 
-  function markSelected(i) {
-    $all(".card").forEach(function (card, idx) {
-      var on = idx === i;
+  function searchOptions() {
+    if (searching) return;
+    setSearching(true);
+    runSearch();
+  }
+
+  // Hace la búsqueda. Quien la llama ya marcó "buscando" (evita pedidos duplicados).
+  function runSearch() {
+    var d = state.data;
+    var box = $("#proposals");
+    renderSummary();
+    box.innerHTML = "";
+    $("#loading").hidden = false;
+
+    var category = chooseCategory(d);
+    var url = "/api/plan-options?category=" + encodeURIComponent(category) + "&zone=" + encodeURIComponent(d.zone || "");
+    var controller = "AbortController" in window ? new AbortController() : null;
+    var timer = controller ? setTimeout(function () { controller.abort(); }, SEARCH_TIMEOUT_MS) : null;
+
+    fetch(url, { signal: controller ? controller.signal : undefined, headers: { "Accept": "application/json" } })
+      .then(function (r) {
+        return r.json().catch(function () { return { ok: false, error: "" }; }).then(function (data) {
+          if (!r.ok || !data.ok) throw new Error(data.error || "");
+          return data;
+        });
+      })
+      .then(function (data) {
+        state.options = Array.isArray(data.options) ? data.options : [];
+        state.optionsKey = url;
+        state.optionsAt = Date.now();
+        state.hasProposals = true;
+        renderOptions();
+        savePlan();
+      })
+      .catch(function (err) {
+        var aborted = err && err.name === "AbortError";
+        renderMessage(
+          "No pudimos traer opciones.",
+          aborted ? "La búsqueda tardó demasiado. Revisá tu conexión y probá de nuevo."
+            : (err && err.message) || "Parece un problema de conexión. Probá de nuevo en un momento.",
+          true
+        );
+      })
+      .then(function () {
+        clearTimeout(timer);
+        setSearching(false);
+      });
+  }
+
+  // Mensaje elegante dentro de LISTO (sin resultados o error). Nunca vuelve a la demo.
+  function renderMessage(title, text, canRetry) {
+    var box = $("#proposals");
+    box.innerHTML =
+      '<div class="proposals-message" role="status">' +
+        '<p class="proposals-message-title">' + escapeHTML(title) + '</p>' +
+        '<p class="proposals-message-text">' + escapeHTML(text) + '</p>' +
+        '<div class="proposals-message-actions">' +
+          (canRetry ? '<button type="button" class="btn btn-dark" data-retry>Reintentar <span aria-hidden="true">→</span></button>' : '') +
+          '<button type="button" class="btn-text" data-action="details">← Ajustar el plan</button>' +
+        '</div>' +
+      '</div>';
+  }
+
+  function ratingText(o) {
+    if (typeof o.rating !== "number") return "Sin rating en Google todavía";
+    var txt = "★ " + o.rating.toLocaleString("es-AR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+    if (typeof o.review_count === "number") txt += " · " + o.review_count.toLocaleString("es-AR") + " reseñas en Google";
+    return txt;
+  }
+
+  function safeHttps(url) {
+    return /^https:\/\//.test(url || "") ? url : "";
+  }
+
+  function photoHTML(o, num) {
+    var p = o.photo;
+    var credit = "Sin fotos en Google";
+    var img = '<span class="photo-empty" aria-hidden="true">LISTO</span>';
+    if (p && p.thumb && p.large) {
+      var authors = (p.attributions || []).map(function (a) {
+        var href = safeHttps(a.uri);
+        return href ? '<a href="' + escapeHTML(href) + '" target="_blank" rel="noopener noreferrer">' + escapeHTML(a.name) + '</a>' : escapeHTML(a.name);
+      }).join(", ");
+      credit = "Foto: " + (authors ? authors + " · " : "") + "Google Maps";
+      img = '<img src="' + escapeHTML(p.large) + '" srcset="' + escapeHTML(p.thumb) + ' 480w, ' + escapeHTML(p.large) + ' 1200w" ' +
+        'sizes="(max-width: 720px) 100vw, (max-width: 1024px) 50vw, 33vw" alt="' + escapeHTML(o.name) + '" loading="lazy" referrerpolicy="no-referrer">';
+    }
+    return '<figure class="card-photo photo' + (p ? '' : ' no-photo') + '">' + img +
+      '<span class="card-chosen">Elegido</span>' +
+      '<figcaption><span>Fig. ' + num + '</span><span class="photo-credit">' + credit + '</span></figcaption>' +
+    '</figure>';
+  }
+
+  function renderOptions() {
+    var box = $("#proposals");
+    var list = state.options || [];
+    if (!list.length) {
+      renderMessage("Todavía no.", "No encontramos una opción que encaje todavía. Probá ampliando la zona o cambiando algún detalle.", false);
+      return;
+    }
+    box.innerHTML = list.map(function (o, i) {
+      var num = "0" + (i + 1);
+      var where = [o.zone, o.address_short].filter(Boolean).join(" — ");
+      var maps = safeHttps(o.maps_url);
+      var web = safeHttps(o.website);
+      return '' +
+        '<article class="card" data-id="' + escapeHTML(o.google_place_id) + '">' +
+          photoHTML(o, num) +
+          '<div class="card-body">' +
+            '<div class="card-top"><span>' + num + '</span><span>' + escapeHTML(o.category || "Lugar") + '</span></div>' +
+            '<h3 class="card-title">' + escapeHTML(o.name) + '</h3>' +
+            '<p class="card-zone">' + escapeHTML(where || "Dirección a confirmar") + '</p>' +
+            '<p class="card-desc">' + escapeHTML(ratingText(o)) + '</p>' +
+            '<p class="card-price">' + PRICE_NOTE + '</p>' +
+            '<div class="card-links">' +
+              (maps ? '<a class="card-cta" href="' + escapeHTML(maps) + '" target="_blank" rel="noopener noreferrer">Ver en Maps <span aria-hidden="true">→</span></a>' : '') +
+              (web ? '<a class="card-cta" href="' + escapeHTML(web) + '" target="_blank" rel="noopener noreferrer">Sitio web <span aria-hidden="true">→</span></a>' : '') +
+            '</div>' +
+            '<button type="button" class="btn btn-dark card-choose" data-choose="' + i + '">Elegir esta opción</button>' +
+            '<div class="card-share">' +
+              '<button type="button" class="card-cta" data-share="' + i + '">Compartir plan <span aria-hidden="true">→</span></button>' +
+              '<a class="card-wa" href="https://wa.me/?text=' + encodeURIComponent(shareText(o)) + '" target="_blank" rel="noopener noreferrer">WhatsApp</a>' +
+            '</div>' +
+          '</div>' +
+        '</article>';
+    }).join("");
+
+    $all("#proposals .photo img").forEach(watchImage);
+    if (state.selected) markSelected(state.selected);
+  }
+
+  function markSelected(id) {
+    $all("#proposals .card").forEach(function (card) {
+      var on = card.getAttribute("data-id") === id;
       card.classList.toggle("is-selected", on);
       var b = card.querySelector("[data-choose]");
-      if (b) b.innerHTML = on ? "Elegido ✓" : "Elegir este plan";
+      if (b) b.innerHTML = on ? "Elegida ✓" : "Elegir esta opción";
+    });
+  }
+
+  // Texto para compartir: sólo datos públicos del lugar. Sin claves, tokens ni IDs internos.
+  function shareText(o) {
+    var d = state.data || {};
+    var lines = [];
+    var head = d.type || "Plan";
+    if (d.guests) head += " para " + d.guests;
+    lines.push(head + " — armado con LISTO");
+    lines.push(o.name + ([o.zone].filter(Boolean).length ? " · " + o.zone : ""));
+    if (typeof o.rating === "number") lines.push(ratingText(o));
+    if (safeHttps(o.maps_url)) lines.push("Google Maps: " + o.maps_url);
+    lines.push(PRICE_NOTE + ".");
+    return lines.join("\n");
+  }
+
+  function copyText(text) {
+    if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text);
+    return new Promise(function (resolve, reject) {
+      var ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      var ok = false;
+      try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+      document.body.removeChild(ta);
+      if (ok) resolve(); else reject(new Error("copy"));
+    });
+  }
+
+  function sharePlan(o) {
+    var text = shareText(o);
+    if (navigator.share) {
+      navigator.share({ title: "LISTO — " + o.name, text: text }).catch(function (err) {
+        if (err && err.name === "AbortError") return;   // el usuario canceló: no es un error
+        copyFallback(text);
+      });
+      return;
+    }
+    copyFallback(text);
+  }
+
+  function copyFallback(text) {
+    copyText(text).then(function () {
+      toast("Copiamos el plan. Pegalo donde quieras.");
+    }, function () {
+      toast("No pudimos copiar el plan. Probá con el botón de WhatsApp.", 6000);
     });
   }
 
   $("#proposals").addEventListener("click", function (e) {
-    var open = e.target.closest("[data-open]");
-    if (open) {
-      var card = open.closest(".card");
-      var isOpen = card.classList.toggle("is-open");
-      open.setAttribute("aria-expanded", isOpen ? "true" : "false");
-      open.innerHTML = (isOpen ? "Cerrar" : "Ver plan") + ' <span aria-hidden="true">→</span>';
-      return;
-    }
+    if (e.target.closest("[data-retry]")) { searchOptions(); return; }
+    var share = e.target.closest("[data-share]");
+    if (share) { sharePlan(state.options[parseInt(share.getAttribute("data-share"), 10)]); return; }
     var choose = e.target.closest("[data-choose]");
     if (!choose) return;
-    var i = parseInt(choose.getAttribute("data-choose"), 10);
-    state.selected = i;
-    markSelected(i);
+    var o = state.options[parseInt(choose.getAttribute("data-choose"), 10)];
+    if (!o) return;
+    // Registro de la intención (por ahora en este navegador). No reserva ni cobra nada.
+    state.selected = o.google_place_id;
+    state.selectedAt = new Date().toISOString();
+    markSelected(o.google_place_id);
     savePlan();
-    toast("Anotado. En la versión completa te confirmaríamos precio y disponibilidad de “" + STYLES[i].title + "”.");
+    toast("Anotamos tu elección: " + o.name + ". No reservamos ni cobramos nada: " + PRICE_NOTE.toLowerCase() + ".", 6000);
   });
 
   /* ---------- Aviso flotante ---------- */
@@ -702,14 +818,25 @@
     else scroll();
   }
 
+  function hasFreshOptions() {
+    return state.options && state.optionsAt && Date.now() - state.optionsAt < OPTIONS_TTL_MS;
+  }
+
+  function showPlans() {
+    show("proposals", function () {
+      renderSummary();
+      if (hasFreshOptions()) renderOptions(); else searchOptions();
+    });
+  }
+
   function goPlans() {
     if (state.data && state.hasProposals) {
-      if (current !== "proposals") show("proposals", renderProposals);
+      if (current !== "proposals") showPlans();
       return;
     }
     if (loadPlan()) {
-      state.hasProposals = false;
-      show("proposals", renderProposals);
+      state.hasProposals = true;
+      showPlans();
       return;
     }
     toast("Todavía no armaste ningún plan. Contanos qué querés hacer y empezamos.");

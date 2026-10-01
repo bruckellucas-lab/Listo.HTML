@@ -191,3 +191,22 @@ Medidas para no gastar de más:
 3. Tocá **Ver fotos (N)**: se abre la galería con hasta 6 fotos, cada una con su autor.
 4. Sección **3**: pegá un `google_place_id` de la tabla `providers` y tocá **Ver fotos**. Así va a funcionar el detalle de un proveedor guardado.
 5. Probalo también en el celular.
+
+---
+
+# Lugares reales en la web principal
+
+La web usa `/api/plan-options?category=…&zone=…`, una función pública que no pide contraseña pero está acotada:
+
+- **Sin búsquedas libres:** solo acepta `restaurantes`, `bares` o `salones`, más una zona escrita con letras.
+- **Cómo se elige la categoría:**
+  - tragos sin comida, after office o despedida → **bares**;
+  - más de 40 personas o eventos grandes (casamiento, 15, corporativo…) → **salones**;
+  - todo lo demás → **restaurantes**.
+- **Cómo elige los 3 lugares:**
+  - excluye lugares cerrados (definitiva o temporalmente) y repetidos;
+  - prioriza los que están en la zona pedida;
+  - después, los que tienen rating y al menos 20 reseñas.
+- **Providers:** cada búsqueda guarda y actualiza los lugares en `providers`, sin duplicar.
+- **Costo:** cada búsqueda nueva es 1 *Text Search*. La misma búsqueda repetida en los 10 minutos siguientes sale de la caché de Vercel y no vuelve a llamar a Google. Además, cada visitante puede hacer como máximo unas 30 búsquedas cada 10 minutos.
+- **"Elegir esta opción"** por ahora queda registrado solo en el navegador del usuario. Para guardarlo en Supabase hace falta una tabla nueva, pendiente de aprobación.

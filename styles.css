@@ -581,9 +581,14 @@ figcaption {
   position: absolute; inset: 0;
   background: var(--ink);
   transform-origin: left;
-  animation: load 1s var(--ease) forwards;
+  animation: load 1.6s var(--ease) infinite;
 }
-@keyframes load { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes load {
+  0% { transform: scaleX(0); transform-origin: left; }
+  50% { transform: scaleX(1); transform-origin: left; }
+  50.01% { transform-origin: right; }
+  100% { transform: scaleX(0); transform-origin: right; }
+}
 
 .proposals {
   display: grid;
@@ -620,6 +625,8 @@ figcaption {
   border-bottom: 1px solid var(--ink);
 }
 .card-title {
+  overflow-wrap: anywhere;
+  hyphens: auto;
   font-family: var(--display);
   font-weight: 400;
   font-size: clamp(42px, 4.4vw, 72px);
@@ -671,6 +678,31 @@ figcaption {
 }
 .card-cta span { display: inline-block; transition: transform .45s var(--ease); }
 .card-cta:hover span { transform: translateX(5px); }
+
+/* Opciones reales: links, compartir, mensajes y foto faltante */
+.card-links { display: flex; flex-wrap: wrap; gap: 4px 22px; }
+.card-links .card-cta { text-decoration: none; }
+.card-choose { margin-top: 22px; }
+.card-share { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.card-wa { font-size: 11px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; opacity: .6; margin-top: 18px; transition: opacity .3s var(--ease); }
+.card-wa:hover { opacity: 1; }
+.photo-credit { text-align: right; max-width: 70%; overflow-wrap: anywhere; }
+.photo-credit a { text-decoration: underline; text-underline-offset: 2px; }
+.photo-empty {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--display); font-size: clamp(34px, 4vw, 52px);
+  color: var(--cream); opacity: .9;
+}
+.proposals-message { grid-column: 1 / -1; padding: 24px 0 64px; max-width: 720px; }
+.proposals-message-title {
+  font-family: var(--display); text-transform: uppercase;
+  font-size: clamp(40px, 6vw, 88px); line-height: .95; margin: 0 0 18px;
+}
+.proposals-message-text { font-size: 17px; color: #4A4138; margin: 0 0 28px; max-width: 520px; }
+.proposals-message-actions { display: flex; align-items: center; gap: 28px; flex-wrap: wrap; }
+.btn:disabled { opacity: .45; cursor: progress; }
+.btn:disabled span { transform: none !important; }
 .card.is-open .card-cta span { transform: rotate(90deg); }
 
 .proposals-actions {
