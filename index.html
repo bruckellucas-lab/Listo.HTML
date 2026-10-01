@@ -269,6 +269,73 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
+  <!-- "Quiero avanzar": datos de contacto para consultar disponibilidad. No es una reserva. -->
+  <dialog class="advance" id="advance" aria-labelledby="advance-title">
+    <div class="advance-inner">
+      <div class="advance-head">
+        <p class="kicker">Quiero avanzar</p>
+        <button type="button" class="btn-text" data-close-advance>Cerrar ✕</button>
+      </div>
+
+      <div id="advance-form-view">
+        <h2 class="advance-title" id="advance-title">Quiero<br>avanzar.</h2>
+        <p class="advance-lead" id="advance-lead">Dejanos tus datos y te ayudamos a consultar disponibilidad y condiciones con este lugar.</p>
+        <dl class="advance-plan" id="advance-plan"></dl>
+
+        <form id="advance-form" novalidate>
+          <div class="advance-grid">
+            <div class="advance-field advance-wide">
+              <label for="a-name">Nombre</label>
+              <input id="a-name" name="name" type="text" autocomplete="name" maxlength="80" required>
+            </div>
+            <div class="advance-field">
+              <label for="a-phone">WhatsApp</label>
+              <input id="a-phone" name="phone" type="tel" inputmode="tel" autocomplete="tel" maxlength="30" placeholder="+54 9 11 …" required>
+            </div>
+            <div class="advance-field">
+              <label for="a-email">Email <span>(opcional)</span></label>
+              <input id="a-email" name="email" type="email" autocomplete="email" maxlength="120">
+            </div>
+            <div class="advance-field">
+              <label for="a-date">Fecha del plan</label>
+              <input id="a-date" name="event_date" type="date" required>
+            </div>
+            <div class="advance-field">
+              <label for="a-time">Horario aproximado</label>
+              <input id="a-time" name="approximate_time" type="time" step="900" required>
+            </div>
+            <div class="advance-field advance-wide">
+              <label for="a-notes">Comentario <span>(opcional)</span></label>
+              <textarea id="a-notes" name="notes" rows="2" maxlength="500" placeholder="Algo que tengamos que saber"></textarea>
+            </div>
+            <div class="sr-only" aria-hidden="true">
+              <label for="a-website">No completar</label>
+              <input id="a-website" name="website" type="text" tabindex="-1" autocomplete="off">
+            </div>
+          </div>
+
+          <p class="form-error" id="advance-error" role="alert" hidden></p>
+          <span class="loading-bar advance-bar" id="advance-bar" aria-hidden="true" hidden></span>
+
+          <div class="advance-actions">
+            <button type="submit" class="btn btn-light" id="advance-submit">Enviar solicitud <span aria-hidden="true">→</span></button>
+            <button type="button" class="btn-text" data-close-advance>Cancelar</button>
+          </div>
+          <p class="advance-legal">Usamos estos datos sólo para consultar este plan. Todavía no hay ninguna reserva ni pago.</p>
+        </form>
+      </div>
+
+      <div id="advance-done" hidden>
+        <h2 class="advance-title">LISTO.</h2>
+        <p class="advance-done-lead">Recibimos tu solicitud.</p>
+        <p class="advance-lead">Todavía no hay una reserva confirmada. Vamos a consultar disponibilidad y condiciones.</p>
+        <div class="advance-actions">
+          <button type="button" class="btn btn-light" data-close-advance>Volver a mis opciones</button>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
   <script src="config.js"></script>
   <script src="supabase.js"></script>
   <script src="app.js"></script>

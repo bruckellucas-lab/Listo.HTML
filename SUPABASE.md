@@ -163,3 +163,74 @@ from public.plan_selections s
 join public.event_requests r on r.id = s.event_request_id
 order by s.created_at desc;
 ```
+
+---
+
+## Paso 5 · "Quiero avanzar" (tabla plan_inquiries)
+
+Cuando el usuario ya eligió un lugar y toca **Quiero avanzar**, deja sus datos de contacto para que LISTO consulte disponibilidad y condiciones. **No es una reserva.**
+
+**Cómo se vinculan las tablas** (sin repetir datos):
+
+```
+event_requests  (el pedido: tipo, personas, zona, presupuesto, necesidades)
+   ↑ event_request_id
+plan_selections (qué lugar eligió y cuándo)
+   ↑ plan_selection_id
+plan_inquiries  (datos de contacto para avanzar + estado)
+```
+
+### Crear la tabla
+
+En **SQL Editor** → **New query**, pegá todo y tocá **Run**:
+
+```sql
+create table if not exists public.plan_inquiries (
+  id                 uuid        primary key default gen_random_uuid(),
+  created_at         timestamptz not null default now(),
+  updated_at         timestamptz not null default now(),
+  plan_selection_id  uuid        not null references public.plan_selections(id) on delete cascade,
+  contact_name       text        not null,
+  contact_phone      text        not null,
+  contact_email      text,
+  event_date         date        not null,
+  approximate_time   text        not null,
+  notes              text,
+  status             text        not null default 'inquiry_requested'
+);
+
+-- Una sola solicitud abierta por elección (un doble envío actualiza en vez de duplicar).
+create unique index if not exists plan_inquiries_one_open
+  on public.plan_inquiries (plan_selection_id)
+  where status = 'inquiry_requested';
+
+-- Datos personales: cerrada al público. Solo el servidor de Vercel puede leer y escribir.
+alter table public.plan_inquiries enable row level security;
+```
+
+| Columna | Tipo | Valor por defecto | Qué guarda |
+|---|---|---|---|
+| `id` | uuid | se genera solo | identificador de la solicitud |
+| `created_at` / `updated_at` | timestamptz | ahora | cuándo se envió y cuándo se actualizó |
+| `plan_selection_id` | uuid | — | qué elección (de ahí salen el lugar y el pedido) |
+| `contact_name` | text | — | nombre |
+| `contact_phone` | text | — | WhatsApp |
+| `contact_email` | text | vacío | email (opcional) |
+| `event_date` | date | — | fecha del plan |
+| `approximate_time` | text | — | horario aproximado (ej. `21:00`) |
+| `notes` | text | vacío | comentario (opcional) |
+| `status` | text | `inquiry_requested` | estado de la solicitud |
+
+`status` no tiene lista cerrada a propósito: más adelante podrá pasar a estados como `contacting`, `quoted`, `confirmed` o `cancelled` sin cambiar la tabla.
+
+### Ver las solicitudes con todo el contexto
+
+```sql
+select i.created_at, i.status, i.contact_name, i.contact_phone, i.contact_email,
+       i.event_date, i.approximate_time, i.notes,
+       s.provider_name, r.event_type, r.guests, r.zone, r.budget, r.needs, r.original_prompt
+from public.plan_inquiries i
+join public.plan_selections s on s.id = i.plan_selection_id
+join public.event_requests  r on r.id = s.event_request_id
+order by i.created_at desc;
+```

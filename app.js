@@ -185,6 +185,7 @@
     requestId: null,      // id (UUID) del event_request guardado en Supabase
     selected: null,       // google_place_id de la opción elegida
     selectedAt: null,
+    inquiries: {},        // "pedido|lugar" → true si ya se envió "Quiero avanzar" (sin datos personales)
     options: null,        // las 3 opciones reales que se mostraron
     optionsAt: 0,
     hasProposals: false
@@ -196,7 +197,7 @@
         text: state.text, data: state.data,
         requestId: state.requestId, requestSig: state.requestId ? lastSaved : "",
         selected: state.selected, selectedAt: state.selectedAt,
-        options: state.options, optionsAt: state.optionsAt
+        options: state.options, optionsAt: state.optionsAt, inquiries: state.inquiries
       }));
     } catch (e) { /* sin almacenamiento: no pasa nada */ }
   }
@@ -216,6 +217,7 @@
       if (state.requestId && typeof saved.requestSig === "string") lastSaved = saved.requestSig;
       state.selected = typeof saved.selected === "string" ? saved.selected : null;
       state.selectedAt = saved.selectedAt || null;
+      state.inquiries = saved.inquiries && typeof saved.inquiries === "object" ? saved.inquiries : {};
       state.options = Array.isArray(saved.options) ? saved.options : null;
       state.optionsAt = typeof saved.optionsAt === "number" ? saved.optionsAt : 0;
       return true;
@@ -577,6 +579,13 @@
     return list;
   }
 
+  // Errores de red del navegador (en inglés y técnicos) → mensaje entendible.
+  // Los mensajes que arma LISTO (del servidor) se muestran tal cual.
+  function friendlyError(err, fallback) {
+    if (!err || err.name === "TypeError" || !err.message) return fallback;
+    return err.message;
+  }
+
   /* ---------- Pantalla 3: lugares reales (Google Places vía Vercel) ---------- */
 
   var OPTIONS_TTL_MS = 50 * 60 * 1000;   // los links de fotos duran 1 hora: re-buscamos antes
@@ -653,7 +662,7 @@
         renderMessage(
           "No pudimos traer opciones.",
           aborted ? "La búsqueda tardó demasiado. Revisá tu conexión y probá de nuevo."
-            : (err && err.message) || "Parece un problema de conexión. Probá de nuevo en un momento.",
+            : friendlyError(err, "Parece un problema de conexión. Probá de nuevo en un momento."),
           true
         );
       })
@@ -733,6 +742,7 @@
               (web ? '<a class="card-cta" href="' + escapeHTML(web) + '" target="_blank" rel="noopener noreferrer">Sitio web <span aria-hidden="true">→</span></a>' : '') +
             '</div>' +
             '<button type="button" class="btn btn-dark card-choose" data-choose="' + i + '">Elegir esta opción</button>' +
+            '<button type="button" class="btn btn-dark card-advance" data-advance="' + i + '">Quiero avanzar <span aria-hidden="true">→</span></button>' +
             '<div class="card-share">' +
               '<button type="button" class="card-cta" data-share="' + i + '">Compartir plan <span aria-hidden="true">→</span></button>' +
               '<a class="card-wa" href="https://wa.me/?text=' + encodeURIComponent(shareText(o)) + '" target="_blank" rel="noopener noreferrer">WhatsApp</a>' +
@@ -751,6 +761,8 @@
       card.classList.toggle("is-selected", on);
       var b = card.querySelector("[data-choose]");
       if (b) b.innerHTML = on ? "Elegida ✓" : "Elegir esta opción";
+      var adv = card.querySelector("[data-advance]");
+      if (adv) adv.innerHTML = inquirySent(card.getAttribute("data-id")) ? "Solicitud enviada ✓" : 'Quiero avanzar <span aria-hidden="true">→</span>';
     });
   }
 
@@ -809,6 +821,8 @@
     if (e.target.closest("[data-retry]")) { searchOptions(); return; }
     var share = e.target.closest("[data-share]");
     if (share) { sharePlan(state.options[parseInt(share.getAttribute("data-share"), 10)]); return; }
+    var advance = e.target.closest("[data-advance]");
+    if (advance) { openAdvance(state.options[parseInt(advance.getAttribute("data-advance"), 10)]); return; }
     var choose = e.target.closest("[data-choose]");
     if (!choose) return;
     var o = state.options[parseInt(choose.getAttribute("data-choose"), 10)];
@@ -862,9 +876,152 @@
     }).catch(function (err) {
       setChoosing(false);
       markSelected(previous);                                // vuelve a como estaba
-      toast((err && err.message) || "No pudimos guardar tu elección. Probá de nuevo en un momento.", 8000);
+      toast(friendlyError(err, "No pudimos guardar tu elección. Revisá tu conexión y probá de nuevo."), 8000);
     });
   }
+
+  /* ---------- "Quiero avanzar" (se guarda en plan_inquiries) ---------- */
+
+  var advanceDialog = $("#advance");
+  var advanceForm = $("#advance-form");
+  var advanceError = $("#advance-error");
+  var advanceSubmit = $("#advance-submit");
+  var advanceOption = null;
+  var sendingInquiry = false;
+
+  function inquiryKey(placeId) { return (state.requestId || "") + "|" + placeId; }
+  function inquirySent(placeId) { return !!(state.inquiries && state.inquiries[inquiryKey(placeId)]); }
+
+  function todayLocal() {
+    var d = new Date();
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    return d.toISOString().slice(0, 10);
+  }
+
+  // Resumen con lo que LISTO ya sabe (no se vuelve a pedir).
+  function renderAdvancePlan(o) {
+    var d = state.data || {};
+    var rows = [
+      ["Lugar", o.name + (o.zone ? " — " + o.zone : "")],
+      ["Plan", d.type],
+      ["Personas", d.guests ? String(d.guests) : ""],
+      ["Zona", d.zone],
+      ["Presupuesto", d.budget ? "Hasta " + formatMoney(d.budget) : ""],
+      ["Necesitás", getActiveNeeds().map(function (n) { return n.label; }).join(", ")]
+    ].filter(function (r) { return r[1]; });
+    $("#advance-plan").innerHTML = rows.map(function (r) {
+      return "<dt>" + escapeHTML(r[0]) + "</dt><dd>" + escapeHTML(r[1]) + "</dd>";
+    }).join("");
+  }
+
+  function showAdvanceView(done) {
+    $("#advance-form-view").hidden = done;
+    $("#advance-done").hidden = !done;
+  }
+
+  function openAdvance(o) {
+    if (!o) return;
+    if (state.selected !== o.google_place_id) { toast("Primero elegí esta opción."); return; }
+    advanceOption = o;
+    renderAdvancePlan(o);
+    showAdvanceView(false);
+    advanceError.hidden = true;
+    $all("#advance-form .advance-field").forEach(function (f) { f.classList.remove("has-error"); });
+    $("#a-date").min = todayLocal();
+    $("#advance-lead").textContent = inquirySent(o.google_place_id)
+      ? "Ya recibimos tu solicitud para este lugar. Si querés, podés actualizar tus datos."
+      : "Dejanos tus datos y te ayudamos a consultar disponibilidad y condiciones con este lugar.";
+    if (advanceDialog.showModal) advanceDialog.showModal(); else advanceDialog.setAttribute("open", "");
+    setTimeout(function () { $("#a-name").focus(); }, 50);
+  }
+
+  function closeAdvance() {
+    if (advanceDialog.close) advanceDialog.close(); else advanceDialog.removeAttribute("open");
+  }
+
+  $all("[data-close-advance]").forEach(function (b) { b.addEventListener("click", closeAdvance); });
+  advanceDialog.addEventListener("click", function (e) { if (e.target === advanceDialog) closeAdvance(); });
+
+  function setSendingInquiry(on) {
+    sendingInquiry = on;
+    advanceSubmit.disabled = on;
+    advanceSubmit.setAttribute("aria-busy", on ? "true" : "false");
+    advanceSubmit.innerHTML = on ? "Enviando…" : 'Enviar solicitud <span aria-hidden="true">→</span>';
+    $("#advance-bar").hidden = !on;
+  }
+
+  function advanceFail(msg, fieldId) {
+    advanceError.textContent = msg;
+    advanceError.hidden = false;
+    if (fieldId) { var f = $("#" + fieldId); f.closest(".advance-field").classList.add("has-error"); f.focus(); }
+  }
+
+  // Controles rápidos en el navegador (el servidor vuelve a validar todo).
+  function checkAdvance(v) {
+    if (v.name.length < 2) return ["Escribí tu nombre.", "a-name"];
+    var digits = v.phone.replace(/\D/g, "");
+    if (digits.length < 8 || digits.length > 15) return ["Revisá tu WhatsApp: tiene que ser un número de teléfono.", "a-phone"];
+    if (v.email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v.email)) return ["Revisá tu email (o dejalo vacío).", "a-email"];
+    if (!v.event_date) return ["Elegí la fecha del plan.", "a-date"];
+    if (v.event_date < todayLocal()) return ["La fecha del plan no puede ser anterior a hoy.", "a-date"];
+    if (!v.approximate_time) return ["Elegí un horario aproximado.", "a-time"];
+    return null;
+  }
+
+  advanceForm.addEventListener("submit", function (e) {
+    e.preventDefault();
+    if (sendingInquiry || !advanceOption) return;               // evita doble envío
+    advanceError.hidden = true;
+    $all("#advance-form .advance-field").forEach(function (f) { f.classList.remove("has-error"); });
+    var v = {
+      name: $("#a-name").value.trim(),
+      phone: $("#a-phone").value.trim(),
+      email: $("#a-email").value.trim(),
+      event_date: $("#a-date").value,
+      approximate_time: $("#a-time").value,
+      notes: $("#a-notes").value.trim(),
+      website: $("#a-website").value
+    };
+    var problem = checkAdvance(v);
+    if (problem) { advanceFail(problem[0], problem[1]); return; }
+
+    var o = advanceOption;
+    var wasSent = inquirySent(o.google_place_id);
+    setSendingInquiry(true);
+    var controller = "AbortController" in window ? new AbortController() : null;
+    var timer = controller ? setTimeout(function () { controller.abort(); }, 20000) : null;
+
+    Promise.resolve(requestSave).then(function () {
+      if (!state.requestId) throw new Error("No pudimos vincular la solicitud con tu plan. Volvé a buscar opciones y probá de nuevo.");
+      v.event_request_id = state.requestId;
+      v.google_place_id = o.google_place_id;
+      return fetch("/api/plan-inquiry", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(v),
+        signal: controller ? controller.signal : undefined
+      });
+    }).then(function (r) {
+      return r.json().catch(function () { return { ok: false }; }).then(function (data) {
+        if (!r.ok || !data.ok) throw new Error(data.error || "");
+        return data;
+      });
+    }).then(function () {
+      state.inquiries[inquiryKey(o.google_place_id)] = true;
+      savePlan();
+      markSelected(state.selected);
+      advanceForm.reset();
+      showAdvanceView(true);
+      if (wasSent) toast("Actualizamos tus datos de contacto.");
+    }).catch(function (err) {
+      var aborted = err && err.name === "AbortError";
+      advanceFail(aborted ? "La conexión tardó demasiado. Probá de nuevo."
+        : friendlyError(err, "No pudimos enviar tu solicitud. Revisá tu conexión y probá de nuevo."));
+    }).then(function () {
+      clearTimeout(timer);
+      setSendingInquiry(false);
+    });
+  });
 
   /* ---------- Aviso flotante ---------- */
 
