@@ -63,6 +63,7 @@
       background: radial-gradient(120% 90% at 30% 20%, #4A3524 0%, #241A12 55%, #120E0B 100%); color: var(--cream); text-align: center; padding: 12px; }
     .placeholder b { font-family: Anton, Impact, sans-serif; font-weight: 400; font-size: 30px; letter-spacing: .02em; }
     .placeholder span { font-size: 10px; letter-spacing: .2em; text-transform: uppercase; opacity: .7; }
+    .placeholder .why { text-transform: none; letter-spacing: 0; font-size: 12px; opacity: .85; max-width: 90%; }
 
     /* Galería */
     dialog { border: 0; padding: 0; width: min(1100px, 100vw - 24px); max-height: calc(100vh - 24px); background: var(--bone); color: var(--ink); }
@@ -221,7 +222,18 @@
       img.referrerPolicy = "no-referrer";
       img.src = size === "large" ? photo.large : photo.thumb;
       img.addEventListener("load", function () { img.classList.add("is-loaded"); });
-      img.addEventListener("error", function () { img.remove(); wrap.appendChild(placeholder("Foto no disponible")); });
+      img.addEventListener("error", function () {
+        img.remove();
+        var ph = placeholder("Foto no disponible");
+        wrap.appendChild(ph);
+        // Diagnóstico: pregunta al servidor por qué falló (sin exponer ninguna clave).
+        fetch(img.src, { redirect: "manual" }).then(function (r) {
+          if (r.type === "opaqueredirect") return null;
+          return r.json().then(function (d) { return d && d.error; }).catch(function () { return "Error " + r.status; });
+        }).then(function (why) {
+          if (why) ph.appendChild(el("span", "why", why));
+        }).catch(function () {});
+      });
       wrap.appendChild(img);
       return { box: wrap, attr: attribution(photo) };
     }

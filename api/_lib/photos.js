@@ -23,8 +23,8 @@ var DETAILS_BASE = "https://places.googleapis.com/v1/places/";
 var ALLOWED_WIDTHS = [320, 480, 800, 1200, 1600];
 var LINK_TTL_SECONDS = 60 * 60;           // los links firmados duran 1 hora
 var MAX_PHOTOS_PER_PLACE = 6;             // tope para la galería del detalle
-var NAME_RE = /^places\/[A-Za-z0-9_-]{10,300}\/photos\/[A-Za-z0-9_-]{10,1000}$/;
-var PLACE_ID_RE = /^[A-Za-z0-9_-]{10,300}$/;
+var NAME_RE = /^places\/[A-Za-z0-9_-]{10,500}\/photos\/[A-Za-z0-9_-]{10,4096}$/;
+var PLACE_ID_RE = /^[A-Za-z0-9_-]{10,500}$/;
 
 function signingKey(secret) {
   return "listo-photo:" + secret;

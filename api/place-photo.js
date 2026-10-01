@@ -41,6 +41,11 @@ module.exports = async function handler(req, res) {
     return res.end();
   } catch (err) {
     console.error("[place-photo] Google:", err.status, err.message);
-    return http.sendJson(res, err.status === 404 ? 404 : 502, { ok: false, error: "No se pudo obtener la foto de Google." });
+    var why = err.status === 403 || err.status === 401
+      ? "Google rechazó la clave para fotos: revisá que Places API (New) esté habilitada y permitida en la clave."
+      : err.status === 429 ? "Se alcanzó la cuota diaria de fotos en Google."
+      : err.status === 404 ? "Google ya no tiene esta foto."
+      : "Google no devolvió la foto (" + (err.status || "sin respuesta") + ").";
+    return http.sendJson(res, err.status === 404 ? 404 : 502, { ok: false, error: why });
   }
 };
