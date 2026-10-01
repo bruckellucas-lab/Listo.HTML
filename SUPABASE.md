@@ -106,3 +106,60 @@ Si en **API Keys** no ves una "Publishable key", abrí la pestaña **Legacy API 
 | `guests` | `int4` / `int8` |
 | `budget` | `int8` o `numeric` |
 | `needs` | `text[]` (lista) o `jsonb`. Si es `text`, LISTO lo guarda como "Lugar, Comida, Bebida". |
+
+---
+
+## Paso 4 · Guardar "Elegir esta opción" (tabla plan_selections)
+
+Cuando el usuario toca **Elegir esta opción**, LISTO guarda qué pedido eligió qué lugar, cuándo y en qué estado. Por ahora **no reserva ni cobra nada**.
+
+**Cómo se vincula con el pedido, sin agregar columnas a `event_requests`:** al guardar el pedido, la web le asigna su `id` UUID (un número aleatorio imposible de adivinar). Así la web conoce el `id` sin necesidad de leer la tabla, que sigue cerrada al público.
+
+### Crear la tabla
+
+1. En Supabase, abrí **SQL Editor** → **New query**.
+2. Pegá todo este bloque y tocá **Run**. Tiene que decir **Success**.
+
+```sql
+create table if not exists public.plan_selections (
+  id                        uuid        primary key default gen_random_uuid(),
+  created_at                timestamptz not null default now(),
+  updated_at                timestamptz not null default now(),
+  event_request_id          uuid        not null references public.event_requests(id) on delete cascade,
+  provider_google_place_id  text        not null references public.providers(google_place_id),
+  provider_name             text        not null,
+  status                    text        not null default 'interested'
+                                        check (status in ('interested', 'replaced'))
+);
+
+-- Un pedido puede tener una sola elección activa (evita duplicados por doble clic).
+create unique index if not exists plan_selections_one_active
+  on public.plan_selections (event_request_id)
+  where status = 'interested';
+
+-- Cerrada al público: solo el servidor de Vercel (con la clave secreta) puede leer y escribir.
+alter table public.plan_selections enable row level security;
+```
+
+| Columna | Tipo | Valor por defecto | Para qué sirve |
+|---|---|---|---|
+| `id` | uuid | `gen_random_uuid()` | Identificador de la elección |
+| `created_at` | timestamptz | `now()` | Cuándo eligió |
+| `updated_at` | timestamptz | `now()` | Cuándo cambió el estado por última vez |
+| `event_request_id` | uuid | — | Qué pedido (apunta a `event_requests.id`) |
+| `provider_google_place_id` | text | — | Qué lugar (apunta a `providers.google_place_id`) |
+| `provider_name` | text | — | Nombre del lugar en ese momento |
+| `status` | text | `'interested'` | `interested` = elección activa · `replaced` = la cambió por otra |
+
+> Si el usuario cambia de opción, la anterior queda como `replaced` y se guarda la nueva como `interested`. Así queda el historial completo.
+
+### Ver las elecciones con el pedido y el lugar
+
+En **SQL Editor** podés correr esto para ver todo junto:
+
+```sql
+select s.created_at, s.status, s.provider_name, r.original_prompt, r.event_type, r.guests, r.zone
+from public.plan_selections s
+join public.event_requests r on r.id = s.event_request_id
+order by s.created_at desc;
+```

@@ -107,5 +107,7 @@ module.exports = {
   saveProviders: saveProviders,
   explainStoreError: explainStoreError,
   normalizeUrl: normalizeUrl,
+  headersFor: headersFor,
+  request: request,
   UPDATABLE: UPDATABLE
 };

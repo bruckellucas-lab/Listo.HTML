@@ -182,6 +182,7 @@
   var state = {
     text: "",
     data: null,
+    requestId: null,      // id (UUID) del event_request guardado en Supabase
     selected: null,       // google_place_id de la opción elegida
     selectedAt: null,
     options: null,        // las 3 opciones reales que se mostraron
@@ -193,6 +194,7 @@
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
         text: state.text, data: state.data,
+        requestId: state.requestId, requestSig: state.requestId ? lastSaved : "",
         selected: state.selected, selectedAt: state.selectedAt,
         options: state.options, optionsAt: state.optionsAt
       }));
@@ -209,6 +211,9 @@
       state.data = saved.data;
       state.data.customNeeds = state.data.customNeeds || [];
       state.data.needLabels = state.data.needLabels || {};
+      state.requestId = typeof saved.requestId === "string" ? saved.requestId : null;
+      // Recuerda qué pedido ya está guardado: buscar de nuevo sin cambios no crea otro.
+      if (state.requestId && typeof saved.requestSig === "string") lastSaved = saved.requestSig;
       state.selected = typeof saved.selected === "string" ? saved.selected : null;
       state.selectedAt = saved.selectedAt || null;
       state.options = Array.isArray(saved.options) ? saved.options : null;
@@ -513,24 +518,54 @@
     return !row.event_type && !row.guests && !row.zone && !row.budget && !row.needs.length;
   }
 
+  // UUID aleatorio: lo genera el navegador para conocer el id del pedido sin tener que leer la tabla.
+  function newUUID() {
+    if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+    var b = new Uint8Array(16);
+    crypto.getRandomValues(b);
+    b[6] = (b[6] & 0x0f) | 0x40;
+    b[8] = (b[8] & 0x3f) | 0x80;
+    var h = Array.prototype.map.call(b, function (x) { return (x + 256).toString(16).slice(1); }).join("");
+    return h.slice(0, 8) + "-" + h.slice(8, 12) + "-" + h.slice(12, 16) + "-" + h.slice(16, 20) + "-" + h.slice(20);
+  }
+
+  var requestSave = null;   // promesa del guardado en curso: la elección la espera
+
   function saveRequest() {
     if (!window.ListoDB || !state.data) return;
     var row = buildRequest();
     if (isEmptyRequest(row)) return;
     var signature = JSON.stringify(row);
-    if (saving || signature === lastSaved) return;
+    if (saving || signature === lastSaved) return;   // mismo pedido: se reutiliza el id ya guardado
     saving = true;
-    window.ListoDB.saveEventRequest(row).then(function (result) {
+    state.requestId = null;
+    state.selected = null;
+    var id = newUUID();
+    var withId = {};
+    Object.keys(row).forEach(function (k) { withId[k] = row[k]; });
+    withId.id = id;
+
+    requestSave = window.ListoDB.saveEventRequest(withId).then(function (result) {
+      // Si la columna id no aceptara el UUID, se guarda igual el pedido (sin poder vincular la elección).
+      if (!result.ok && result.reason === "bad-data") {
+        return window.ListoDB.saveEventRequest(row).then(function (r2) { return { result: r2, id: null }; });
+      }
+      return { result: result, id: id };
+    }).then(function (out) {
       saving = false;
-      if (result.ok) {
+      if (out.result.ok) {
         lastSaved = signature;
+        state.requestId = out.id;
+        savePlan();
         toast("Listo: guardamos tu pedido.");
       } else {
-        toast(result.message, 8000);
+        toast(out.result.message, 8000);
       }
+      return state.requestId;
     }, function () {
       saving = false;
       toast("No pudimos guardar tu pedido. Probá de nuevo en un rato.", 8000);
+      return null;
     });
   }
 
@@ -777,14 +812,59 @@
     var choose = e.target.closest("[data-choose]");
     if (!choose) return;
     var o = state.options[parseInt(choose.getAttribute("data-choose"), 10)];
-    if (!o) return;
-    // Registro de la intención (por ahora en este navegador). No reserva ni cobra nada.
-    state.selected = o.google_place_id;
-    state.selectedAt = new Date().toISOString();
-    markSelected(o.google_place_id);
-    savePlan();
-    toast("Anotamos tu elección: " + o.name + ". No reservamos ni cobramos nada: " + PRICE_NOTE.toLowerCase() + ".", 6000);
+    if (o) chooseOption(o, choose);
   });
+
+  /* ---------- Elegir una opción (se guarda en plan_selections) ---------- */
+
+  var choosing = false;
+
+  function setChoosing(on, button) {
+    choosing = on;
+    $all("#proposals [data-choose]").forEach(function (b) { b.disabled = on; });
+    if (on && button) button.innerHTML = "Guardando…";
+  }
+
+  function postSelection(requestId, o) {
+    return fetch("/api/plan-selection", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ event_request_id: requestId, google_place_id: o.google_place_id })
+    }).then(function (r) {
+      return r.json().catch(function () { return { ok: false }; }).then(function (data) {
+        if (!r.ok || !data.ok) throw new Error(data.error || "");
+        return data;
+      });
+    });
+  }
+
+  function chooseOption(o, button) {
+    if (choosing) return;                                    // evita doble clic
+    if (state.selected === o.google_place_id) {
+      toast("Ya elegiste " + o.name + ". Si querés, podés elegir otra opción.");
+      return;
+    }
+    var previous = state.selected;
+    setChoosing(true, button);
+
+    // Esperamos a que el pedido termine de guardarse para tener su id.
+    Promise.resolve(requestSave).then(function () {
+      if (!state.requestId) throw new Error("No pudimos vincular tu elección porque el pedido no se guardó. Probá buscar opciones de nuevo.");
+      return postSelection(state.requestId, o);
+    }).then(function (data) {
+      state.selected = o.google_place_id;
+      state.selectedAt = (data.selection && data.selection.created_at) || new Date().toISOString();
+      savePlan();
+      setChoosing(false);
+      markSelected(o.google_place_id);
+      toast((previous ? "Cambiamos tu elección a " : "Guardamos tu elección: ") + o.name +
+        ". No reservamos ni cobramos nada: " + PRICE_NOTE.toLowerCase() + ".", 6000);
+    }).catch(function (err) {
+      setChoosing(false);
+      markSelected(previous);                                // vuelve a como estaba
+      toast((err && err.message) || "No pudimos guardar tu elección. Probá de nuevo en un momento.", 8000);
+    });
+  }
 
   /* ---------- Aviso flotante ---------- */
 
