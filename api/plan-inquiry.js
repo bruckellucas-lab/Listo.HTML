@@ -15,6 +15,7 @@ var http = require("./_lib/http");
 var photos = require("./_lib/photos");
 var selections = require("./_lib/selections");
 var inquiries = require("./_lib/inquiries");
+var notify = require("./_lib/notify");
 
 var WINDOW_MS = 10 * 60 * 1000;
 var MAX_PER_WINDOW = 20;
@@ -74,7 +75,18 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    var out = await inquiries.saveInquiry({ url: url, key: key }, requestId, placeId, checked.data);
+    var cfg = { url: url, key: key };
+    var out = await inquiries.saveInquiry(cfg, requestId, placeId, checked.data);
+
+    // La solicitud ya está guardada. El aviso por email se intenta después y, pase lo que pase,
+    // no cambia la respuesta al usuario (se espera para que Vercel no corte el envío a mitad).
+    try {
+      await notify.notifyInquiry(cfg, {
+        eventRequestId: requestId, placeId: placeId, selectionId: out.selectionId,
+        contact: checked.data, updated: out.updated
+      });
+    } catch (e) { console.error("[plan-inquiry] aviso:", e && e.message); }
+
     // Sólo confirmamos: nunca devolvemos los datos personales.
     return http.sendJson(res, 200, { ok: true, updated: out.updated, status: inquiries.STATUS });
   } catch (err) {

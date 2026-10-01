@@ -1,0 +1,200 @@
+/* =========================================================
+   LISTO — Aviso interno por email (Resend) de cada "Quiero avanzar"
+   - Se ejecuta DESPUÉS de guardar la solicitud: si falla, la
+     solicitud no se pierde y el usuario igual ve la confirmación.
+   - Marca plan_inquiries.notification_status = 'sent' o 'failed'.
+   - El detalle del error queda sólo en los registros de Vercel.
+   - No envía nada por WhatsApp: sólo incluye un link para abrirlo.
+   ========================================================= */
+"use strict";
+
+var store = require("./providers-store");
+
+var RESEND_URL = "https://api.resend.com/emails";
+var NOTIFY_TO = "listoeventoss@gmail.com";
+var DEFAULT_FROM = "LISTO <onboarding@resend.dev>";   // remitente de prueba de Resend (sin dominio propio)
+var TIMEOUT_MS = 8000;
+
+function api(cfg, path) { return store.normalizeUrl(cfg.url) + "/rest/v1/" + path; }
+function first(rows) { return Array.isArray(rows) && rows.length ? rows[0] : null; }
+
+function esc(v) {
+  return String(v === null || v === undefined ? "" : v).replace(/[&<>"']/g, function (c) {
+    return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+  });
+}
+
+// Teléfono del USUARIO → número para wa.me (formato internacional, sin "+").
+// Argentina: agrega 54 + 9 (celular), quita el 0 de larga distancia y el 15.
+function whatsappNumber(phone) {
+  var raw = String(phone || "").trim();
+  var d = raw.replace(/\D/g, "");
+  if (!d) return "";
+  if (d.indexOf("00") === 0) d = d.slice(2);
+  if (d.indexOf("54") === 0) {
+    var rest = d.slice(2);
+    if (rest.charAt(0) === "9") rest = rest.slice(1);
+    return "549" + stripFifteen(rest.replace(/^0/, ""));
+  }
+  if (raw.charAt(0) === "+") return d;                          // otro país: se respeta tal cual
+  return "549" + stripFifteen(d.replace(/^0/, ""));
+}
+
+function stripFifteen(n) {
+  // Área (2 a 4 dígitos) + "15" + número local = 12 dígitos → se quita el 15.
+  if (n.length === 12) {
+    for (var a = 2; a <= 4; a++) if (n.substr(a, 2) === "15") return n.slice(0, a) + n.slice(a + 2);
+  }
+  return n;
+}
+
+function money(n) {
+  return typeof n === "number" ? "$" + Math.round(n).toLocaleString("es-AR") : (n ? String(n) : "");
+}
+
+function dateAR(iso) {
+  var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ""));
+  return m ? m[3] + "/" + m[2] + "/" + m[1] : String(iso || "");
+}
+
+function nowAR() {
+  try {
+    return new Date().toLocaleString("es-AR", { timeZone: "America/Argentina/Buenos_Aires", dateStyle: "short", timeStyle: "short" }) + " (hora de Argentina)";
+  } catch (e) { return new Date().toISOString(); }
+}
+
+function needsText(needs) {
+  if (Array.isArray(needs)) return needs.join(", ");
+  return needs ? String(needs) : "";
+}
+
+// Arma el email con todo el contexto (sólo para el equipo de LISTO).
+function buildEmail(ctx) {
+  var r = ctx.request || {}, p = ctx.provider || {}, c = ctx.contact || {};
+  var wa = whatsappNumber(c.contact_phone);
+  var waLink = wa ? "https://wa.me/" + wa : "";
+  var rating = typeof p.rating === "number" ? "★ " + p.rating + (typeof p.review_count === "number" ? " (" + p.review_count + " reseñas)" : "") : "";
+  var rows = [
+    ["Contacto", c.contact_name],
+    ["WhatsApp", c.contact_phone],
+    ["Email", c.contact_email],
+    ["Plan", r.event_type],
+    ["Fecha", dateAR(c.event_date)],
+    ["Horario", c.approximate_time],
+    ["Personas", r.guests],
+    ["Zona", r.zone],
+    ["Presupuesto", money(r.budget)],
+    ["Necesidades", needsText(r.needs)],
+    ["Comentario", c.notes],
+    ["Proveedor elegido", p.name || ctx.providerName],
+    ["Dirección", p.address],
+    ["Rating", rating],
+    ["Google Maps", p.maps_url],
+    ["Pedido original", r.original_prompt],
+    ["event_request_id", ctx.eventRequestId],
+    ["plan_selection_id", ctx.selectionId],
+    ["Recibido", ctx.receivedAt]
+  ].filter(function (row) { return row[1] !== null && row[1] !== undefined && row[1] !== ""; });
+
+  var subject = (ctx.updated ? "Solicitud actualizada · " : "Nueva solicitud · ") +
+    (r.event_type || "Plan") + (r.guests ? " para " + r.guests : "") + " · " + (p.name || ctx.providerName || "LISTO");
+
+  var html = '<div style="font-family:Arial,Helvetica,sans-serif;max-width:640px;margin:0 auto;color:#141210">' +
+    '<p style="font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#5E4431;margin:0 0 8px">LISTO · Quiero avanzar</p>' +
+    '<h1 style="font-size:24px;margin:0 0 6px">' + esc(ctx.updated ? "Solicitud actualizada" : "Nueva solicitud") + '</h1>' +
+    '<p style="margin:0 0 18px;color:#5A5046">Todavía no hay reserva confirmada: hay que consultar disponibilidad y condiciones con el lugar.</p>' +
+    (waLink ? '<p style="margin:0 0 22px"><a href="' + esc(waLink) + '" style="display:inline-block;background:#141210;color:#EFE8DC;text-decoration:none;padding:14px 22px;font-weight:bold;letter-spacing:2px;font-size:13px">ABRIR WHATSAPP</a></p>' : '') +
+    '<table cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;font-size:14px">' +
+    rows.map(function (row) {
+      var val = esc(row[1]);
+      if (row[0] === "Google Maps" && /^https:\/\//.test(row[1])) val = '<a href="' + esc(row[1]) + '">Abrir en Google Maps</a>';
+      return '<tr><td style="padding:8px 12px 8px 0;border-bottom:1px solid #E2D9CB;color:#8C857A;white-space:nowrap;vertical-align:top">' + esc(row[0]) +
+        '</td><td style="padding:8px 0;border-bottom:1px solid #E2D9CB;vertical-align:top">' + val + '</td></tr>';
+    }).join("") +
+    '</table></div>';
+
+  var text = (ctx.updated ? "Solicitud actualizada" : "Nueva solicitud") + " — LISTO\n" +
+    "Todavía no hay reserva confirmada.\n\n" +
+    rows.map(function (row) { return row[0] + ": " + row[1]; }).join("\n") +
+    (waLink ? "\n\nABRIR WHATSAPP: " + waLink : "");
+
+  return { subject: subject, html: html, text: text, waLink: waLink };
+}
+
+// Busca el contexto (pedido + lugar) con la clave secreta, para el email.
+function loadContext(cfg, eventRequestId, placeId, fetchImpl) {
+  var doFetch = fetchImpl || fetch;
+  var get = function (path, step) {
+    return store.request(doFetch, api(cfg, path), { method: "GET", headers: store.headersFor(cfg.key) }, step).then(first);
+  };
+  return Promise.all([
+    get("event_requests?select=event_type,guests,zone,budget,needs,original_prompt&id=eq." + encodeURIComponent(eventRequestId), "leer pedido"),
+    get("providers?select=name,address,rating,review_count,maps_url&google_place_id=eq." + encodeURIComponent(placeId), "leer proveedor")
+  ]).then(function (res) { return { request: res[0] || {}, provider: res[1] || {} }; });
+}
+
+function sendEmail(apiKey, email, fetchImpl) {
+  var doFetch = fetchImpl || fetch;
+  var controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+  var timer = controller ? setTimeout(function () { controller.abort(); }, TIMEOUT_MS) : null;
+  return doFetch(RESEND_URL, {
+    method: "POST",
+    headers: { "Authorization": "Bearer " + apiKey, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      from: process.env.NOTIFY_FROM || DEFAULT_FROM,
+      to: [NOTIFY_TO],
+      subject: email.subject,
+      html: email.html,
+      text: email.text
+    }),
+    signal: controller ? controller.signal : undefined
+  }).then(function (res) {
+    clearTimeout(timer);
+    if (res.ok) return true;
+    return res.text().then(function (t) {
+      var err = new Error("Resend " + res.status + ": " + String(t).slice(0, 300));
+      err.status = res.status;
+      throw err;
+    });
+  }, function (err) { clearTimeout(timer); throw err; });
+}
+
+function markNotification(cfg, selectionId, sent, fetchImpl) {
+  var doFetch = fetchImpl || fetch;
+  return store.request(doFetch, api(cfg, "plan_inquiries?status=eq.inquiry_requested&plan_selection_id=eq." + encodeURIComponent(selectionId)), {
+    method: "PATCH",
+    headers: store.headersFor(cfg.key, { "Prefer": "return=minimal" }),
+    body: JSON.stringify(sent
+      ? { notification_status: "sent", notified_at: new Date().toISOString() }
+      : { notification_status: "failed", notified_at: null })
+  }, "marcar aviso");
+}
+
+// Nunca lanza errores: lo que pase acá no afecta la respuesta al usuario.
+function notifyInquiry(cfg, info, fetchImpl) {
+  var apiKey = String(process.env.RESEND_API_KEY || "").trim();
+  var sent = false;
+  var work = !apiKey
+    ? Promise.reject(new Error("Falta RESEND_API_KEY en Vercel"))
+    : loadContext(cfg, info.eventRequestId, info.placeId, fetchImpl).catch(function (err) {
+        console.error("[notify] no se pudo leer el contexto:", err.step || "", err.status || "", err.code || "");
+        return { request: {}, provider: {} };   // igual avisamos con lo que hay
+      }).then(function (ctx) {
+        return sendEmail(apiKey, buildEmail({
+          request: ctx.request, provider: ctx.provider, contact: info.contact,
+          providerName: info.providerName, eventRequestId: info.eventRequestId,
+          selectionId: info.selectionId, updated: info.updated, receivedAt: nowAR()
+        }), fetchImpl);
+      });
+
+  return work.then(function () { sent = true; }, function (err) {
+    // El detalle sólo va a los registros de Vercel (no a Supabase).
+    console.error("[notify] el email no se envió:", err && err.name === "AbortError" ? "tiempo de espera agotado" : (err && err.message));
+  }).then(function () {
+    return markNotification(cfg, info.selectionId, sent, fetchImpl).catch(function (err) {
+      console.error("[notify] no se pudo marcar notification_status:", err.step || "", err.status || "", err.code || "");
+    });
+  }).then(function () { return sent; });
+}
+
+module.exports = { NOTIFY_TO: NOTIFY_TO, buildEmail: buildEmail, whatsappNumber: whatsappNumber, notifyInquiry: notifyInquiry };

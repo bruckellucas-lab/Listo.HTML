@@ -69,13 +69,13 @@ function saveInquiry(cfg, eventRequestId, placeId, data, fetchImpl) {
         var body = Object.assign({}, data, { updated_at: now });
         return store.request(doFetch, api(cfg, path), {
           method: "PATCH", headers: store.headersFor(cfg.key, { "Prefer": "return=minimal" }), body: JSON.stringify(body)
-        }, "actualizar solicitud").then(function () { return { updated: true }; });
+        }, "actualizar solicitud").then(function () { return { updated: true, selectionId: sel.id }; });
       };
       if (first(rows)) return patch();
       var row = Object.assign({ plan_selection_id: sel.id, status: STATUS }, data);
       return store.request(doFetch, api(cfg, "plan_inquiries"), {
         method: "POST", headers: store.headersFor(cfg.key, { "Prefer": "return=minimal" }), body: JSON.stringify(row)
-      }, "guardar solicitud").then(function () { return { updated: false }; }, function (err) {
+      }, "guardar solicitud").then(function () { return { updated: false, selectionId: sel.id }; }, function (err) {
         if (err.code === "23505") return patch();   // doble envío simultáneo: se actualiza la que ya entró
         throw err;
       });

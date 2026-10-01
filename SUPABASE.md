@@ -234,3 +234,50 @@ join public.plan_selections s on s.id = i.plan_selection_id
 join public.event_requests  r on r.id = s.event_request_id
 order by i.created_at desc;
 ```
+
+---
+
+## Paso 6 · Aviso por email de cada "Quiero avanzar" (Resend)
+
+Cada vez que se guarda una solicitud, LISTO intenta mandar un email a **listoeventoss@gmail.com** con todos los datos y un botón **ABRIR WHATSAPP**. Ese botón abre una conversación con el teléfono del usuario; LISTO no manda nada por WhatsApp. Si el email falla, la solicitud no se pierde y el usuario igual ve la confirmación.
+
+### Agregar las columnas
+
+En **SQL Editor** → **New query**, pegá todo y tocá **Run**:
+
+```sql
+alter table public.plan_inquiries
+  add column if not exists notification_status text not null default 'pending',
+  add column if not exists notified_at timestamptz;
+
+alter table public.plan_inquiries
+  drop constraint if exists plan_inquiries_notification_status_check;
+
+alter table public.plan_inquiries
+  add constraint plan_inquiries_notification_status_check
+  check (notification_status in ('pending', 'sent', 'failed'));
+```
+
+| `notification_status` | Significa |
+|---|---|
+| `pending` | se guardó la solicitud y todavía no se intentó o terminó de enviar el email |
+| `sent` | el email salió bien (`notified_at` = cuándo) |
+| `failed` | el email falló (`notified_at` vacío). El motivo se ve en los registros de Vercel (**Logs**), no en Supabase |
+
+> Las solicitudes que ya existían antes de correr esto van a figurar como `pending`.
+
+### Ver las solicitudes cuyo email falló
+
+```sql
+select created_at, contact_name, contact_phone, event_date, approximate_time
+from public.plan_inquiries
+where notification_status <> 'sent'
+order by created_at desc;
+```
+
+### Resend (resumen)
+
+1. **Crear la cuenta** en [resend.com](https://resend.com) **con listoeventoss@gmail.com**. Sin dominio propio, Resend solo entrega emails a esa dirección.
+2. **Crear la clave:** **API Keys** → **Create API Key**, con permiso **Sending access**. Copiá la clave que empieza con `re_`.
+3. **Cargarla en Vercel:** **Settings → Environment Variables** → `RESEND_API_KEY` = la clave, para **Production** y **Preview**. Después hacé **Redeploy**.
+4. **Remitente:** en la etapa de prueba sale desde `LISTO <onboarding@resend.dev>`. Si el primer email llega a **Spam**, marcalo como "No es spam".
