@@ -11,6 +11,13 @@ var store = require("./providers-store");
 
 var STATUS = "inquiry_requested";
 
+// Estados posibles (los cambia el equipo desde /admin).
+var STATUSES = ["inquiry_requested", "provider_contacted", "quoted", "confirmed", "cancelled", "completed"];
+// "Abiertas": mientras una solicitud esté en alguno de estos estados, un reenvío del usuario
+// actualiza esa misma solicitud (no crea otra) y no le cambia el estado.
+var OPEN_STATUSES = ["inquiry_requested", "provider_contacted", "quoted", "confirmed"];
+var OPEN_FILTER = "status=in.(" + OPEN_STATUSES.join(",") + ")";
+
 function clean(v, max) {
   return String(v === undefined || v === null ? "" : v).replace(/\s+/g, " ").trim().slice(0, max);
 }
@@ -62,7 +69,7 @@ function saveInquiry(cfg, eventRequestId, placeId, data, fetchImpl) {
     if (sel.provider_google_place_id !== placeId) { var e2 = new Error("elección distinta"); e2.code = "OTHER_SELECTION"; throw e2; }
 
     // 2) Una sola solicitud abierta por elección: si ya existe, se actualiza (no se duplica).
-    var path = "plan_inquiries?status=eq." + STATUS + "&plan_selection_id=eq." + encodeURIComponent(sel.id);
+    var path = "plan_inquiries?" + OPEN_FILTER + "&plan_selection_id=eq." + encodeURIComponent(sel.id);
     return get(path.replace("plan_inquiries?", "plan_inquiries?select=id&"), "buscar solicitud").then(function (rows) {
       var now = new Date().toISOString();
       var patch = function () {
@@ -91,4 +98,7 @@ function explain(err) {
   return { status: 502, message: "No pudimos enviar tu solicitud. Probá de nuevo en un momento." };
 }
 
-module.exports = { STATUS: STATUS, validate: validate, saveInquiry: saveInquiry, explain: explain };
+module.exports = {
+  STATUS: STATUS, STATUSES: STATUSES, OPEN_STATUSES: OPEN_STATUSES, OPEN_FILTER: OPEN_FILTER,
+  validate: validate, saveInquiry: saveInquiry, explain: explain
+};

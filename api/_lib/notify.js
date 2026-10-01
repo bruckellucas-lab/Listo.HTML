@@ -161,7 +161,9 @@ function sendEmail(apiKey, email, fetchImpl) {
 
 function markNotification(cfg, selectionId, sent, fetchImpl) {
   var doFetch = fetchImpl || fetch;
-  return store.request(doFetch, api(cfg, "plan_inquiries?status=eq.inquiry_requested&plan_selection_id=eq." + encodeURIComponent(selectionId)), {
+  // Misma regla de "solicitud abierta" que inquiries.js (Nueva, Contactando, Cotizado, Confirmado).
+  var open = "status=in.(inquiry_requested,provider_contacted,quoted,confirmed)";
+  return store.request(doFetch, api(cfg, "plan_inquiries?" + open + "&plan_selection_id=eq." + encodeURIComponent(selectionId)), {
     method: "PATCH",
     headers: store.headersFor(cfg.key, { "Prefer": "return=minimal" }),
     body: JSON.stringify(sent

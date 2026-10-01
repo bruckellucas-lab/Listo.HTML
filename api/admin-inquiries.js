@@ -1,0 +1,127 @@
+/* =========================================================
+   LISTO — Función serverless de Vercel (PANEL INTERNO)
+   Ruta: /api/admin-inquiries
+   GET   → lista de solicitudes con todo el contexto combinado:
+           plan_inquiries + plan_selections + event_requests + providers
+   PATCH → { id, status } cambia el estado (y updated_at = ahora)
+
+   Sólo responde con el pase de /admin (cookie). La clave secreta de
+   Supabase queda en Vercel: el navegador nunca la recibe.
+   No manda emails ni WhatsApp al cambiar estados.
+   ========================================================= */
+"use strict";
+
+var http = require("./_lib/http");
+var auth = require("./_lib/admin-auth");
+var store = require("./_lib/providers-store");
+var inquiries = require("./_lib/inquiries");
+var notify = require("./_lib/notify");
+
+var UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+var LIMIT = 500;
+
+var SELECT = [
+  "id", "created_at", "updated_at", "status", "notification_status", "notified_at",
+  "contact_name", "contact_phone", "contact_email", "event_date", "approximate_time", "notes", "plan_selection_id",
+  "plan_selections(id,created_at,status,event_request_id,provider_google_place_id,provider_name," +
+    "event_requests(id,created_at,event_type,guests,zone,budget,needs,original_prompt)," +
+    "providers(name,category,address,zone,rating,review_count,maps_url,website))"
+].join(",");
+
+function cfg() {
+  return { url: http.env("SUPABASE_URL"), key: http.env("SUPABASE_SECRET_KEY") };
+}
+
+function https(u) { return typeof u === "string" && /^https:\/\//.test(u) ? u : null; }
+
+// Aplana la respuesta de Supabase en lo que necesita el panel.
+function toItem(row) {
+  var sel = row.plan_selections || {};
+  var req = sel.event_requests || {};
+  var prov = sel.providers || {};
+  var wa = notify.whatsappNumber(row.contact_phone);
+  return {
+    id: row.id,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    status: row.status,
+    notification_status: row.notification_status || null,
+    notified_at: row.notified_at || null,
+    contact: { name: row.contact_name, phone: row.contact_phone, email: row.contact_email, whatsapp_url: wa ? "https://wa.me/" + wa : null },
+    plan: {
+      type: req.event_type || null, date: row.event_date, time: row.approximate_time,
+      guests: req.guests || null, zone: req.zone || null, budget: req.budget || null,
+      needs: Array.isArray(req.needs) ? req.needs : (req.needs ? String(req.needs).split(/,\s*/) : []),
+      notes: row.notes, original_prompt: req.original_prompt || null
+    },
+    provider: {
+      name: prov.name || sel.provider_name || null, category: prov.category || null, address: prov.address || null,
+      zone: prov.zone || null, rating: typeof prov.rating === "number" ? prov.rating : null,
+      review_count: typeof prov.review_count === "number" ? prov.review_count : null,
+      maps_url: https(prov.maps_url), website: https(prov.website)
+    },
+    event_request_id: sel.event_request_id || null,
+    plan_selection_id: row.plan_selection_id,
+    selection_status: sel.status || null
+  };
+}
+
+function explain(err) {
+  if (err.code === "PGRST205" || err.code === "42P01") return "Falta alguna tabla en Supabase (plan_inquiries / plan_selections).";
+  if (err.code === "42703" || err.code === "PGRST204") return "Falta alguna columna en Supabase (¿corriste el SQL del aviso por email?).";
+  if (err.code === "PGRST200") return "Supabase no encuentra el vínculo entre tablas. Revisá las claves foráneas de la guía.";
+  if (err.code === "23514") return "Ese estado no está permitido en Supabase. ¿Corriste el SQL del panel?";
+  return "No pudimos hablar con Supabase. Probá de nuevo.";
+}
+
+module.exports = async function handler(req, res) {
+  if (!auth.isAuthenticated(req)) {
+    return http.sendJson(res, 401, { ok: false, error: "Tu sesión no es válida o venció. Volvé a ingresar." });
+  }
+  var c = cfg();
+  if (!c.url || !c.key || /^sb_publishable_/.test(c.key)) {
+    return http.sendJson(res, 503, { ok: false, error: "Falta configurar Supabase en Vercel." });
+  }
+  var base = store.normalizeUrl(c.url) + "/rest/v1/";
+
+  if (req.method === "GET") {
+    try {
+      var rows = await store.request(fetch, base + "plan_inquiries?select=" + encodeURIComponent(SELECT) +
+        "&order=created_at.desc&limit=" + LIMIT, { method: "GET", headers: store.headersFor(c.key) }, "listar");
+      var items = (rows || []).map(toItem);
+      return http.sendJson(res, 200, { ok: true, statuses: inquiries.STATUSES, count: items.length, items: items });
+    } catch (err) {
+      console.error("[admin] listar:", err.status || "", err.code || "", err.message);
+      return http.sendJson(res, 502, { ok: false, error: explain(err) });
+    }
+  }
+
+  if (req.method === "PATCH") {
+    // Defensa extra contra pedidos desde otros sitios (además de SameSite=Strict).
+    if (req.headers["x-listo-admin"] !== "1") return http.sendJson(res, 403, { ok: false, error: "Pedido no permitido." });
+    var body = await http.readJson(req, 1000);
+    var id = body && String(body.id || "");
+    var status = body && String(body.status || "");
+    if (!UUID_RE.test(id)) return http.sendJson(res, 400, { ok: false, error: "Solicitud no válida." });
+    if (inquiries.STATUSES.indexOf(status) === -1) return http.sendJson(res, 400, { ok: false, error: "Estado no válido." });
+    try {
+      var updated = await store.request(fetch, base + "plan_inquiries?id=eq." + encodeURIComponent(id) + "&select=id,status,updated_at", {
+        method: "PATCH",
+        headers: store.headersFor(c.key, { "Prefer": "return=representation" }),
+        body: JSON.stringify({ status: status, updated_at: new Date().toISOString() })
+      }, "cambiar estado");
+      var row = Array.isArray(updated) ? updated[0] : null;
+      if (!row) return http.sendJson(res, 404, { ok: false, error: "No encontramos esa solicitud." });
+      return http.sendJson(res, 200, { ok: true, item: row });
+    } catch (err) {
+      console.error("[admin] cambiar estado:", err.status || "", err.code || "", err.message);
+      var msg = err.code === "23505"
+        ? "Ya hay otra solicitud abierta para esa misma elección. Cerrá (Cancelado/Completado) una antes de reabrir la otra."
+        : explain(err);
+      return http.sendJson(res, err.code === "23505" ? 409 : 502, { ok: false, error: msg });
+    }
+  }
+
+  res.setHeader("Allow", "GET, PATCH");
+  return http.sendJson(res, 405, { ok: false, error: "Método no permitido." });
+};

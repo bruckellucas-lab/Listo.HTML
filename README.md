@@ -26,6 +26,13 @@ Para activar el guardado en Supabase, seguí la guía paso a paso: [SUPABASE.md]
 
 Guía paso a paso: [GOOGLE-PLACES.md](GOOGLE-PLACES.md).
 
+### Panel interno
+
+- `admin/index.html`: panel en **/admin** para gestionar las solicitudes de "Quiero avanzar" (protegido con `ADMIN_PASSWORD`).
+- `api/admin-login.js` y `api/admin-inquiries.js`: ingreso y datos del panel (todo pasa por Vercel).
+
+Guía: [SUPABASE.md](SUPABASE.md), Paso 7.
+
 Las fotos son de [Unsplash](https://unsplash.com) (uso libre) y se cargan directamente desde su servidor.
 Para cambiar una foto, buscá en los archivos el código que empieza con `photo-` y reemplazalo por el de otra imagen de Unsplash.
 

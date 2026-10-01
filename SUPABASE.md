@@ -281,3 +281,52 @@ order by created_at desc;
 2. **Crear la clave:** **API Keys** → **Create API Key**, con permiso **Sending access**. Copiá la clave que empieza con `re_`.
 3. **Cargarla en Vercel:** **Settings → Environment Variables** → `RESEND_API_KEY` = la clave, para **Production** y **Preview**. Después hacé **Redeploy**.
 4. **Remitente:** en la etapa de prueba sale desde `LISTO <onboarding@resend.dev>`. Si el primer email llega a **Spam**, marcalo como "No es spam".
+
+---
+
+## Paso 7 · Panel interno /admin
+
+En **/admin** se ven y gestionan todas las solicitudes de "Quiero avanzar", sin entrar a Supabase. El panel está protegido con contraseña, y los datos y los cambios de estado pasan siempre por Vercel: Supabase sigue cerrado al público.
+
+### Estados
+
+| Estado (interno) | En el panel | ¿Cuenta como "abierta"? |
+|---|---|---|
+| `inquiry_requested` | Nueva | sí |
+| `provider_contacted` | Contactando proveedor | sí |
+| `quoted` | Cotizado | sí |
+| `confirmed` | Confirmado | sí |
+| `cancelled` | Cancelado | no |
+| `completed` | Completado | no |
+
+- **Si está abierta y el usuario reenvía "Quiero avanzar":** se actualizan sus datos en esa misma solicitud, sin crear otra y sin cambiar el estado.
+- **Si está cerrada:** el reenvío crea una solicitud nueva.
+- **Fecha de cambio:** cada cambio de estado desde el panel actualiza `updated_at`.
+- **Sin avisos automáticos:** cambiar un estado no manda emails ni WhatsApp.
+
+### SQL (correr una vez)
+
+En **SQL Editor** → **New query**, pegá todo y tocá **Run**:
+
+```sql
+alter table public.plan_inquiries
+  drop constraint if exists plan_inquiries_status_check;
+
+alter table public.plan_inquiries
+  add constraint plan_inquiries_status_check
+  check (status in ('inquiry_requested','provider_contacted','quoted','confirmed','cancelled','completed'));
+
+drop index if exists plan_inquiries_one_open;
+
+create unique index plan_inquiries_one_open
+  on public.plan_inquiries (plan_selection_id)
+  where status in ('inquiry_requested','provider_contacted','quoted','confirmed');
+```
+
+### Variable en Vercel
+
+**Settings → Environment Variables** → `ADMIN_PASSWORD` = una contraseña de **16 caracteres o más**, para **Production** y **Preview**. Después hacé **Redeploy**.
+
+- Al entrar, el navegador recibe un pase que dura **12 horas** y que la página no puede leer.
+- Si cambiás `ADMIN_PASSWORD`, todos los pases anteriores dejan de valer.
+- Después de 8 intentos fallidos seguidos, el ingreso se bloquea 15 minutos.

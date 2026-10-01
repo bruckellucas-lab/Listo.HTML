@@ -1,0 +1,511 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="referrer" content="no-referrer">
+  <title>LISTO / ADMIN</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ink: #141210; --char: #1C1916; --line: rgba(239, 232, 220, .14); --cream: #EFE8DC; --muted: rgba(239, 232, 220, .6);
+      --wood: #5E4431; --amber: #E0A458; --ok: #8DB28F; --bad: #E08A6B;
+      --display: "Anton", Impact, "Arial Narrow", sans-serif;
+      --sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      --gutter: clamp(16px, 4vw, 48px);
+    }
+    * { box-sizing: border-box; }
+    html, body { overflow-x: clip; }
+    body { margin: 0; min-height: 100vh; background: var(--ink); color: var(--cream); font-family: var(--sans); font-size: 15px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+    [hidden] { display: none !important; }
+    button, input, select, textarea { font: inherit; color: inherit; }
+    a { color: inherit; }
+    :focus-visible { outline: 1px solid var(--amber); outline-offset: 3px; }
+
+    .label { font-size: 11px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; }
+    .muted { color: var(--muted); }
+    .brand { font-family: var(--display); font-weight: 400; text-transform: uppercase; letter-spacing: .01em; margin: 0; line-height: .9; }
+    .brand span { color: var(--muted); }
+
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 18px; border: 1px solid var(--cream); background: var(--cream); color: var(--ink);
+      font-size: 11px; font-weight: 600; letter-spacing: .18em; text-transform: uppercase; cursor: pointer; text-decoration: none; white-space: nowrap; }
+    .btn:disabled { opacity: .45; cursor: progress; }
+    .btn-ghost { background: transparent; color: var(--cream); border-color: rgba(239, 232, 220, .35); }
+    .btn-ghost:hover { border-color: var(--cream); }
+    .btn-sm { padding: 8px 12px; font-size: 10px; }
+
+    /* Login */
+    .login { min-height: 100vh; display: grid; place-items: center; padding: var(--gutter); }
+    .login-box { width: min(440px, 100%); }
+    .login .brand { font-size: clamp(56px, 14vw, 96px); margin-bottom: 26px; }
+    .login label { display: block; margin-bottom: 6px; color: var(--muted); }
+    .login input { width: 100%; padding: 12px 0; border: 0; border-bottom: 1px solid rgba(239, 232, 220, .35); background: transparent; font-size: 17px; outline: none; border-radius: 0; }
+    .login input:focus { border-bottom-color: var(--amber); }
+    .login .btn { width: 100%; margin-top: 22px; padding: 16px; }
+    .error { color: var(--bad); font-size: 14px; margin: 14px 0 0; }
+
+    /* Panel */
+    .top { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 18px var(--gutter); border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--ink); z-index: 5; }
+    .top .brand { font-size: 28px; }
+    .top-actions { display: flex; gap: 10px; }
+    main { padding: 26px var(--gutter) 80px; max-width: 1280px; margin: 0 auto; }
+    .summary { display: flex; align-items: flex-end; gap: 18px; flex-wrap: wrap; margin-bottom: 24px; }
+    .big { font-family: var(--display); font-size: clamp(64px, 10vw, 120px); line-height: .85; }
+    .summary p { margin: 0 0 6px; }
+    .toolbar { display: grid; gap: 14px; margin-bottom: 18px; }
+    .search { width: 100%; max-width: 520px; padding: 12px 0; border: 0; border-bottom: 1px solid rgba(239, 232, 220, .35); background: transparent; outline: none; font-size: 16px; border-radius: 0; }
+    .search:focus { border-bottom-color: var(--amber); }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chip { padding: 8px 12px; border: 1px solid var(--line); background: transparent; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; cursor: pointer; }
+    .chip[aria-pressed="true"] { background: var(--cream); color: var(--ink); border-color: var(--cream); }
+    .chip b { font-weight: 600; margin-left: 6px; opacity: .7; }
+    .sorted { color: var(--muted); }
+
+    .list { display: grid; gap: 12px; }
+    .item { border: 1px solid var(--line); background: var(--char); padding: 16px 18px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px 24px; }
+    .item-head { grid-column: 1 / -1; display: flex; gap: 10px 16px; flex-wrap: wrap; align-items: center; }
+    .badge { display: inline-flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; }
+    .badge::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+    .s-inquiry_requested { color: var(--amber); }
+    .s-provider_contacted { color: #9FB7D9; }
+    .s-quoted { color: #C9A6E0; }
+    .s-confirmed { color: var(--ok); }
+    .s-cancelled { color: var(--bad); }
+    .s-completed { color: var(--muted); }
+    .mail { font-size: 11px; color: var(--muted); }
+    .mail.failed { color: var(--bad); }
+    .name { font-family: var(--display); font-weight: 400; text-transform: uppercase; font-size: 26px; line-height: 1; margin: 2px 0 4px; overflow-wrap: anywhere; }
+    .contact, .plan, .prov { margin: 0; overflow-wrap: anywhere; }
+    .plan { color: var(--muted); }
+    .prov b { font-weight: 600; }
+    .item-actions { display: flex; flex-direction: column; gap: 8px; align-items: stretch; min-width: 220px; }
+    .links { display: flex; gap: 8px; flex-wrap: wrap; }
+    .links .btn { flex: 1; }
+    select.status { width: 100%; padding: 10px 12px; background: var(--ink); border: 1px solid rgba(239, 232, 220, .35); border-radius: 0; color-scheme: dark; cursor: pointer; }
+    select.status:disabled { opacity: .5; cursor: progress; }
+
+    .state { padding: 50px 0; text-align: left; }
+    .state p { margin: 0 0 16px; }
+    .state-title { font-family: var(--display); text-transform: uppercase; font-size: clamp(32px, 5vw, 56px); line-height: 1; }
+    .loading-line { display: block; height: 1px; max-width: 420px; background: var(--line); position: relative; overflow: hidden; }
+    .loading-line::after { content: ""; position: absolute; inset: 0; background: var(--cream); transform-origin: left; animation: load 1.4s ease-in-out infinite; }
+    @keyframes load { 0% { transform: scaleX(0); } 50% { transform: scaleX(1); transform-origin: left; } 50.01% { transform-origin: right; } 100% { transform: scaleX(0); transform-origin: right; } }
+
+    /* Detalle */
+    dialog { width: min(820px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); padding: 0; border: 1px solid var(--line); background: var(--ink); color: var(--cream); }
+    dialog::backdrop { background: rgba(10, 8, 6, .8); }
+    .d-head { position: sticky; top: 0; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 16px 22px; background: var(--ink); border-bottom: 1px solid var(--line); z-index: 2; }
+    .d-body { padding: 8px 22px 26px; }
+    .d-title { font-family: var(--display); font-weight: 400; text-transform: uppercase; font-size: clamp(34px, 6vw, 56px); line-height: .95; margin: 16px 0 6px; overflow-wrap: anywhere; }
+    .d-section { margin-top: 22px; }
+    .d-section h3 { margin: 0 0 8px; color: var(--muted); font-size: 11px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; }
+    dl { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 6px 16px; margin: 0; padding-top: 8px; border-top: 1px solid var(--line); }
+    dt { color: var(--muted); font-size: 13px; }
+    dd { margin: 0; overflow-wrap: anywhere; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+    .d-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+
+    .toast { position: fixed; left: 16px; right: 16px; bottom: max(18px, env(safe-area-inset-bottom)); margin: 0 auto; width: fit-content; max-width: 560px;
+      padding: 13px 18px; background: var(--cream); color: var(--ink); font-size: 14px; z-index: 50; }
+
+    @media (max-width: 760px) {
+      .item { grid-template-columns: 1fr; }
+      .item-actions { min-width: 0; }
+      dl { grid-template-columns: 1fr; gap: 2px; }
+      dd { margin-bottom: 8px; }
+      dialog { width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0; border: 0; }
+      .top .brand { font-size: 24px; }
+      .top-actions .btn { padding: 8px 10px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Ingreso -->
+  <section class="login" id="login" hidden>
+    <form class="login-box" id="login-form" novalidate>
+      <p class="label muted">Panel interno</p>
+      <h1 class="brand">LISTO<span> /</span><br>ADMIN</h1>
+      <label class="label" for="password">Contraseña</label>
+      <input id="password" type="password" autocomplete="current-password" required>
+      <button class="btn" type="submit" id="login-btn">Entrar →</button>
+      <p class="error" id="login-error" role="alert" hidden></p>
+    </form>
+  </section>
+
+  <!-- Panel -->
+  <div id="panel" hidden>
+    <header class="top">
+      <h1 class="brand">LISTO <span>/</span> ADMIN</h1>
+      <div class="top-actions">
+        <button class="btn btn-ghost btn-sm" type="button" id="refresh">Actualizar</button>
+        <button class="btn btn-ghost btn-sm" type="button" id="logout">Salir</button>
+      </div>
+    </header>
+
+    <main>
+      <div class="summary">
+        <span class="big" id="new-count">0</span>
+        <p><span class="label">Solicitudes nuevas</span><br><span class="muted" id="total-count"></span></p>
+      </div>
+
+      <div class="toolbar">
+        <input class="search" id="search" type="search" placeholder="Buscar por nombre, teléfono o proveedor" autocomplete="off" aria-label="Buscar">
+        <div class="chips" id="chips" role="group" aria-label="Filtrar por estado"></div>
+        <p class="label sorted">Más recientes primero</p>
+      </div>
+
+      <div id="state" class="state" hidden></div>
+      <div class="list" id="list"></div>
+    </main>
+  </div>
+
+  <!-- Detalle -->
+  <dialog id="detail" aria-labelledby="d-title">
+    <div class="d-head">
+      <span class="label muted">Solicitud</span>
+      <button class="btn btn-ghost btn-sm" type="button" id="d-close">Cerrar ✕</button>
+    </div>
+    <div class="d-body" id="d-body"></div>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+  <script>
+  (function () {
+    "use strict";
+
+    var STATUS_LABELS = {
+      inquiry_requested: "Nueva",
+      provider_contacted: "Contactando proveedor",
+      quoted: "Cotizado",
+      confirmed: "Confirmado",
+      cancelled: "Cancelado",
+      completed: "Completado"
+    };
+    var ORDER = Object.keys(STATUS_LABELS);
+    var MAIL_LABELS = { sent: "Email enviado", failed: "Email falló", pending: "Email pendiente" };
+
+    var items = [];
+    var filter = "all";
+    var query = "";
+    var loading = false;
+
+    function $(id) { return document.getElementById(id); }
+    function el(tag, cls, text) {
+      var n = document.createElement(tag);
+      if (cls) n.className = cls;
+      if (text !== undefined && text !== null) n.textContent = text;
+      return n;
+    }
+    function norm(s) { return String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, ""); }
+
+    function fmtDateTime(iso) {
+      if (!iso) return "—";
+      try {
+        return new Date(iso).toLocaleString("es-AR", { timeZone: "America/Argentina/Buenos_Aires", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+      } catch (e) { return iso; }
+    }
+    function fmtDate(d) {
+      var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d || "");
+      return m ? m[3] + "/" + m[2] + "/" + m[1] : (d || "—");
+    }
+    function money(n) { return typeof n === "number" ? "Hasta $" + Math.round(n).toLocaleString("es-AR") : (n ? String(n) : ""); }
+
+    var toastTimer;
+    function toast(msg) {
+      var t = $("toast");
+      t.textContent = msg;
+      t.hidden = false;
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(function () { t.hidden = true; }, 4000);
+    }
+
+    // Pedidos al backend. Si la sesión venció, vuelve al ingreso.
+    function api(method, url, body) {
+      var opts = { method: method, credentials: "same-origin", headers: { "Accept": "application/json" } };
+      if (body) { opts.headers["Content-Type"] = "application/json"; opts.headers["X-Listo-Admin"] = "1"; opts.body = JSON.stringify(body); }
+      return fetch(url, opts).then(function (r) {
+        return r.json().catch(function () { return {}; }).then(function (data) {
+          if (r.status === 401 && url.indexOf("admin-inquiries") !== -1) { showLogin("Tu sesión venció. Volvé a ingresar."); throw new Error("__session__"); }
+          if (!r.ok || data.ok === false) { var e = new Error(data.error || "Error " + r.status); e.status = r.status; throw e; }
+          return data;
+        });
+      }, function () {
+        throw new Error("No pudimos conectarnos. Revisá tu conexión y probá de nuevo.");
+      });
+    }
+
+    /* ---------- Ingreso / salida ---------- */
+
+    function showLogin(msg) {
+      $("panel").hidden = true;
+      $("login").hidden = false;
+      $("login-error").hidden = !msg;
+      $("login-error").textContent = msg || "";
+      $("password").value = "";
+      setTimeout(function () { $("password").focus(); }, 30);
+    }
+
+    function showPanel() {
+      $("login").hidden = true;
+      $("panel").hidden = false;
+      load();
+    }
+
+    $("login-form").addEventListener("submit", function (e) {
+      e.preventDefault();
+      var pw = $("password").value;
+      if (!pw) { $("login-error").textContent = "Escribí la contraseña."; $("login-error").hidden = false; return; }
+      var btn = $("login-btn");
+      btn.disabled = true;
+      btn.textContent = "Entrando…";
+      api("POST", "/api/admin-login", { password: pw }).then(function () {
+        $("password").value = "";
+        showPanel();
+      }).catch(function (err) {
+        $("login-error").textContent = err.message;
+        $("login-error").hidden = false;
+      }).then(function () { btn.disabled = false; btn.textContent = "Entrar →"; });
+    });
+
+    $("logout").addEventListener("click", function () {
+      api("DELETE", "/api/admin-login").catch(function () {}).then(function () {
+        items = [];
+        $("list").innerHTML = "";
+        showLogin("Cerraste sesión.");
+      });
+    });
+
+    /* ---------- Lista ---------- */
+
+    function setState(kind, title, text, retry) {
+      var s = $("state");
+      s.innerHTML = "";
+      if (!kind) { s.hidden = true; return; }
+      s.hidden = false;
+      if (kind === "loading") { s.appendChild(el("p", "label muted", "Cargando solicitudes")); s.appendChild(el("span", "loading-line")); return; }
+      s.appendChild(el("p", "state-title", title));
+      if (text) s.appendChild(el("p", "muted", text));
+      if (retry) {
+        var b = el("button", "btn", "Reintentar");
+        b.type = "button";
+        b.addEventListener("click", load);
+        s.appendChild(b);
+      }
+    }
+
+    function load() {
+      if (loading) return;
+      loading = true;
+      $("refresh").disabled = true;
+      $("list").innerHTML = "";
+      setState("loading");
+      api("GET", "/api/admin-inquiries").then(function (data) {
+        items = data.items || [];
+        setState(null);
+        render();
+      }).catch(function (err) {
+        if (err.message === "__session__") return;
+        setState("error", "No pudimos cargar.", err.message, true);
+      }).then(function () { loading = false; $("refresh").disabled = false; });
+    }
+    $("refresh").addEventListener("click", load);
+
+    function matches(it) {
+      if (filter !== "all" && it.status !== filter) return false;
+      if (!query) return true;
+      var q = norm(query), qd = query.replace(/\D/g, "");
+      var hay = norm([it.contact.name, it.contact.email, it.provider.name].join(" "));
+      if (hay.indexOf(q) !== -1) return true;
+      return qd.length >= 3 && String(it.contact.phone || "").replace(/\D/g, "").indexOf(qd) !== -1;
+    }
+
+    function renderChips() {
+      var box = $("chips");
+      box.innerHTML = "";
+      var counts = { all: items.length };
+      items.forEach(function (it) { counts[it.status] = (counts[it.status] || 0) + 1; });
+      [["all", "Todas"]].concat(ORDER.map(function (s) { return [s, STATUS_LABELS[s]]; })).forEach(function (pair) {
+        var b = el("button", "chip", pair[1]);
+        b.type = "button";
+        b.setAttribute("aria-pressed", filter === pair[0] ? "true" : "false");
+        b.appendChild(el("b", "", String(counts[pair[0]] || 0)));
+        b.addEventListener("click", function () { filter = pair[0]; render(); });
+        box.appendChild(b);
+      });
+    }
+
+    function linkBtn(href, text) {
+      var a = el("a", "btn btn-ghost btn-sm", text);
+      a.href = href;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      return a;
+    }
+
+    function statusSelect(it) {
+      var s = el("select", "status");
+      s.setAttribute("aria-label", "Cambiar estado");
+      ORDER.forEach(function (k) {
+        var o = el("option", "", STATUS_LABELS[k]);
+        o.value = k;
+        if (it.status === k) o.selected = true;
+        s.appendChild(o);
+      });
+      if (!STATUS_LABELS[it.status]) {
+        var other = el("option", "", it.status);
+        other.value = it.status;
+        other.selected = true;
+        s.appendChild(other);
+      }
+      s.addEventListener("change", function () { changeStatus(it, s.value, s); });
+      return s;
+    }
+
+    function planLine(it) {
+      var p = it.plan;
+      return [p.type, p.guests ? p.guests + " personas" : "", p.zone, fmtDate(p.date) + (p.time ? " " + p.time : ""), money(p.budget)]
+        .filter(Boolean).join(" · ");
+    }
+
+    function render() {
+      $("new-count").textContent = items.filter(function (i) { return i.status === "inquiry_requested"; }).length;
+      $("total-count").textContent = items.length + " en total";
+      renderChips();
+      var list = $("list");
+      list.innerHTML = "";
+      var shown = items.filter(matches);
+      if (!items.length) { setState("empty", "Todavía no hay solicitudes.", "Cuando alguien toque “Quiero avanzar”, va a aparecer acá."); return; }
+      if (!shown.length) { setState("empty", "Sin resultados.", "Probá con otro filtro o búsqueda."); return; }
+      setState(null);
+
+      shown.forEach(function (it) {
+        var card = el("article", "item");
+        var head = el("div", "item-head");
+        head.appendChild(el("span", "badge s-" + it.status, STATUS_LABELS[it.status] || it.status));
+        head.appendChild(el("span", "label muted", fmtDateTime(it.created_at)));
+        if (it.notification_status) head.appendChild(el("span", "mail " + it.notification_status, MAIL_LABELS[it.notification_status] || it.notification_status));
+        card.appendChild(head);
+
+        var info = el("div");
+        info.appendChild(el("h2", "name", it.contact.name || "Sin nombre"));
+        info.appendChild(el("p", "contact", [it.contact.phone, it.contact.email].filter(Boolean).join(" · ")));
+        info.appendChild(el("p", "plan", planLine(it)));
+        var prov = el("p", "prov");
+        prov.appendChild(document.createTextNode("→ "));
+        prov.appendChild(el("b", "", it.provider.name || "Proveedor sin nombre"));
+        info.appendChild(prov);
+        card.appendChild(info);
+
+        var actions = el("div", "item-actions");
+        var links = el("div", "links");
+        if (it.contact.whatsapp_url) links.appendChild(linkBtn(it.contact.whatsapp_url, "WhatsApp"));
+        if (it.provider.maps_url) links.appendChild(linkBtn(it.provider.maps_url, "Maps"));
+        if (it.provider.website) links.appendChild(linkBtn(it.provider.website, "Web"));
+        actions.appendChild(links);
+        actions.appendChild(statusSelect(it));
+        var more = el("button", "btn btn-sm", "Ver detalle");
+        more.type = "button";
+        more.addEventListener("click", function () { openDetail(it); });
+        actions.appendChild(more);
+        card.appendChild(actions);
+        list.appendChild(card);
+      });
+    }
+
+    var searchTimer;
+    $("search").addEventListener("input", function () {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(function () { query = $("search").value.trim(); render(); }, 120);
+    });
+
+    /* ---------- Cambiar estado (sin emails ni WhatsApp automáticos) ---------- */
+
+    function changeStatus(it, status, select) {
+      var previous = it.status;
+      if (status === previous) return;
+      $all("select.status").forEach(function (s) { s.disabled = true; });
+      api("PATCH", "/api/admin-inquiries", { id: it.id, status: status }).then(function (data) {
+        it.status = data.item.status;
+        it.updated_at = data.item.updated_at;
+        toast("Estado: " + STATUS_LABELS[it.status]);
+        render();
+        if ($("detail").open) openDetail(it);
+      }).catch(function (err) {
+        if (err.message === "__session__") return;
+        select.value = previous;
+        toast(err.message);
+      }).then(function () {
+        $all("select.status").forEach(function (s) { s.disabled = false; });
+      });
+    }
+    function $all(sel) { return Array.prototype.slice.call(document.querySelectorAll(sel)); }
+
+    /* ---------- Detalle ---------- */
+
+    function section(title, rows) {
+      var sec = el("section", "d-section");
+      sec.appendChild(el("h3", "", title));
+      var dl = el("dl");
+      rows.forEach(function (r) {
+        dl.appendChild(el("dt", "", r[0]));
+        var dd = el("dd", r[2] || "");
+        if (r[1] instanceof Node) dd.appendChild(r[1]); else dd.textContent = (r[1] === null || r[1] === undefined || r[1] === "") ? "—" : String(r[1]);
+        dl.appendChild(dd);
+      });
+      sec.appendChild(dl);
+      return sec;
+    }
+
+    function openDetail(it) {
+      var b = $("d-body");
+      b.innerHTML = "";
+      b.appendChild(el("span", "badge s-" + it.status, STATUS_LABELS[it.status] || it.status));
+      b.appendChild(el("h2", "d-title", it.contact.name || "Sin nombre"));
+      var acts = el("div", "d-actions");
+      if (it.contact.whatsapp_url) acts.appendChild(linkBtn(it.contact.whatsapp_url, "Abrir WhatsApp"));
+      if (it.provider.maps_url) acts.appendChild(linkBtn(it.provider.maps_url, "Google Maps"));
+      if (it.provider.website) acts.appendChild(linkBtn(it.provider.website, "Website"));
+      b.appendChild(acts);
+      var sel = statusSelect(it);
+      sel.style.maxWidth = "320px";
+      sel.style.marginTop = "12px";
+      b.appendChild(sel);
+
+      var p = it.plan, pr = it.provider;
+      b.appendChild(section("Datos del usuario", [["Nombre", it.contact.name], ["WhatsApp", it.contact.phone], ["Email", it.contact.email]]));
+      b.appendChild(section("Datos del plan", [
+        ["Tipo de plan", p.type], ["Fecha", fmtDate(p.date)], ["Horario", p.time], ["Personas", p.guests],
+        ["Zona", p.zone], ["Presupuesto", money(p.budget)], ["Necesidades", (p.needs || []).join(", ")],
+        ["Comentario", p.notes], ["Pedido original", p.original_prompt]
+      ]));
+      var rating = typeof pr.rating === "number" ? "★ " + pr.rating + (typeof pr.review_count === "number" ? " (" + pr.review_count + " reseñas)" : "") : null;
+      b.appendChild(section("Proveedor elegido", [
+        ["Nombre", pr.name], ["Categoría", pr.category], ["Dirección", pr.address], ["Rating", rating],
+        ["Google Maps", pr.maps_url ? linkBtn(pr.maps_url, "Abrir") : null], ["Website", pr.website ? linkBtn(pr.website, "Abrir") : null]
+      ]));
+      b.appendChild(section("Datos internos", [
+        ["Creada", fmtDateTime(it.created_at)], ["Última actualización", fmtDateTime(it.updated_at)],
+        ["Estado", (STATUS_LABELS[it.status] || it.status) + " (" + it.status + ")"],
+        ["Aviso por email", it.notification_status ? (MAIL_LABELS[it.notification_status] || it.notification_status) + (it.notified_at ? " · " + fmtDateTime(it.notified_at) : "") : null],
+        ["event_request_id", it.event_request_id, "mono"], ["plan_selection_id", it.plan_selection_id, "mono"], ["inquiry id", it.id, "mono"]
+      ]));
+      var d = $("detail");
+      if (!d.open) { if (d.showModal) d.showModal(); else d.setAttribute("open", ""); }
+    }
+    $("d-close").addEventListener("click", function () { $("detail").close(); });
+    $("detail").addEventListener("click", function (e) { if (e.target === $("detail")) $("detail").close(); });
+
+    /* ---------- Inicio: ¿hay sesión? ---------- */
+    api("GET", "/api/admin-login").then(function (data) {
+      if (data.authenticated) showPanel();
+      else showLogin(data.configured ? "" : "Falta configurar ADMIN_PASSWORD en Vercel.");
+    }).catch(function (err) { showLogin(err.message); });
+  })();
+  </script>
+</body>
+</html>
