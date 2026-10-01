@@ -330,3 +330,63 @@ create unique index plan_inquiries_one_open
 - Al entrar, el navegador recibe un pase que dura **12 horas** y que la página no puede leer.
 - Si cambiás `ADMIN_PASSWORD`, todos los pases anteriores dejan de valer.
 - Después de 8 intentos fallidos seguidos, el ingreso se bloquea 15 minutos.
+
+---
+
+## Paso 8 · Contacto con el proveedor y cotizaciones (/admin)
+
+En el detalle de cada solicitud del panel:
+
+- **Proveedor:** datos del lugar, Maps, website y si ya lo contactaste (cuándo y por dónde).
+- **Contacto:**
+  - **Preparar contacto →** arma un mensaje con datos reales del pedido: tipo de plan, personas, fecha, horario, zona y necesidades. Sin presupuesto ni datos del usuario.
+  - **Copiar mensaje** lo copia. LISTO no envía nada.
+  - **Marcar como contactado** guarda la fecha y el canal. Si la solicitud estaba en Nueva, pasa a Contactando proveedor.
+- **Cotización:** se carga a mano, con los datos que te pasó el proveedor. Al guardarla, la solicitud pasa a **Cotizado**, salvo que esté en Confirmado, Cancelado o Completado. **Confirmado sigue siendo manual.**
+- **Historial:** cada cotización nueva se agrega; las anteriores no se borran.
+
+Cada acción actualiza `updated_at`. No se envían emails ni WhatsApp.
+
+### SQL (correr una vez)
+
+En **SQL Editor** → **New query**, pegá todo y tocá **Run**:
+
+```sql
+-- Contacto con el proveedor (en la solicitud)
+alter table public.plan_inquiries
+  add column if not exists provider_contacted_at timestamptz,
+  add column if not exists provider_contact_channel text;
+
+alter table public.plan_inquiries
+  drop constraint if exists plan_inquiries_contact_channel_check;
+alter table public.plan_inquiries
+  add constraint plan_inquiries_contact_channel_check
+  check (provider_contact_channel is null
+         or provider_contact_channel in ('whatsapp','phone','email','instagram','other'));
+
+-- Cotizaciones (con historial)
+create table if not exists public.provider_quotes (
+  id                uuid        primary key default gen_random_uuid(),
+  created_at        timestamptz not null default now(),
+  plan_inquiry_id   uuid        not null references public.plan_inquiries(id) on delete cascade,
+  received_at       timestamptz not null default now(),
+  total_price       numeric(14,2) check (total_price is null or total_price >= 0),
+  price_per_person  numeric(14,2) check (price_per_person is null or price_per_person >= 0),
+  currency          text        not null default 'ARS' check (currency in ('ARS','USD')),
+  includes          text,
+  conditions        text,
+  deposit           text,
+  availability      text        not null default 'pending' check (availability in ('yes','no','pending')),
+  valid_until       date,
+  internal_notes    text,
+  constraint provider_quotes_has_price check (total_price is not null or price_per_person is not null)
+);
+
+create index if not exists provider_quotes_by_inquiry
+  on public.provider_quotes (plan_inquiry_id, received_at desc);
+
+-- Cerrada al público: solo Vercel (con la clave secreta) lee y escribe
+alter table public.provider_quotes enable row level security;
+```
+
+> Si el panel se publica antes de correr este SQL, la lista sigue funcionando y muestra un aviso. Contacto y cotizaciones quedan bloqueados hasta correrlo.

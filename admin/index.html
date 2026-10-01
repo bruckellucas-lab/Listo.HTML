@@ -108,6 +108,34 @@
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
     .d-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
 
+    .d-block { margin-top: 30px; }
+    .d-block > h3 { font-family: var(--display); font-weight: 400; text-transform: uppercase; font-size: 26px; letter-spacing: .01em; color: var(--cream); margin: 0 0 4px; }
+    .d-sub { margin: 14px 0 6px; color: var(--muted); font-size: 11px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; }
+    .contact-state { margin: 10px 0 0; }
+    .contact-state.done { color: var(--ok); }
+    .msg { width: 100%; min-height: 150px; margin-top: 12px; padding: 12px; background: var(--char); border: 1px solid var(--line); color: var(--cream); font-size: 15px; line-height: 1.5; resize: vertical; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+    .row select { padding: 10px 12px; background: var(--ink); border: 1px solid rgba(239, 232, 220, .35); color-scheme: dark; border-radius: 0; }
+    .form { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 18px; margin-top: 12px; }
+    .form .wide { grid-column: 1 / -1; }
+    .form label { display: block; color: var(--muted); font-size: 11px; font-weight: 500; letter-spacing: .16em; text-transform: uppercase; margin-bottom: 4px; }
+    .form input, .form select, .form textarea { width: 100%; padding: 10px 0; background: transparent; border: 0; border-bottom: 1px solid rgba(239, 232, 220, .3); color: var(--cream); border-radius: 0; outline: none; color-scheme: dark; font-size: 15px; }
+    .form select { padding: 10px 6px; background: var(--ink); border: 1px solid rgba(239, 232, 220, .3); }
+    .form textarea { resize: vertical; min-height: 48px; font-family: inherit; }
+    .form input:focus, .form textarea:focus { border-bottom-color: var(--amber); }
+    .form .error { grid-column: 1 / -1; margin: 0; }
+    .quote { border: 1px solid var(--line); padding: 14px 16px; margin-top: 10px; background: var(--char); }
+    .quote.current { border-color: rgba(239, 232, 220, .45); }
+    .quote-price { font-family: var(--display); font-size: 28px; line-height: 1.05; }
+    .quote dl { margin-top: 10px; }
+    .timeline { list-style: none; margin: 8px 0 0; padding: 0; border-left: 1px solid var(--line); }
+    .timeline li { padding: 4px 0 10px 16px; position: relative; }
+    .timeline li::before { content: ""; position: absolute; left: -4px; top: 11px; width: 7px; height: 7px; border-radius: 50%; background: var(--cream); }
+    .timeline time { display: block; color: var(--muted); font-size: 12px; }
+    .banner { border: 1px solid var(--amber); color: var(--amber); padding: 12px 14px; margin-bottom: 18px; font-size: 14px; }
+    .card-quote { margin: 4px 0 0; color: var(--ok); font-size: 14px; }
+    @media (max-width: 760px) { .form { grid-template-columns: 1fr; } }
+
     .toast { position: fixed; left: 16px; right: 16px; bottom: max(18px, env(safe-area-inset-bottom)); margin: 0 auto; width: fit-content; max-width: 560px;
       padding: 13px 18px; background: var(--cream); color: var(--ink); font-size: 14px; z-index: 50; }
 
@@ -158,6 +186,7 @@
         <p class="label sorted">Más recientes primero</p>
       </div>
 
+      <p class="banner" id="schema-banner" hidden>Falta correr en Supabase el SQL de cotizaciones (SUPABASE.md, Paso 8). Mientras tanto, contacto y cotizaciones no se pueden guardar.</p>
       <div id="state" class="state" hidden></div>
       <div class="list" id="list"></div>
     </main>
@@ -230,7 +259,7 @@
       if (body) { opts.headers["Content-Type"] = "application/json"; opts.headers["X-Listo-Admin"] = "1"; opts.body = JSON.stringify(body); }
       return fetch(url, opts).then(function (r) {
         return r.json().catch(function () { return {}; }).then(function (data) {
-          if (r.status === 401 && url.indexOf("admin-inquiries") !== -1) { showLogin("Tu sesión venció. Volvé a ingresar."); throw new Error("__session__"); }
+          if (r.status === 401 && url.indexOf("/api/admin-login") === -1) { showLogin("Tu sesión venció. Volvé a ingresar."); throw new Error("__session__"); }
           if (!r.ok || data.ok === false) { var e = new Error(data.error || "Error " + r.status); e.status = r.status; throw e; }
           return data;
         });
@@ -306,6 +335,7 @@
       setState("loading");
       api("GET", "/api/admin-inquiries").then(function (data) {
         items = data.items || [];
+        $("schema-banner").hidden = data.schema_ready !== false;
         setState(null);
         render();
       }).catch(function (err) {
@@ -399,6 +429,7 @@
         prov.appendChild(document.createTextNode("→ "));
         prov.appendChild(el("b", "", it.provider.name || "Proveedor sin nombre"));
         info.appendChild(prov);
+        if (it.quotes && it.quotes.length) info.appendChild(el("p", "card-quote", "Cotización: " + quotePrice(it.quotes[0]) + " · " + AVAIL[it.quotes[0].availability]));
         card.appendChild(info);
 
         var actions = el("div", "item-actions");
@@ -445,11 +476,15 @@
     }
     function $all(sel) { return Array.prototype.slice.call(document.querySelectorAll(sel)); }
 
-    /* ---------- Detalle ---------- */
+    /* ---------- Detalle: SOLICITUD · PROVEEDOR · CONTACTO · COTIZACIÓN · HISTORIAL ---------- */
+
+    var CHANNELS = { whatsapp: "WhatsApp", phone: "Teléfono", email: "Email", instagram: "Instagram", other: "Otro" };
+    var AVAIL = { yes: "Disponibilidad confirmada", no: "Sin disponibilidad", pending: "Disponibilidad pendiente" };
+    var schemaReady = function () { return $("schema-banner").hidden; };
 
     function section(title, rows) {
       var sec = el("section", "d-section");
-      sec.appendChild(el("h3", "", title));
+      if (title) sec.appendChild(el("h4", "d-sub", title));
       var dl = el("dl");
       rows.forEach(function (r) {
         dl.appendChild(el("dt", "", r[0]));
@@ -461,39 +496,285 @@
       return sec;
     }
 
+    function block(title) {
+      var b = el("section", "d-block");
+      b.appendChild(el("h3", "", title));
+      return b;
+    }
+
+    function amount(n, cur) {
+      if (n === null || n === undefined || n === "") return "";
+      var v = Number(n);
+      return (cur === "USD" ? "US$ " : "$ ") + v.toLocaleString("es-AR", { minimumFractionDigits: v % 1 ? 2 : 0, maximumFractionDigits: 2 });
+    }
+    function quotePrice(q) {
+      var parts = [];
+      if (q.total_price !== null && q.total_price !== undefined) parts.push(amount(q.total_price, q.currency) + " total");
+      if (q.price_per_person !== null && q.price_per_person !== undefined) parts.push(amount(q.price_per_person, q.currency) + " por persona");
+      return parts.join(" · ");
+    }
+
+    // Mensaje para el proveedor, SÓLO con datos reales del pedido (sin presupuesto ni datos del usuario).
+    var ARTICLES = {
+      "cena": "una cena", "cumpleaños": "un cumpleaños", "after office": "un after office", "juntada": "una juntada",
+      "reunión": "una reunión", "fiesta": "una fiesta", "fiesta de 15": "una fiesta de 15", "casamiento": "un casamiento",
+      "aniversario": "un aniversario", "baby shower": "un baby shower", "bautismo": "un bautismo", "comunión": "una comunión",
+      "despedida": "una despedida", "despedida de soltero/a": "una despedida de soltero/a", "asado": "un asado",
+      "evento corporativo": "un evento corporativo", "graduación": "una graduación"
+    };
+    function withArticle(type) {
+      var t = String(type || "").trim().toLowerCase();
+      if (!t) return "un encuentro";
+      return ARTICLES[t] || ((/a$|ión$/.test(t) ? "una " : "un ") + t);
+    }
+    function weekdayDate(iso) {
+      var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || "");
+      if (!m) return "";
+      var d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], 12));
+      var wd = d.toLocaleDateString("es-AR", { weekday: "long", timeZone: "UTC" });
+      return wd + " " + m[3] + "/" + m[2];
+    }
+    function listJoin(a) { return a.length < 2 ? a.join("") : a.slice(0, -1).join(", ") + " y " + a[a.length - 1]; }
+    function buildMessage(it) {
+      var p = it.plan;
+      var s = "Hola, ¿cómo estás? Te contacto de LISTO. Tenemos una consulta para " + withArticle(p.type);
+      if (p.guests) s += " de " + p.guests + (p.guests === 1 ? " persona" : " personas");
+      var day = weekdayDate(p.date);
+      if (day) s += " para el " + day;
+      if (p.time) s += " alrededor de las " + p.time;
+      if (p.zone) s += " en " + p.zone;
+      s += ".";
+      // "Lugar" no se menciona: es justamente lo que le consultamos al lugar.
+      var needs = (p.needs || []).filter(function (n) { return n && !/^lugar$/i.test(String(n).trim()); })
+        .map(function (n) { return String(n).trim().toLowerCase(); });
+      if (needs.length) s += " Nos interesaría incluir " + listJoin(needs) + ".";
+      s += " ¿Tienen disponibilidad? ¿Podrían indicarnos propuesta y precio aproximado para el grupo?";
+      return s;
+    }
+
+    function copyText(text) {
+      if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text);
+      return new Promise(function (resolve, reject) {
+        var ta = el("textarea"); ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+        document.body.appendChild(ta); ta.select();
+        var ok = false; try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+        document.body.removeChild(ta);
+        if (ok) resolve(); else reject(new Error("copy"));
+      });
+    }
+
+    function contactState(it) {
+      if (!it.provider_contacted_at) return el("p", "contact-state muted", "Todavía sin contactar.");
+      return el("p", "contact-state done", "Contactado el " + fmtDateTime(it.provider_contacted_at) +
+        (it.provider_contact_channel ? " por " + (CHANNELS[it.provider_contact_channel] || it.provider_contact_channel) : "") + ".");
+    }
+
+    function quoteCard(q, current) {
+      var box = el("div", "quote" + (current ? " current" : ""));
+      box.appendChild(el("p", "label muted", (current ? "Actual · " : "") + "Recibida " + fmtDateTime(q.received_at)));
+      box.appendChild(el("p", "quote-price", quotePrice(q)));
+      var dl = el("dl");
+      [["Disponibilidad", AVAIL[q.availability] || q.availability], ["Incluye", q.includes], ["No incluye / condiciones", q.conditions],
+       ["Seña", q.deposit], ["Válida hasta", q.valid_until ? fmtDate(q.valid_until) : null], ["Notas internas", q.internal_notes],
+       ["Cargada en LISTO", fmtDateTime(q.created_at)]].forEach(function (r) {
+        if (r[1] === null || r[1] === undefined || r[1] === "") return;
+        dl.appendChild(el("dt", "", r[0]));
+        dl.appendChild(el("dd", "", String(r[1])));
+      });
+      box.appendChild(dl);
+      return box;
+    }
+
+    function field(label, input, wide) {
+      var w = el("div", wide ? "wide" : "");
+      var l = el("label", "", label);
+      input.id = "q-" + input.name;
+      l.setAttribute("for", input.id);
+      w.appendChild(l);
+      w.appendChild(input);
+      return w;
+    }
+    function input(name, type, attrs) {
+      var i = el(type === "textarea" ? "textarea" : type === "select" ? "select" : "input");
+      i.name = name;
+      if (type !== "textarea" && type !== "select") i.type = type;
+      Object.keys(attrs || {}).forEach(function (k) { i.setAttribute(k, attrs[k]); });
+      return i;
+    }
+    function options(sel, list) {
+      list.forEach(function (o) { var op = el("option", "", o[1]); op.value = o[0]; sel.appendChild(op); });
+      return sel;
+    }
+    function todayAR() {
+      return new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10);
+    }
+
+    function quoteForm(it) {
+      var f = el("form", "form");
+      f.noValidate = true;
+      f.appendChild(field("Precio total", input("total_price", "text", { inputmode: "decimal", placeholder: "Ej: 850.000" })));
+      f.appendChild(field("Precio por persona (opcional)", input("price_per_person", "text", { inputmode: "decimal", placeholder: "Ej: 42.500" })));
+      f.appendChild(field("Moneda", options(input("currency", "select"), [["ARS", "Pesos (ARS)"], ["USD", "Dólares (USD)"]])));
+      f.appendChild(field("Disponibilidad confirmada", options(input("availability", "select"), [["pending", "Pendiente"], ["yes", "Sí"], ["no", "No"]])));
+      f.appendChild(field("Qué incluye", input("includes", "textarea", { rows: "2", maxlength: "2000" }), true));
+      f.appendChild(field("Qué NO incluye / condiciones", input("conditions", "textarea", { rows: "2", maxlength: "2000" }), true));
+      f.appendChild(field("Seña requerida", input("deposit", "text", { maxlength: "300", placeholder: "Ej: 30% para reservar" })));
+      f.appendChild(field("Válida hasta", input("valid_until", "date")));
+      var rec = input("received_at", "date", { max: todayAR() });
+      rec.value = todayAR();
+      f.appendChild(field("Fecha de recepción", rec));
+      f.appendChild(field("Notas internas", input("internal_notes", "textarea", { rows: "2", maxlength: "2000" }), true));
+      var err = el("p", "error"); err.hidden = true; f.appendChild(err);
+      var actions = el("div", "row wide");
+      var save = el("button", "btn", "Guardar cotización"); save.type = "submit";
+      actions.appendChild(save);
+      actions.appendChild(el("span", "muted", "Pasa la solicitud a Cotizado (salvo si ya está Confirmada, Cancelada o Completada)."));
+      f.appendChild(actions);
+
+      var saving = false;
+      f.addEventListener("submit", function (e) {
+        e.preventDefault();
+        if (saving) return;                                   // evita doble envío
+        err.hidden = true;
+        var v = {};
+        ["total_price", "price_per_person", "currency", "availability", "includes", "conditions", "deposit", "valid_until", "received_at", "internal_notes"]
+          .forEach(function (k) { v[k] = f.elements[k].value.trim(); });
+        if (!v.total_price && !v.price_per_person) { err.textContent = "Cargá al menos un precio: total o por persona."; err.hidden = false; return; }
+        v.plan_inquiry_id = it.id;
+        saving = true; save.disabled = true; save.textContent = "Guardando…";
+        api("POST", "/api/admin-quotes", v).then(function (data) {
+          it.quotes = [data.quote].concat(it.quotes || []);
+          if (data.item) { it.status = data.item.status; it.updated_at = data.item.updated_at; }
+          toast("Cotización guardada" + (data.status_changed ? " · Estado: Cotizado" : ""));
+          render();
+          openDetail(it);
+        }).catch(function (e2) {
+          if (e2.message === "__session__") return;
+          err.textContent = e2.message; err.hidden = false;
+        }).then(function () { saving = false; save.disabled = false; save.textContent = "Guardar cotización"; });
+      });
+      return f;
+    }
+
     function openDetail(it) {
       var b = $("d-body");
       b.innerHTML = "";
       b.appendChild(el("span", "badge s-" + it.status, STATUS_LABELS[it.status] || it.status));
       b.appendChild(el("h2", "d-title", it.contact.name || "Sin nombre"));
-      var acts = el("div", "d-actions");
-      if (it.contact.whatsapp_url) acts.appendChild(linkBtn(it.contact.whatsapp_url, "Abrir WhatsApp"));
-      if (it.provider.maps_url) acts.appendChild(linkBtn(it.provider.maps_url, "Google Maps"));
-      if (it.provider.website) acts.appendChild(linkBtn(it.provider.website, "Website"));
-      b.appendChild(acts);
       var sel = statusSelect(it);
       sel.style.maxWidth = "320px";
-      sel.style.marginTop = "12px";
+      sel.style.marginTop = "6px";
       b.appendChild(sel);
 
       var p = it.plan, pr = it.provider;
-      b.appendChild(section("Datos del usuario", [["Nombre", it.contact.name], ["WhatsApp", it.contact.phone], ["Email", it.contact.email]]));
-      b.appendChild(section("Datos del plan", [
+
+      // SOLICITUD
+      var s1 = block("Solicitud");
+      var acts = el("div", "d-actions");
+      if (it.contact.whatsapp_url) acts.appendChild(linkBtn(it.contact.whatsapp_url, "WhatsApp del usuario"));
+      s1.appendChild(acts);
+      s1.appendChild(section("Usuario", [["Nombre", it.contact.name], ["WhatsApp", it.contact.phone], ["Email", it.contact.email]]));
+      s1.appendChild(section("Plan", [
         ["Tipo de plan", p.type], ["Fecha", fmtDate(p.date)], ["Horario", p.time], ["Personas", p.guests],
         ["Zona", p.zone], ["Presupuesto", money(p.budget)], ["Necesidades", (p.needs || []).join(", ")],
         ["Comentario", p.notes], ["Pedido original", p.original_prompt]
       ]));
+      b.appendChild(s1);
+
+      // PROVEEDOR
+      var s2 = block("Proveedor");
+      var pacts = el("div", "d-actions");
+      if (pr.maps_url) pacts.appendChild(linkBtn(pr.maps_url, "Google Maps"));
+      if (pr.website) pacts.appendChild(linkBtn(pr.website, "Website"));
+      s2.appendChild(pacts);
       var rating = typeof pr.rating === "number" ? "★ " + pr.rating + (typeof pr.review_count === "number" ? " (" + pr.review_count + " reseñas)" : "") : null;
-      b.appendChild(section("Proveedor elegido", [
-        ["Nombre", pr.name], ["Categoría", pr.category], ["Dirección", pr.address], ["Rating", rating],
-        ["Google Maps", pr.maps_url ? linkBtn(pr.maps_url, "Abrir") : null], ["Website", pr.website ? linkBtn(pr.website, "Abrir") : null]
-      ]));
-      b.appendChild(section("Datos internos", [
-        ["Creada", fmtDateTime(it.created_at)], ["Última actualización", fmtDateTime(it.updated_at)],
+      s2.appendChild(section("", [["Nombre", pr.name], ["Categoría", pr.category], ["Dirección", pr.address], ["Zona", pr.zone], ["Rating", rating],
+        ["Website", pr.website ? linkBtn(pr.website, "Abrir") : "No figura en nuestros datos"]]));
+      s2.appendChild(contactState(it));
+      b.appendChild(s2);
+
+      // CONTACTO
+      var s3 = block("Contacto");
+      s3.appendChild(el("p", "muted", "Preparamos el mensaje con los datos del pedido. Lo copiás y lo mandás vos por el canal del lugar (web, Maps, redes). LISTO no envía nada."));
+      var prep = el("button", "btn", "Preparar contacto →"); prep.type = "button";
+      var msgWrap = el("div"); msgWrap.hidden = true;
+      var msg = el("textarea", "msg"); msg.setAttribute("aria-label", "Mensaje para el proveedor");
+      msgWrap.appendChild(msg);
+      var copyRow = el("div", "row");
+      var copyBtn = el("button", "btn", "Copiar mensaje"); copyBtn.type = "button";
+      copyRow.appendChild(copyBtn);
+      msgWrap.appendChild(copyRow);
+      prep.addEventListener("click", function () { msg.value = buildMessage(it); msgWrap.hidden = false; prep.hidden = true; msg.focus(); });
+      copyBtn.addEventListener("click", function () {
+        copyText(msg.value).then(function () { toast("Mensaje copiado"); }, function () { msg.select(); toast("No pudimos copiar: seleccioná el texto y copialo a mano."); });
+      });
+      s3.appendChild(prep);
+      s3.appendChild(msgWrap);
+
+      s3.appendChild(el("h4", "d-sub", "Marcar como contactado"));
+      var markRow = el("div", "row");
+      var chan = options(el("select"), Object.keys(CHANNELS).map(function (k) { return [k, CHANNELS[k]]; }));
+      chan.setAttribute("aria-label", "Canal de contacto");
+      if (it.provider_contact_channel) chan.value = it.provider_contact_channel;
+      var mark = el("button", "btn btn-ghost", it.provider_contacted_at ? "Registrar nuevo contacto" : "Marcar como contactado"); mark.type = "button";
+      markRow.appendChild(chan);
+      markRow.appendChild(mark);
+      s3.appendChild(markRow);
+      s3.appendChild(el("p", "muted", "Si la solicitud está en Nueva, pasa a Contactando proveedor."));
+      mark.addEventListener("click", function () {
+        if (mark.disabled) return;
+        mark.disabled = true; mark.textContent = "Guardando…";
+        api("PATCH", "/api/admin-inquiries", { id: it.id, action: "mark_contacted", channel: chan.value }).then(function (data) {
+          it.status = data.item.status; it.updated_at = data.item.updated_at;
+          it.provider_contacted_at = data.item.provider_contacted_at; it.provider_contact_channel = data.item.provider_contact_channel;
+          toast("Contacto registrado · Estado: " + STATUS_LABELS[it.status]);
+          render();
+          openDetail(it);
+        }).catch(function (e) {
+          if (e.message === "__session__") return;
+          toast(e.message);
+          mark.disabled = false; mark.textContent = it.provider_contacted_at ? "Registrar nuevo contacto" : "Marcar como contactado";
+        });
+      });
+      if (!schemaReady()) { mark.disabled = true; }
+      b.appendChild(s3);
+
+      // COTIZACIÓN
+      var s4 = block("Cotización");
+      var quotes = it.quotes || [];
+      if (quotes.length) s4.appendChild(quoteCard(quotes[0], true));
+      else s4.appendChild(el("p", "muted", "Todavía no hay cotizaciones."));
+      s4.appendChild(el("h4", "d-sub", quotes.length ? "Registrar nueva cotización (la anterior queda en el historial)" : "Registrar cotización"));
+      if (schemaReady()) s4.appendChild(quoteForm(it));
+      else s4.appendChild(el("p", "banner", "Corré el SQL de cotizaciones (SUPABASE.md, Paso 8) para poder guardar."));
+      b.appendChild(s4);
+
+      // HISTORIAL
+      var s5 = block("Historial");
+      var events = [{ at: it.created_at, text: "Solicitud recibida" }];
+      if (it.provider_contacted_at) events.push({ at: it.provider_contacted_at, text: "Proveedor contactado" + (it.provider_contact_channel ? " por " + CHANNELS[it.provider_contact_channel] : "") });
+      quotes.forEach(function (q, i) { events.push({ at: q.received_at, text: "Cotización " + (i === 0 ? "(actual)" : "anterior") + ": " + quotePrice(q) + " · " + (AVAIL[q.availability] || "") }); });
+      events.sort(function (x, y) { return String(y.at).localeCompare(String(x.at)); });
+      var tl = el("ol", "timeline");
+      events.forEach(function (ev) {
+        var li = el("li");
+        li.appendChild(el("time", "", fmtDateTime(ev.at)));
+        li.appendChild(document.createTextNode(ev.text));
+        tl.appendChild(li);
+      });
+      s5.appendChild(tl);
+      if (quotes.length > 1) {
+        s5.appendChild(el("h4", "d-sub", "Cotizaciones anteriores"));
+        quotes.slice(1).forEach(function (q) { s5.appendChild(quoteCard(q, false)); });
+      }
+      s5.appendChild(section("Datos internos", [
+        ["Última actualización", fmtDateTime(it.updated_at)],
         ["Estado", (STATUS_LABELS[it.status] || it.status) + " (" + it.status + ")"],
         ["Aviso por email", it.notification_status ? (MAIL_LABELS[it.notification_status] || it.notification_status) + (it.notified_at ? " · " + fmtDateTime(it.notified_at) : "") : null],
         ["event_request_id", it.event_request_id, "mono"], ["plan_selection_id", it.plan_selection_id, "mono"], ["inquiry id", it.id, "mono"]
       ]));
+      b.appendChild(s5);
+
       var d = $("detail");
       if (!d.open) { if (d.showModal) d.showModal(); else d.setAttribute("open", ""); }
     }

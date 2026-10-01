@@ -20,13 +20,18 @@ var notify = require("./_lib/notify");
 var UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 var LIMIT = 500;
 
-var SELECT = [
+var QUOTE_FIELDS = "id,created_at,received_at,total_price,price_per_person,currency,includes,conditions,deposit,availability,valid_until,internal_notes";
+
+var SELECT_BASE = [
   "id", "created_at", "updated_at", "status", "notification_status", "notified_at",
   "contact_name", "contact_phone", "contact_email", "event_date", "approximate_time", "notes", "plan_selection_id",
   "plan_selections(id,created_at,status,event_request_id,provider_google_place_id,provider_name," +
     "event_requests(id,created_at,event_type,guests,zone,budget,needs,original_prompt)," +
     "providers(name,category,address,zone,rating,review_count,maps_url,website))"
 ].join(",");
+// Completo: suma contacto con el proveedor y cotizaciones (requiere el SQL de cotizaciones).
+var SELECT = SELECT_BASE + ",provider_contacted_at,provider_contact_channel,provider_quotes(" + QUOTE_FIELDS + ")";
+var CHANNELS = ["whatsapp", "phone", "email", "instagram", "other"];
 
 function cfg() {
   return { url: http.env("SUPABASE_URL"), key: http.env("SUPABASE_SECRET_KEY") };
@@ -62,13 +67,18 @@ function toItem(row) {
     },
     event_request_id: sel.event_request_id || null,
     plan_selection_id: row.plan_selection_id,
-    selection_status: sel.status || null
+    selection_status: sel.status || null,
+    provider_contacted_at: row.provider_contacted_at || null,
+    provider_contact_channel: row.provider_contact_channel || null,
+    quotes: (Array.isArray(row.provider_quotes) ? row.provider_quotes : []).slice().sort(function (a, b) {
+      return String(b.received_at).localeCompare(String(a.received_at)) || String(b.created_at).localeCompare(String(a.created_at));
+    })
   };
 }
 
 function explain(err) {
   if (err.code === "PGRST205" || err.code === "42P01") return "Falta alguna tabla en Supabase (plan_inquiries / plan_selections).";
-  if (err.code === "42703" || err.code === "PGRST204") return "Falta alguna columna en Supabase (¿corriste el SQL del aviso por email?).";
+  if (err.code === "42703" || err.code === "PGRST204") return "Falta alguna columna en Supabase. ¿Corriste el último SQL de SUPABASE.md?";
   if (err.code === "PGRST200") return "Supabase no encuentra el vínculo entre tablas. Revisá las claves foráneas de la guía.";
   if (err.code === "23514") return "Ese estado no está permitido en Supabase. ¿Corriste el SQL del panel?";
   return "No pudimos hablar con Supabase. Probá de nuevo.";
@@ -86,10 +96,22 @@ module.exports = async function handler(req, res) {
 
   if (req.method === "GET") {
     try {
-      var rows = await store.request(fetch, base + "plan_inquiries?select=" + encodeURIComponent(SELECT) +
-        "&order=created_at.desc&limit=" + LIMIT, { method: "GET", headers: store.headersFor(c.key) }, "listar");
+      var list = function (select) {
+        return store.request(fetch, base + "plan_inquiries?select=" + encodeURIComponent(select) +
+          "&order=created_at.desc&limit=" + LIMIT, { method: "GET", headers: store.headersFor(c.key) }, "listar");
+      };
+      var schemaReady = true, rows;
+      try {
+        rows = await list(SELECT);
+      } catch (err) {
+        // Si todavía no se corrió el SQL de cotizaciones, el panel sigue funcionando sin esa parte.
+        if (["PGRST200", "PGRST204", "42703", "42P01", "PGRST205"].indexOf(err.code) === -1) throw err;
+        console.error("[admin] falta el SQL de cotizaciones:", err.code);
+        schemaReady = false;
+        rows = await list(SELECT_BASE);
+      }
       var items = (rows || []).map(toItem);
-      return http.sendJson(res, 200, { ok: true, statuses: inquiries.STATUSES, count: items.length, items: items });
+      return http.sendJson(res, 200, { ok: true, statuses: inquiries.STATUSES, schema_ready: schemaReady, count: items.length, items: items });
     } catch (err) {
       console.error("[admin] listar:", err.status || "", err.code || "", err.message);
       return http.sendJson(res, 502, { ok: false, error: explain(err) });
@@ -103,6 +125,29 @@ module.exports = async function handler(req, res) {
     var id = body && String(body.id || "");
     var status = body && String(body.status || "");
     if (!UUID_RE.test(id)) return http.sendJson(res, 400, { ok: false, error: "Solicitud no válida." });
+
+    if (body.action === "mark_contacted") {
+      var channel = String(body.channel || "");
+      if (CHANNELS.indexOf(channel) === -1) return http.sendJson(res, 400, { ok: false, error: "Elegí por dónde contactaste al proveedor." });
+      try {
+        var current = await store.request(fetch, base + "plan_inquiries?select=id,status&id=eq." + encodeURIComponent(id),
+          { method: "GET", headers: store.headersFor(c.key) }, "leer solicitud");
+        if (!current || !current[0]) return http.sendJson(res, 404, { ok: false, error: "No encontramos esa solicitud." });
+        var now = new Date().toISOString();
+        var patch = { provider_contacted_at: now, provider_contact_channel: channel, updated_at: now };
+        // Sólo avanza desde "Nueva": nunca retrocede una solicitud ya cotizada, confirmada o cerrada.
+        if (current[0].status === "inquiry_requested") patch.status = "provider_contacted";
+        var done = await store.request(fetch, base + "plan_inquiries?id=eq." + encodeURIComponent(id) +
+          "&select=id,status,updated_at,provider_contacted_at,provider_contact_channel", {
+          method: "PATCH", headers: store.headersFor(c.key, { "Prefer": "return=representation" }), body: JSON.stringify(patch)
+        }, "marcar contactado");
+        return http.sendJson(res, 200, { ok: true, item: done[0] });
+      } catch (err) {
+        console.error("[admin] marcar contactado:", err.status || "", err.code || "", err.message);
+        return http.sendJson(res, 502, { ok: false, error: explain(err) });
+      }
+    }
+
     if (inquiries.STATUSES.indexOf(status) === -1) return http.sendJson(res, 400, { ok: false, error: "Estado no válido." });
     try {
       var updated = await store.request(fetch, base + "plan_inquiries?id=eq." + encodeURIComponent(id) + "&select=id,status,updated_at", {
