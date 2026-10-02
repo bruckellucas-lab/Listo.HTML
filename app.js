@@ -690,7 +690,9 @@
     { label: "Kosher", words: ["kosher", "kasher"] },
     { label: "Halal", words: ["halal"] },
     { label: "Apto celíacos / sin TACC", words: ["celiaco", "celiaca", "celiacos", "celiacas", "celiaquia", "sin tacc", "tacc", "apto celiacos"] },
-    { label: "Alergias", words: ["alergia", "alergias", "alergico", "alergica", "alergicos", "alergicas"] }
+    { label: "Alergias", words: ["alergia", "alergias", "alergico", "alergica", "alergicos", "alergicas"] },
+    // Mientras no exista la pregunta "¿celiaquía o preferencia?", también se bloquea.
+    { label: "Sin gluten", words: ["sin gluten", "gluten free", "libre de gluten", "intolerancia al gluten"] }
   ];
 
   function sensitiveRequirements() {
