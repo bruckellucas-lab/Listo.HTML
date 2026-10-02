@@ -29,8 +29,13 @@ var SELECT_BASE = [
     "event_requests(id,created_at,event_type,guests,zone,budget,needs,original_prompt)," +
     "providers(name,category,address,zone,rating,review_count,maps_url,website))"
 ].join(",");
-// Completo: suma contacto con el proveedor y cotizaciones (requiere el SQL de cotizaciones).
-var SELECT = SELECT_BASE + ",provider_contacted_at,provider_contact_channel,provider_quotes(" + QUOTE_FIELDS + ")";
+// Con cotizaciones: suma contacto con el proveedor y cotizaciones (requiere el SQL del Paso 8).
+// Los vínculos van con nombre explícito para que Supabase no se confunda con plan_proposals.
+var SELECT_QUOTES = SELECT_BASE + ",provider_contacted_at,provider_contact_channel," +
+  "provider_quotes!provider_quotes_plan_inquiry_id_fkey(" + QUOTE_FIELDS + ")";
+// Completo: suma las propuestas enviadas al usuario (requiere el SQL del Paso 9).
+var PROPOSAL_FIELDS = "id,created_at,public_code,status,provider_quote_id,first_viewed_at,last_viewed_at,view_count,responded_at,user_comment";
+var SELECT = SELECT_QUOTES + ",plan_proposals!plan_proposals_plan_inquiry_id_fkey(" + PROPOSAL_FIELDS + ")";
 var CHANNELS = ["whatsapp", "phone", "email", "instagram", "other"];
 
 function cfg() {
@@ -72,6 +77,9 @@ function toItem(row) {
     provider_contact_channel: row.provider_contact_channel || null,
     quotes: (Array.isArray(row.provider_quotes) ? row.provider_quotes : []).slice().sort(function (a, b) {
       return String(b.received_at).localeCompare(String(a.received_at)) || String(b.created_at).localeCompare(String(a.created_at));
+    }),
+    proposals: (Array.isArray(row.plan_proposals) ? row.plan_proposals : []).slice().sort(function (a, b) {
+      return String(b.created_at).localeCompare(String(a.created_at));
     })
   };
 }
@@ -100,18 +108,33 @@ module.exports = async function handler(req, res) {
         return store.request(fetch, base + "plan_inquiries?select=" + encodeURIComponent(select) +
           "&order=created_at.desc&limit=" + LIMIT, { method: "GET", headers: store.headersFor(c.key) }, "listar");
       };
-      var schemaReady = true, rows;
+      // Si todavía no se corrió algún SQL (propuestas o cotizaciones), el panel sigue funcionando sin esa parte.
+      var MISSING = ["PGRST200", "PGRST201", "PGRST204", "42703", "42P01", "PGRST205"];
+      var schemaReady = true, proposalsReady = true, rows;
       try {
         rows = await list(SELECT);
       } catch (err) {
-        // Si todavía no se corrió el SQL de cotizaciones, el panel sigue funcionando sin esa parte.
-        if (["PGRST200", "PGRST204", "42703", "42P01", "PGRST205"].indexOf(err.code) === -1) throw err;
-        console.error("[admin] falta el SQL de cotizaciones:", err.code);
-        schemaReady = false;
-        rows = await list(SELECT_BASE);
+        if (MISSING.indexOf(err.code) === -1) throw err;
+        console.error("[admin] falta el SQL de propuestas:", err.code);
+        proposalsReady = false;
+        try {
+          // Primero con el vínculo por nombre; si Supabase no lo reconoce, sin nombre (como antes).
+          rows = await list(SELECT_QUOTES).catch(function (e) {
+            if (e.code !== "PGRST200") throw e;
+            return list(SELECT_QUOTES.replace("provider_quotes!provider_quotes_plan_inquiry_id_fkey(", "provider_quotes("));
+          });
+        } catch (err2) {
+          if (MISSING.indexOf(err2.code) === -1) throw err2;
+          console.error("[admin] falta el SQL de cotizaciones:", err2.code);
+          schemaReady = false;
+          rows = await list(SELECT_BASE);
+        }
       }
       var items = (rows || []).map(toItem);
-      return http.sendJson(res, 200, { ok: true, statuses: inquiries.STATUSES, schema_ready: schemaReady, count: items.length, items: items });
+      return http.sendJson(res, 200, {
+        ok: true, statuses: inquiries.STATUSES, schema_ready: schemaReady, proposals_ready: proposalsReady,
+        count: items.length, items: items
+      });
     } catch (err) {
       console.error("[admin] listar:", err.status || "", err.code || "", err.message);
       return http.sendJson(res, 502, { ok: false, error: explain(err) });

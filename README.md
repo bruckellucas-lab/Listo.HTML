@@ -33,6 +33,14 @@ Guía paso a paso: [GOOGLE-PLACES.md](GOOGLE-PLACES.md).
 
 Guía: [SUPABASE.md](SUPABASE.md), Paso 7.
 
+### Propuesta para el usuario
+
+- `propuesta/index.html`: la página privada **/propuesta/CÓDIGO** que ve el usuario (aceptar o pedir otra opción).
+- `api/proposal.js` (pública) y `api/admin-proposals.js` (panel): leen y guardan las propuestas desde Vercel.
+- `vercel.json`: hace que `/propuesta/CÓDIGO` abra esa página.
+
+Guía: [SUPABASE.md](SUPABASE.md), Paso 9.
+
 Las fotos son de [Unsplash](https://unsplash.com) (uso libre) y se cargan directamente desde su servidor.
 Para cambiar una foto, buscá en los archivos el código que empieza con `photo-` y reemplazalo por el de otra imagen de Unsplash.
 

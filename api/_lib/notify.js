@@ -199,4 +199,92 @@ function notifyInquiry(cfg, info, fetchImpl) {
   }).then(function () { return sent; });
 }
 
-module.exports = { NOTIFY_TO: NOTIFY_TO, buildEmail: buildEmail, whatsappNumber: whatsappNumber, notifyInquiry: notifyInquiry };
+/* ---------- Aviso cuando el usuario responde una propuesta ---------- */
+
+function amountText(n, cur) {
+  if (n === null || n === undefined || n === "") return "";
+  return (cur === "USD" ? "US$ " : "$ ") + Number(n).toLocaleString("es-AR", { maximumFractionDigits: 2 });
+}
+
+// Arma el email de "Propuesta aceptada" / "Pidió otra opción" (sólo para el equipo de LISTO).
+function buildProposalEmail(ctx) {
+  var c = ctx.contact || {}, q = ctx.quote || {}, r = ctx.request || {}, p = ctx.provider || {};
+  var accepted = ctx.action === "accept";
+  var providerName = p.name || ctx.providerName || "Proveedor";
+  var wa = whatsappNumber(c.contact_phone);
+  var waLink = wa ? "https://wa.me/" + wa : "";
+  var price = [q.total_price !== null && q.total_price !== undefined ? amountText(q.total_price, q.currency) + " total" : "",
+    q.price_per_person !== null && q.price_per_person !== undefined ? amountText(q.price_per_person, q.currency) + " por persona" : ""]
+    .filter(Boolean).join(" · ");
+  var rows = [
+    ["Respuesta", accepted ? "ACEPTÓ la propuesta" : "Pidió otra opción"],
+    ["Comentario del usuario", ctx.comment],
+    ["Contacto", c.contact_name],
+    ["WhatsApp", c.contact_phone],
+    ["Email", c.contact_email],
+    ["Proveedor", providerName],
+    ["Dirección", p.address],
+    ["Plan", r.event_type],
+    ["Fecha", dateAR(c.event_date)],
+    ["Horario", c.approximate_time],
+    ["Personas", r.guests],
+    ["Zona", r.zone],
+    ["Cotización", price],
+    ["Válida hasta", q.valid_until ? dateAR(q.valid_until) : ""],
+    ["Respondió", nowAR()]
+  ].filter(function (row) { return row[1] !== null && row[1] !== undefined && row[1] !== ""; });
+
+  var subject = (accepted ? "Propuesta aceptada · " : "Pidió otra opción · ") + providerName;
+  var lead = accepted
+    ? "El usuario aceptó la propuesta. Falta confirmar la reserva con el lugar (todavía NO está confirmada)."
+    : "El usuario pidió otra opción" + (ctx.comment ? ". Su comentario está abajo." : " (no dejó comentario).");
+  var admin = ctx.adminUrl ? '<p style="margin:22px 0 0"><a href="' + esc(ctx.adminUrl) + '">Gestionar en /admin</a></p>' : "";
+
+  var html = '<div style="font-family:Arial,Helvetica,sans-serif;max-width:640px;margin:0 auto;color:#141210">' +
+    '<p style="font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#5E4431;margin:0 0 8px">LISTO · Propuesta</p>' +
+    '<h1 style="font-size:24px;margin:0 0 6px">' + esc(accepted ? "Propuesta aceptada" : "Pidió otra opción") + '</h1>' +
+    '<p style="margin:0 0 18px;color:#5A5046">' + esc(lead) + '</p>' +
+    (ctx.comment ? '<div style="border-left:4px solid #5E4431;background:#F5F1EA;padding:12px 14px;margin:0 0 18px"><strong>Comentario:</strong><br>' + esc(ctx.comment).replace(/\n/g, "<br>") + '</div>' : '') +
+    (waLink ? '<p style="margin:0 0 22px"><a href="' + esc(waLink) + '" style="display:inline-block;background:#141210;color:#EFE8DC;text-decoration:none;padding:14px 22px;font-weight:bold;letter-spacing:2px;font-size:13px">ABRIR WHATSAPP</a></p>' : '') +
+    '<table cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;font-size:14px">' +
+    rows.map(function (row) {
+      return '<tr><td style="padding:8px 12px 8px 0;border-bottom:1px solid #E2D9CB;color:#8C857A;white-space:nowrap;vertical-align:top">' + esc(row[0]) +
+        '</td><td style="padding:8px 0;border-bottom:1px solid #E2D9CB;vertical-align:top">' + esc(row[1]) + '</td></tr>';
+    }).join("") + '</table>' + admin + '</div>';
+
+  var text = subject + "\n" + lead + "\n\n" +
+    rows.map(function (row) { return row[0] + ": " + row[1]; }).join("\n") +
+    (waLink ? "\n\nABRIR WHATSAPP: " + waLink : "") + (ctx.adminUrl ? "\nGestionar: " + ctx.adminUrl : "");
+  return { subject: subject, html: html, text: text };
+}
+
+// Nunca lanza errores: si Resend falla, la respuesta del usuario ya quedó guardada.
+function notifyProposalResponse(cfg, info, fetchImpl) {
+  var apiKey = String(process.env.RESEND_API_KEY || "").trim();
+  if (!apiKey) { console.error("[notify] respuesta de propuesta sin email: falta RESEND_API_KEY"); return Promise.resolve(false); }
+  var doFetch = fetchImpl || fetch;
+  var path = "plan_inquiries?select=contact_name,contact_phone,contact_email,event_date,approximate_time," +
+    "plan_selections(provider_name,event_requests(event_type,guests,zone),providers(name,address))&id=eq." + encodeURIComponent(info.planInquiryId);
+  return store.request(doFetch, api(cfg, path), { method: "GET", headers: store.headersFor(cfg.key) }, "leer contexto propuesta")
+    .then(first, function (err) {
+      console.error("[notify] no se pudo leer el contexto de la propuesta:", err.status || "", err.code || "");
+      return null;
+    })
+    .then(function (inq) {
+      inq = inq || {};
+      var sel = inq.plan_selections || {};
+      return sendEmail(apiKey, buildProposalEmail({
+        action: info.action, comment: info.comment, quote: info.quote, adminUrl: info.adminUrl,
+        contact: inq, request: sel.event_requests || {}, provider: sel.providers || {}, providerName: sel.provider_name
+      }), doFetch);
+    })
+    .then(function () { return true; }, function (err) {
+      console.error("[notify] el email de respuesta no se envió:", err && err.name === "AbortError" ? "tiempo de espera agotado" : (err && err.message));
+      return false;
+    });
+}
+
+module.exports = {
+  NOTIFY_TO: NOTIFY_TO, buildEmail: buildEmail, whatsappNumber: whatsappNumber, notifyInquiry: notifyInquiry,
+  buildProposalEmail: buildProposalEmail, notifyProposalResponse: notifyProposalResponse
+};

@@ -134,6 +134,14 @@
     .timeline time { display: block; color: var(--muted); font-size: 12px; }
     .banner { border: 1px solid var(--amber); color: var(--amber); padding: 12px 14px; margin-bottom: 18px; font-size: 14px; }
     .card-quote { margin: 4px 0 0; color: var(--ok); font-size: 14px; }
+    .card-proposal { margin: 2px 0 0; font-size: 14px; color: var(--amber); }
+    .card-proposal.proposal_accepted { color: var(--ok); } .card-proposal.proposal_declined { color: var(--bad); }
+    .proposal { border: 1px solid var(--line); padding: 14px 16px; margin-top: 12px; }
+    .p-status { display: inline-block; padding: 4px 9px; border: 1px solid currentColor; font-size: 10px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; color: var(--amber); }
+    .p-status.proposal_accepted { color: var(--ok); } .p-status.proposal_declined { color: var(--bad); } .p-status.proposal_replaced { color: var(--muted); }
+    .p-gen { white-space: normal; text-align: center; max-width: 100%; margin-top: 12px; }
+    .p-link { margin: 10px 0 0; overflow-wrap: anywhere; }
+    .p-comment { border-left: 3px solid var(--wood); background: var(--char); padding: 10px 12px; margin: 12px 0 0; white-space: pre-line; }
     @media (max-width: 760px) { .form { grid-template-columns: 1fr; } }
 
     .toast { position: fixed; left: 16px; right: 16px; bottom: max(18px, env(safe-area-inset-bottom)); margin: 0 auto; width: fit-content; max-width: 560px;
@@ -336,6 +344,7 @@
       api("GET", "/api/admin-inquiries").then(function (data) {
         items = data.items || [];
         $("schema-banner").hidden = data.schema_ready !== false;
+        proposalsReady = data.proposals_ready !== false;
         setState(null);
         render();
       }).catch(function (err) {
@@ -430,6 +439,9 @@
         prov.appendChild(el("b", "", it.provider.name || "Proveedor sin nombre"));
         info.appendChild(prov);
         if (it.quotes && it.quotes.length) info.appendChild(el("p", "card-quote", "Cotización: " + quotePrice(it.quotes[0]) + " · " + AVAIL[it.quotes[0].availability]));
+        var lastProp = currentProposal(it);
+        if (lastProp) info.appendChild(el("p", "card-proposal " + lastProp.status, "Propuesta: " + (PROPOSAL_LABELS[lastProp.status] || lastProp.status) +
+          (lastProp.status === "proposal_sent" ? " · " + opensText(lastProp) : "")));
         card.appendChild(info);
 
         var actions = el("div", "item-actions");
@@ -481,6 +493,7 @@
     var CHANNELS = { whatsapp: "WhatsApp", phone: "Teléfono", email: "Email", instagram: "Instagram", other: "Otro" };
     var AVAIL = { yes: "Disponibilidad confirmada", no: "Sin disponibilidad", pending: "Disponibilidad pendiente" };
     var schemaReady = function () { return $("schema-banner").hidden; };
+    var proposalsReady = true;
 
     function section(title, rows) {
       var sec = el("section", "d-section");
@@ -656,6 +669,91 @@
       return f;
     }
 
+    /* ---------- Propuesta para el usuario (/propuesta/CODE) ---------- */
+
+    var PROPOSAL_LABELS = { proposal_sent: "Enviada", proposal_accepted: "Aceptada", proposal_declined: "Pidió otra opción", proposal_replaced: "Reemplazada" };
+    function proposalUrl(pp) { return location.origin + "/propuesta/" + pp.public_code; }
+    // La más nueva que no fue reemplazada (o la más nueva de todas).
+    function currentProposal(it) {
+      var list = it.proposals || [];
+      return list.filter(function (pp) { return pp.status !== "proposal_replaced"; })[0] || null;
+    }
+    function opensText(pp) {
+      var n = pp.view_count || 0;
+      return n ? "abierta " + n + (n === 1 ? " vez" : " veces") : "sin abrir";
+    }
+
+    function proposalBlock(it) {
+      var wrap = el("div");
+      wrap.appendChild(el("h4", "d-sub", "Propuesta para el usuario"));
+      if (!proposalsReady) {
+        wrap.appendChild(el("p", "banner", "Corré el SQL de propuestas (SUPABASE.md, Paso 9) para poder generar el link."));
+        return wrap;
+      }
+      var quotes = it.quotes || [];
+      var pp = currentProposal(it);
+      if (pp) {
+        var box = el("div", "proposal");
+        box.appendChild(el("span", "p-status " + pp.status, PROPOSAL_LABELS[pp.status] || pp.status));
+        var linkP = el("p", "p-link mono", proposalUrl(pp));
+        box.appendChild(linkP);
+        var row = el("div", "row");
+        var copy = el("button", "btn btn-sm", "Copiar link"); copy.type = "button";
+        copy.addEventListener("click", function () {
+          copyText(proposalUrl(pp)).then(function () { toast("Link copiado"); }, function () { toast("No pudimos copiar: copialo a mano."); });
+        });
+        row.appendChild(copy);
+        row.appendChild(linkBtn(proposalUrl(pp), "Abrir propuesta"));
+        box.appendChild(row);
+        var q = quotes.filter(function (x) { return x.id === pp.provider_quote_id; })[0];
+        box.appendChild(section("", [
+          ["Generada", fmtDateTime(pp.created_at)],
+          ["Cotización", q ? quotePrice(q) + (quotes[0] && q.id !== quotes[0].id ? " (no es la actual)" : "") : null],
+          ["Aperturas", String(pp.view_count || 0)],
+          ["Primera apertura", pp.first_viewed_at ? fmtDateTime(pp.first_viewed_at) : "Todavía no la abrió"],
+          ["Última apertura", pp.last_viewed_at ? fmtDateTime(pp.last_viewed_at) : null],
+          ["Respondió", pp.responded_at ? fmtDateTime(pp.responded_at) : null]
+        ]));
+        if (pp.user_comment) {
+          var c = el("p", "p-comment");
+          c.appendChild(el("b", "", "Comentario del usuario: "));
+          c.appendChild(document.createTextNode(pp.user_comment));
+          box.appendChild(c);
+        }
+        if (pp.status === "proposal_accepted") box.appendChild(el("p", "muted", "Aceptó: falta confirmar la reserva con el lugar. Cuando esté confirmada, pasá la solicitud a Confirmado."));
+        box.appendChild(el("p", "muted", "Tus aperturas desde este panel no se cuentan."));
+        wrap.appendChild(box);
+      }
+      if (!quotes.length) {
+        wrap.appendChild(el("p", "muted", "Cargá una cotización para poder generar la propuesta."));
+        return wrap;
+      }
+      var needsNew = !pp || pp.provider_quote_id !== quotes[0].id || pp.status !== "proposal_sent";
+      if (needsNew) {
+        var gen = el("button", pp ? "btn btn-ghost p-gen" : "btn p-gen", pp ? "Nueva propuesta con la cotización actual" : "Generar propuesta →"); gen.type = "button";
+        if (pp && pp.status === "proposal_sent") wrap.appendChild(el("p", "muted", "La propuesta enviada usa una cotización anterior. Si generás una nueva, el link anterior queda Reemplazado."));
+        gen.addEventListener("click", function () {
+          if (gen.disabled) return;
+          gen.disabled = true; gen.textContent = "Generando…";
+          api("POST", "/api/admin-proposals", { plan_inquiry_id: it.id, provider_quote_id: quotes[0].id }).then(function (data) {
+            var fresh = data.proposal;
+            it.proposals = [fresh].concat((it.proposals || []).filter(function (x) { return x.id !== fresh.id; }).map(function (x) {
+              return x.status === "proposal_sent" ? Object.assign({}, x, { status: "proposal_replaced" }) : x;
+            }));
+            toast(data.created ? "Propuesta generada" : "Ya existía esta propuesta");
+            render();
+            openDetail(it);
+          }).catch(function (e) {
+            if (e.message === "__session__") return;
+            toast(e.message);
+            gen.disabled = false; gen.textContent = pp ? "Nueva propuesta con la cotización actual" : "Generar propuesta →";
+          });
+        });
+        wrap.appendChild(gen);
+      }
+      return wrap;
+    }
+
     function openDetail(it) {
       var b = $("d-body");
       b.innerHTML = "";
@@ -744,6 +842,7 @@
       var quotes = it.quotes || [];
       if (quotes.length) s4.appendChild(quoteCard(quotes[0], true));
       else s4.appendChild(el("p", "muted", "Todavía no hay cotizaciones."));
+      if (schemaReady()) s4.appendChild(proposalBlock(it));
       s4.appendChild(el("h4", "d-sub", quotes.length ? "Registrar nueva cotización (la anterior queda en el historial)" : "Registrar cotización"));
       if (schemaReady()) s4.appendChild(quoteForm(it));
       else s4.appendChild(el("p", "banner", "Corré el SQL de cotizaciones (SUPABASE.md, Paso 8) para poder guardar."));
@@ -754,6 +853,12 @@
       var events = [{ at: it.created_at, text: "Solicitud recibida" }];
       if (it.provider_contacted_at) events.push({ at: it.provider_contacted_at, text: "Proveedor contactado" + (it.provider_contact_channel ? " por " + CHANNELS[it.provider_contact_channel] : "") });
       quotes.forEach(function (q, i) { events.push({ at: q.received_at, text: "Cotización " + (i === 0 ? "(actual)" : "anterior") + ": " + quotePrice(q) + " · " + (AVAIL[q.availability] || "") }); });
+      (it.proposals || []).forEach(function (pp) {
+        events.push({ at: pp.created_at, text: "Propuesta generada (" + (PROPOSAL_LABELS[pp.status] || pp.status) + ")" });
+        if (pp.first_viewed_at) events.push({ at: pp.first_viewed_at, text: "El usuario abrió la propuesta" });
+        if (pp.responded_at) events.push({ at: pp.responded_at, text: pp.status === "proposal_accepted" ? "El usuario aceptó la propuesta" : "El usuario pidió otra opción" +
+          (pp.user_comment ? ": “" + pp.user_comment + "”" : "") });
+      });
       events.sort(function (x, y) { return String(y.at).localeCompare(String(x.at)); });
       var tl = el("ol", "timeline");
       events.forEach(function (ev) {

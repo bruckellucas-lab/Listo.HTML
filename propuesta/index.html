@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#141210">
+  <title>LISTO / Tu propuesta</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23141210'/%3E%3Ctext x='32' y='47' text-anchor='middle' font-family='Impact,Arial Narrow,sans-serif' font-size='40' fill='%23EFE8DC'%3EL%3C/text%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ink: #141210; --char: #1C1916; --wood: #5E4431; --beige: #CDBFA9; --cream: #EFE8DC; --bone: #F5F1EA;
+      --amber: #E0A458; --danger: #E08A6B; --ok: #8DB28F;
+      --line: rgba(239, 232, 220, .14); --muted: rgba(239, 232, 220, .62);
+      --display: "Anton", "Oswald", "Arial Narrow", Impact, sans-serif;
+      --sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      --ease-out: cubic-bezier(.16, 1, .3, 1);
+      --gutter: clamp(18px, 4.4vw, 64px);
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; overflow-x: clip; }
+    body { margin: 0; min-height: 100vh; background: var(--ink); color: var(--cream); font-family: var(--sans); font-size: 16px; line-height: 1.55; -webkit-font-smoothing: antialiased; overflow-x: clip; }
+    button, textarea { font: inherit; color: inherit; }
+    a { color: inherit; }
+    img { display: block; max-width: 100%; }
+    [hidden] { display: none !important; }
+    :focus-visible { outline: 1px solid var(--amber); outline-offset: 4px; }
+    ::selection { background: var(--amber); color: var(--ink); }
+
+    .label { font-size: 11px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; line-height: 1.4; }
+    .muted { color: var(--muted); }
+    .brand { font-family: var(--display); font-weight: 400; text-transform: uppercase; margin: 0; line-height: .9; text-decoration: none; }
+
+    .top { position: absolute; inset: 0 0 auto; z-index: 3; display: flex; justify-content: space-between; align-items: center; padding: 22px var(--gutter); }
+    .top .brand { font-size: 30px; }
+
+    .preview { position: relative; z-index: 4; background: var(--amber); color: var(--ink); text-align: center; padding: 9px var(--gutter); }
+
+    /* Portada */
+    .hero { position: relative; min-height: min(78vh, 760px); display: flex; align-items: flex-end; overflow: hidden; background: var(--char); }
+    .hero img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform: scale(1.04); opacity: 0; transition: opacity 1.2s var(--ease-out), transform 2.4s var(--ease-out); }
+    .hero img.is-loaded { opacity: 1; transform: none; }
+    .hero::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(20,18,16,.55) 0%, rgba(20,18,16,.05) 30%, rgba(20,18,16,.2) 55%, rgba(20,18,16,.96) 100%); }
+    .hero-in { position: relative; z-index: 2; width: 100%; padding: 120px var(--gutter) clamp(34px, 6vw, 64px); }
+    .hero .label { margin: 0 0 16px; opacity: .8; }
+    .hero h1 { font-family: var(--display); font-weight: 400; text-transform: uppercase; font-size: clamp(54px, 11vw, 168px); line-height: .9; margin: 0; padding: .06em 0; overflow-wrap: anywhere;
+      animation: rise 1s var(--ease-out) both; }
+    .hero .sub { margin: 14px 0 0; color: var(--muted); font-size: 15px; animation: rise 1s .12s var(--ease-out) both; }
+    .credit { position: absolute; right: var(--gutter); bottom: 12px; z-index: 2; font-size: 10px; color: rgba(239,232,220,.5); }
+    .credit a { color: inherit; }
+    @keyframes rise { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
+
+    main { max-width: 1180px; margin: 0 auto; padding: 0 var(--gutter) 90px; }
+    section { border-top: 1px solid var(--line); padding: clamp(28px, 4vw, 44px) 0; animation: rise .9s .2s var(--ease-out) both; }
+    section:first-child { border-top: 0; }
+
+    /* Datos del plan */
+    .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 22px; margin: 0; }
+    .facts div { min-width: 0; }
+    .facts dt { color: var(--muted); margin-bottom: 6px; }
+    .facts dd { margin: 0; font-family: var(--display); text-transform: uppercase; font-size: clamp(24px, 3vw, 34px); line-height: 1.05; overflow-wrap: anywhere; }
+
+    .where { display: flex; flex-wrap: wrap; gap: 14px 28px; align-items: center; justify-content: space-between; }
+    .where p { margin: 0; }
+    .where p + p { margin-top: 6px; font-size: 17px; }
+
+    /* Precio */
+    .price { display: grid; grid-template-columns: 1.1fr 1fr; gap: clamp(24px, 5vw, 64px); align-items: end; }
+    .amount { font-family: var(--display); font-size: clamp(48px, 7vw, 104px); line-height: .95; margin: 10px 0 0; letter-spacing: -.005em; }
+    .amount small { white-space: nowrap; }
+    .amount small { font-size: .36em; color: var(--muted); margin-left: 10px; }
+    .per { margin: 10px 0 0; font-size: 17px; }
+    .status-list { list-style: none; margin: 0; padding: 0; }
+    .status-list li { display: flex; gap: 12px; align-items: baseline; padding: 12px 0; border-bottom: 1px solid var(--line); }
+    .status-list li:last-child { border-bottom: 0; }
+    .dot { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; background: var(--amber); transform: translateY(-1px); }
+    .dot.ok { background: var(--ok); } .dot.bad { background: var(--danger); }
+
+    .details { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; }
+    .details h3 { margin: 0 0 8px; }
+    .details p { margin: 0; white-space: pre-line; color: var(--cream); }
+
+    .note { color: var(--muted); font-size: 14px; max-width: 640px; }
+
+    /* Botones */
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; padding: 20px 28px; border: 1px solid var(--cream); background: var(--cream); color: var(--ink);
+      font-size: 12px; font-weight: 600; letter-spacing: .2em; text-transform: uppercase; cursor: pointer; text-decoration: none; transition: background .25s, color .25s, border-color .25s, opacity .25s; }
+    .btn:hover:not(:disabled) { background: var(--amber); border-color: var(--amber); }
+    .btn:disabled { opacity: .35; cursor: not-allowed; }
+    .btn-ghost { background: transparent; color: var(--cream); border-color: rgba(239,232,220,.4); }
+    .btn-ghost:hover:not(:disabled) { background: transparent; border-color: var(--cream); color: var(--cream); }
+    .btn-line { padding: 12px 0; border: 0; border-bottom: 1px solid rgba(239,232,220,.4); background: none; color: var(--cream); }
+    .btn-line:hover { background: none !important; border-color: var(--amber) !important; }
+    .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .warn { color: var(--danger); margin: 0 0 16px; font-weight: 500; }
+    .error { color: var(--danger); margin: 14px 0 0; font-size: 14px; }
+
+    .decline { margin-top: 22px; max-width: 720px; }
+    .decline label { display: block; margin-bottom: 8px; }
+    .decline textarea { width: 100%; min-height: 110px; padding: 14px 0; border: 0; border-bottom: 1px solid rgba(239,232,220,.35); background: transparent; outline: none; resize: vertical; font-size: 17px; border-radius: 0; }
+    .decline textarea:focus { border-bottom-color: var(--amber); }
+    .decline .row { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 18px; }
+
+    /* Mensajes finales */
+    .done { padding: clamp(40px, 7vw, 90px) 0; }
+    .done h2 { font-family: var(--display); font-weight: 400; text-transform: uppercase; font-size: clamp(56px, 12vw, 150px); line-height: .9; margin: 0 0 20px; padding: .06em 0; }
+    .done p { font-size: clamp(18px, 2.2vw, 22px); max-width: 680px; margin: 0; }
+
+    .center { min-height: 100vh; display: grid; place-items: center; padding: var(--gutter); text-align: center; }
+    .center .brand { font-size: clamp(64px, 16vw, 120px); margin-bottom: 22px; }
+    .center p { max-width: 460px; margin: 0 auto; }
+    .loading .brand { animation: pulse 1.4s ease-in-out infinite; }
+    @keyframes pulse { 50% { opacity: .35; } }
+
+    footer { border-top: 1px solid var(--line); padding: 26px var(--gutter) 40px; display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; color: var(--muted); }
+
+    @media (max-width: 860px) {
+      .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .price, .details { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 560px) {
+      .actions { grid-template-columns: 1fr; }
+      .hero { min-height: 72vh; }
+      .hero-in { padding-bottom: 46px; }
+      .btn { padding: 18px 20px; }
+    }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+  </style>
+</head>
+<body>
+  <div id="loading" class="center loading"><div><p class="brand">LISTO</p><p class="label muted">Cargando tu propuesta</p></div></div>
+
+  <div id="message" class="center" hidden>
+    <div><a class="brand" href="/">LISTO</a><p id="message-text"></p></div>
+  </div>
+
+  <div id="page" hidden>
+    <div id="preview" class="preview label" hidden>Vista previa de LISTO · esta apertura no se cuenta</div>
+    <header class="hero">
+      <div class="top"><a class="brand" href="/">LISTO</a><span class="label muted">Propuesta</span></div>
+      <img id="photo" alt="" hidden>
+      <div class="hero-in">
+        <p class="label">Tu propuesta</p>
+        <h1 id="place-name"></h1>
+        <p class="sub" id="place-sub"></p>
+      </div>
+      <p class="credit" id="credit" hidden></p>
+    </header>
+
+    <main>
+      <section>
+        <dl class="facts" id="facts"></dl>
+      </section>
+
+      <section id="where-section" hidden>
+        <div class="where">
+          <div><p class="label muted">Dirección</p><p id="address"></p></div>
+          <a class="btn btn-ghost" id="maps" href="#" target="_blank" rel="noopener noreferrer" hidden>Ver en Maps ↗</a>
+        </div>
+      </section>
+
+      <section>
+        <div class="price">
+          <div>
+            <p class="label muted" id="price-label">Precio total</p>
+            <p class="amount" id="amount"></p>
+            <p class="per" id="per" hidden></p>
+          </div>
+          <ul class="status-list" id="status-list"></ul>
+        </div>
+      </section>
+
+      <section id="details-section" hidden>
+        <div class="details" id="details"></div>
+      </section>
+
+      <section id="actions-section">
+        <div id="open-actions">
+          <p class="warn" id="warn" hidden></p>
+          <div class="actions">
+            <button class="btn" type="button" id="accept">Aceptar propuesta →</button>
+            <button class="btn btn-ghost" type="button" id="decline">Quiero otra opción</button>
+          </div>
+          <form class="decline" id="decline-form" hidden>
+            <label class="label muted" for="comment">¿Qué te gustaría cambiar?</label>
+            <textarea id="comment" maxlength="1000" placeholder="Opcional. Por ejemplo: otra zona, algo más económico, otro horario…"></textarea>
+            <div class="row">
+              <button class="btn" type="submit" id="decline-send">Enviar</button>
+              <button class="btn btn-line" type="button" id="decline-cancel">Volver</button>
+            </div>
+          </form>
+          <p class="error" id="error" role="alert" hidden></p>
+          <p class="note" style="margin-top:22px">Al aceptar, LISTO termina de confirmar la reserva con el lugar. Te avisamos cuando esté confirmada.</p>
+        </div>
+
+        <div class="done" id="done" hidden>
+          <h2 id="done-title"></h2>
+          <p id="done-text"></p>
+        </div>
+      </section>
+    </main>
+
+    <footer><span class="label">LISTO</span><span class="label">Tenés el plan. Nosotros hacemos el resto.</span></footer>
+  </div>
+
+  <script>
+  (function () {
+    "use strict";
+    var $ = function (id) { return document.getElementById(id); };
+    var code = (location.pathname.match(/\/propuesta\/([A-Za-z0-9]{12})\/?$/) || [])[1] || "";
+    var data = null, busy = false;
+
+    function show(id) {
+      ["loading", "message", "page"].forEach(function (k) { $(k).hidden = k !== id; });
+    }
+    function message(text) { $("message-text").textContent = text; show("message"); }
+
+    function money(n, cur) {
+      if (n === null || n === undefined) return "";
+      return (cur === "USD" ? "US$ " : "$ ") + Number(n).toLocaleString("es-AR", { maximumFractionDigits: 2 });
+    }
+    function dateText(iso) {
+      if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return "";
+      var p = iso.split("-");
+      return new Date(+p[0], +p[1] - 1, +p[2]).toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" });
+    }
+    function shortDate(iso) {
+      if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return "";
+      var p = iso.split("-");
+      return new Date(+p[0], +p[1] - 1, +p[2]).toLocaleDateString("es-AR", { day: "numeric", month: "long", year: "numeric" });
+    }
+    function el(tag, cls, text) {
+      var e = document.createElement(tag);
+      if (cls) e.className = cls;
+      if (text !== undefined && text !== null) e.textContent = text;
+      return e;
+    }
+
+    function render(p, preview) {
+      data = p;
+      if (p.status === "proposal_replaced") {
+        return message("Esta propuesta fue reemplazada por una más nueva. Pedile a LISTO el link actualizado.");
+      }
+      var place = p.place || {}, plan = p.plan || {}, q = p.quote || {};
+      $("preview").hidden = !preview;
+      document.title = "LISTO / " + (place.name || "Tu propuesta");
+
+      $("place-name").textContent = place.name || "Tu propuesta";
+      $("place-sub").textContent = [place.category, place.zone].filter(Boolean).join(" · ");
+
+      var img = $("photo");
+      if (p.photo && p.photo.large) {
+        img.onload = function () { img.classList.add("is-loaded"); };
+        img.onerror = function () { img.hidden = true; $("credit").hidden = true; };
+        img.alt = place.name || "";
+        img.src = p.photo.large;
+        img.hidden = false;
+        var authors = (p.photo.attributions || []).filter(function (a) { return a && a.name; });
+        if (authors.length) {
+          var credit = $("credit");
+          credit.textContent = "Foto: ";
+          authors.forEach(function (a, i) {
+            if (i) credit.appendChild(document.createTextNode(", "));
+            if (a.uri) { var link = el("a", "", a.name); link.href = a.uri; link.target = "_blank"; link.rel = "noopener noreferrer"; credit.appendChild(link); }
+            else credit.appendChild(document.createTextNode(a.name));
+          });
+          credit.appendChild(document.createTextNode(" · Google Maps"));
+          credit.hidden = false;
+        }
+      }
+
+      var facts = $("facts");
+      facts.textContent = "";
+      [["Plan", plan.type], ["Fecha", dateText(plan.date)], ["Horario", plan.time], ["Personas", plan.guests], ["Zona", plan.zone || place.zone]]
+        .filter(function (f) { return f[1]; })
+        .forEach(function (f) {
+          var d = el("div");
+          d.appendChild(el("dt", "label", f[0]));
+          d.appendChild(el("dd", "", String(f[1])));
+          facts.appendChild(d);
+        });
+
+      if (place.address || place.maps_url) {
+        $("where-section").hidden = false;
+        $("address").textContent = place.address || "Dirección a confirmar";
+        if (place.maps_url) { $("maps").href = place.maps_url; $("maps").hidden = false; }
+      }
+
+      var hasTotal = q.total_price !== null && q.total_price !== undefined;
+      var hasPer = q.price_per_person !== null && q.price_per_person !== undefined;
+      $("price-label").textContent = hasTotal ? "Precio total" : "Precio por persona";
+      $("amount").textContent = hasTotal ? money(q.total_price, q.currency) : (hasPer ? money(q.price_per_person, q.currency) : "A confirmar");
+      if (hasTotal || hasPer) $("amount").appendChild(el("small", "", q.currency === "USD" ? "USD" : "ARS"));
+      if (hasTotal && hasPer) { $("per").textContent = money(q.price_per_person, q.currency) + " por persona"; $("per").hidden = false; }
+
+      var list = $("status-list");
+      list.textContent = "";
+      var avail = q.availability === "yes" ? ["ok", "Disponible para tu fecha"]
+        : q.availability === "no" ? ["bad", "Sin disponibilidad para esta fecha"]
+        : ["", "Disponibilidad a confirmar con el lugar"];
+      var rows = [avail];
+      if (q.valid_until) rows.push(q.expired ? ["bad", "Esta cotización venció."] : ["", "Cotización válida hasta el " + shortDate(q.valid_until)]);
+      if (q.deposit) rows.push(["", "Seña: " + q.deposit]);
+      rows.forEach(function (r) {
+        var li = el("li");
+        li.appendChild(el("span", "dot" + (r[0] ? " " + r[0] : "")));
+        li.appendChild(el("span", "", r[1]));
+        list.appendChild(li);
+      });
+
+      var details = $("details");
+      details.textContent = "";
+      [["Qué incluye", q.includes], ["Condiciones", q.conditions]].filter(function (d) { return d[1]; }).forEach(function (d) {
+        var box = el("div");
+        box.appendChild(el("h3", "label muted", d[0]));
+        box.appendChild(el("p", "", d[1]));
+        details.appendChild(box);
+      });
+      $("details-section").hidden = !details.children.length;
+
+      renderActions(p);
+      show("page");
+    }
+
+    function renderActions(p) {
+      var q = p.quote || {};
+      var answered = p.status === "proposal_accepted" || p.status === "proposal_declined";
+      $("open-actions").hidden = answered;
+      $("done").hidden = !answered;
+      if (p.status === "proposal_accepted") {
+        $("done-title").textContent = "LISTO.";
+        $("done-text").textContent = "Recibimos tu aceptación. Ahora vamos a terminar de confirmar la reserva con el lugar.";
+        return;
+      }
+      if (p.status === "proposal_declined") {
+        $("done-title").textContent = "Recibido.";
+        $("done-text").textContent = "Gracias por avisarnos. Vamos a buscarte otra opción y te escribimos.";
+        return;
+      }
+      $("accept").disabled = !p.can_accept;
+      $("decline").disabled = !p.can_decline;
+      $("decline-send").disabled = !p.can_decline;
+      var warn = q.expired ? "Esta cotización venció." : (q.availability === "no" ? "El lugar no tiene disponibilidad para esta fecha." : "");
+      $("warn").textContent = warn;
+      $("warn").hidden = !warn;
+    }
+
+    function setError(text) { $("error").textContent = text || ""; $("error").hidden = !text; }
+
+    function answer(action, comment) {
+      if (busy) return;
+      busy = true;
+      setError("");
+      var buttons = [$("accept"), $("decline"), $("decline-send")];
+      buttons.forEach(function (b) { b.disabled = true; });
+      fetch("/api/proposal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ code: code, action: action, comment: comment || "" })
+      }).then(function (res) {
+        return res.json().catch(function () { return {}; }).then(function (body) { return { res: res, body: body }; });
+      }).then(function (r) {
+        busy = false;
+        if (r.body && r.body.proposal) {
+          var merged = Object.assign({}, data, r.body.proposal, { photo: data && data.photo });
+          if (merged.status === "proposal_replaced") return render(merged);
+          data = merged;
+          renderActions(merged);
+          if (!r.res.ok) setError(r.body.error || "No pudimos guardar tu respuesta. Probá de nuevo.");
+          else if (merged.status !== "proposal_sent") $("done").scrollIntoView({ behavior: "smooth", block: "center" });
+          return;
+        }
+        renderActions(data);
+        setError((r.body && r.body.error && r.body.error !== "not_found") ? r.body.error : "No pudimos guardar tu respuesta. Probá de nuevo.");
+      }).catch(function () {
+        busy = false;
+        renderActions(data);
+        setError("No pudimos conectarnos. Revisá tu conexión y probá de nuevo.");
+      });
+    }
+
+    $("accept").addEventListener("click", function () { answer("accept"); });
+    $("decline").addEventListener("click", function () {
+      $("decline-form").hidden = false;
+      $("comment").focus();
+    });
+    $("decline-cancel").addEventListener("click", function () { $("decline-form").hidden = true; });
+    $("decline-form").addEventListener("submit", function (e) {
+      e.preventDefault();
+      answer("decline", $("comment").value.trim());
+    });
+
+    if (!code) return message("No encontramos esta propuesta. Revisá que el link esté completo.");
+    fetch("/api/proposal?code=" + encodeURIComponent(code), { credentials: "same-origin", cache: "no-store" })
+      .then(function (res) {
+        return res.json().catch(function () { return {}; }).then(function (body) { return { res: res, body: body }; });
+      })
+      .then(function (r) {
+        if (r.res.ok && r.body.proposal) return render(r.body.proposal, r.body.preview);
+        if (r.res.status === 404) return message("No encontramos esta propuesta. Revisá que el link esté completo.");
+        if (r.res.status === 429) return message("Demasiados intentos seguidos. Esperá unos minutos y volvé a abrir el link.");
+        message("No pudimos cargar la propuesta. Probá de nuevo en un rato.");
+      })
+      .catch(function () { message("No pudimos conectarnos. Revisá tu conexión y probá de nuevo."); });
+  })();
+  </script>
+</body>
+</html>

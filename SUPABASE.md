@@ -390,3 +390,68 @@ alter table public.provider_quotes enable row level security;
 ```
 
 > Si el panel se publica antes de correr este SQL, la lista sigue funcionando y muestra un aviso. Contacto y cotizaciones quedan bloqueados hasta correrlo.
+
+---
+
+## Paso 9 · Propuesta para el usuario (/propuesta/CÓDIGO)
+
+Desde el detalle de una solicitud en /admin, dentro de **Cotización**:
+
+- **Generar propuesta →** crea un link privado como `https://tu-sitio/propuesta/Ab3dE9xYz2Qk`. El código tiene 12 caracteres al azar y no sale de ningún dato interno.
+- **Copiar link** y **Abrir propuesta**. Mandás el link vos, por WhatsApp. LISTO no lo envía solo.
+- En el panel se ve:
+  - el estado: **Enviada**, **Aceptada**, **Pidió otra opción** o **Reemplazada**;
+  - cuántas veces la abrió el usuario, y la primera y la última vez;
+  - el comentario del usuario, si dejó uno.
+
+  Tus aperturas desde el panel no se cuentan.
+- Si cargás una cotización nueva y generás otra propuesta, el link anterior pasa a **Reemplazada** y deja de mostrar los datos viejos.
+
+Qué ve el usuario:
+
+- el lugar, con foto, dirección y "Ver en Maps";
+- su plan: fecha, horario, personas y zona;
+- el precio, qué incluye, las condiciones, la seña, la disponibilidad y la validez.
+
+Puede tocar **ACEPTAR PROPUESTA →** o **QUIERO OTRA OPCIÓN** (con un comentario opcional). En los dos casos llega un email a listoeventoss@gmail.com. Si el email falla, la respuesta queda guardada igual.
+
+- Si la cotización venció (`valid_until` ya pasó), no se puede aceptar. El servidor también lo controla.
+- Aceptar **no** confirma la reserva: la solicitud no cambia de estado. **Confirmado** lo seguís marcando vos, cuando el lugar confirma.
+
+### SQL (correr una vez)
+
+En **SQL Editor** → **New query**, pegá todo y tocá **Run**:
+
+```sql
+create table if not exists public.plan_proposals (
+  id                 uuid        primary key default gen_random_uuid(),
+  created_at         timestamptz not null default now(),
+  updated_at         timestamptz not null default now(),
+  public_code        text        not null unique check (public_code ~ '^[A-Za-z0-9]{12}$'),
+  plan_inquiry_id    uuid        not null,
+  provider_quote_id  uuid        not null,
+  status             text        not null default 'proposal_sent'
+                     check (status in ('proposal_sent','proposal_accepted','proposal_declined','proposal_replaced')),
+  first_viewed_at    timestamptz,
+  last_viewed_at     timestamptz,
+  view_count         integer     not null default 0,
+  responded_at       timestamptz,
+  user_comment       text        check (user_comment is null or char_length(user_comment) <= 1000),
+  constraint plan_proposals_plan_inquiry_id_fkey
+    foreign key (plan_inquiry_id) references public.plan_inquiries(id) on delete cascade,
+  constraint plan_proposals_provider_quote_id_fkey
+    foreign key (provider_quote_id) references public.provider_quotes(id) on delete cascade
+);
+
+-- Una sola propuesta "Enviada" por solicitud
+create unique index if not exists plan_proposals_one_open
+  on public.plan_proposals (plan_inquiry_id) where status = 'proposal_sent';
+
+create index if not exists plan_proposals_by_inquiry
+  on public.plan_proposals (plan_inquiry_id, created_at desc);
+
+-- Cerrada al público: solo Vercel (con la clave secreta) lee y escribe
+alter table public.plan_proposals enable row level security;
+```
+
+> Si el panel se publica antes de correr este SQL, todo sigue funcionando y en Cotización aparece un aviso. Generar propuestas queda bloqueado hasta correrlo.
