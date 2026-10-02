@@ -41,6 +41,13 @@ Guía: [SUPABASE.md](SUPABASE.md), Paso 7.
 
 Guía: [SUPABASE.md](SUPABASE.md), Paso 9.
 
+### Reserva confirmada y comisión
+
+- `api/admin-bookings.js`: CONFIRMAR RESERVA, comisión (facturada / pagada / exenta) y cancelación, desde /admin.
+- `api/_lib/bookings.js`: validaciones y cálculo de la comisión (siempre en el servidor).
+
+Guía: [SUPABASE.md](SUPABASE.md), Paso 10.
+
 Las fotos son de [Unsplash](https://unsplash.com) (uso libre) y se cargan directamente desde su servidor.
 Para cambiar una foto, buscá en los archivos el código que empieza con `photo-` y reemplazalo por el de otra imagen de Unsplash.
 

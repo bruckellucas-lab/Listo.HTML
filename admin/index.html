@@ -75,6 +75,7 @@
     .s-confirmed { color: var(--ok); }
     .s-cancelled { color: var(--bad); }
     .s-completed { color: var(--muted); }
+    .s-proposal_accepted { color: #E6C76B; }
     .mail { font-size: 11px; color: var(--muted); }
     .mail.failed { color: var(--bad); }
     .name { font-family: var(--display); font-weight: 400; text-transform: uppercase; font-size: 26px; line-height: 1; margin: 2px 0 4px; overflow-wrap: anywhere; }
@@ -139,6 +140,22 @@
     .proposal { border: 1px solid var(--line); padding: 14px 16px; margin-top: 12px; }
     .p-status { display: inline-block; padding: 4px 9px; border: 1px solid currentColor; font-size: 10px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; color: var(--amber); }
     .p-status.proposal_accepted { color: var(--ok); } .p-status.proposal_declined { color: var(--bad); } .p-status.proposal_replaced { color: var(--muted); }
+    .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; margin: -8px 0 24px; }
+    .metric { border: 1px solid var(--line); padding: 14px 16px; }
+    .metric h4 { margin: 0 0 10px; color: var(--muted); font-size: 11px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; }
+    .metric dl { border-top: 0; padding-top: 0; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; }
+    .metric dd { text-align: right; font-weight: 600; margin: 0; }
+    .card-booking { margin: 2px 0 0; font-size: 14px; color: var(--ok); }
+    .booking { border: 1px solid var(--line); padding: 14px 16px; margin-top: 10px; background: var(--char); }
+    .booking.cancelled { opacity: .7; }
+    .b-status { display: inline-block; padding: 4px 9px; border: 1px solid currentColor; font-size: 10px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; }
+    .b-status.yes { color: var(--ok); } .b-status.no { color: var(--muted); } .b-status.bad { color: var(--bad); }
+    .c-pending { color: var(--amber); } .c-invoiced { color: #9FB7D9; } .c-paid { color: var(--ok); } .c-waived { color: var(--muted); }
+    .calc { margin: 4px 0 0; font-family: var(--display); font-size: 26px; line-height: 1.1; }
+    .calc.bad { font-family: var(--sans); font-size: 14px; color: var(--bad); }
+    .radio-row { display: flex; flex-wrap: wrap; gap: 8px 18px; padding-top: 6px; }
+    .radio-row label { display: inline-flex; align-items: center; gap: 8px; margin: 0; color: var(--cream); font-size: 14px; letter-spacing: 0; text-transform: none; cursor: pointer; }
+    .radio-row input { width: auto; accent-color: var(--amber); }
     .p-gen { white-space: normal; text-align: center; max-width: 100%; margin-top: 12px; }
     .p-link { margin: 10px 0 0; overflow-wrap: anywhere; }
     .p-comment { border-left: 3px solid var(--wood); background: var(--char); padding: 10px 12px; margin: 12px 0 0; white-space: pre-line; }
@@ -194,6 +211,7 @@
         <p class="label sorted">Más recientes primero</p>
       </div>
 
+      <div class="metrics" id="metrics" hidden></div>
       <p class="banner" id="schema-banner" hidden>Falta correr en Supabase el SQL de cotizaciones (SUPABASE.md, Paso 8). Mientras tanto, contacto y cotizaciones no se pueden guardar.</p>
       <div id="state" class="state" hidden></div>
       <div class="list" id="list"></div>
@@ -224,6 +242,9 @@
       completed: "Completado"
     };
     var ORDER = Object.keys(STATUS_LABELS);
+    // Para la lista: "Propuesta aceptada" no es un estado guardado; se deduce de la propuesta vigente.
+    var VIEW_LABELS = Object.assign({ proposal_accepted: "Propuesta aceptada" }, STATUS_LABELS);
+    var VIEW_ORDER = ["inquiry_requested", "provider_contacted", "quoted", "proposal_accepted", "confirmed", "completed", "cancelled"];
     var MAIL_LABELS = { sent: "Email enviado", failed: "Email falló", pending: "Email pendiente" };
 
     var items = [];
@@ -345,6 +366,8 @@
         items = data.items || [];
         $("schema-banner").hidden = data.schema_ready !== false;
         proposalsReady = data.proposals_ready !== false;
+        bookingsReady = data.bookings_ready !== false;
+        renderMetrics(bookingsReady ? data.metrics : null);
         setState(null);
         render();
       }).catch(function (err) {
@@ -355,7 +378,7 @@
     $("refresh").addEventListener("click", load);
 
     function matches(it) {
-      if (filter !== "all" && it.status !== filter) return false;
+      if (filter !== "all" && viewStatus(it) !== filter) return false;
       if (!query) return true;
       var q = norm(query), qd = query.replace(/\D/g, "");
       var hay = norm([it.contact.name, it.contact.email, it.provider.name].join(" "));
@@ -367,8 +390,8 @@
       var box = $("chips");
       box.innerHTML = "";
       var counts = { all: items.length };
-      items.forEach(function (it) { counts[it.status] = (counts[it.status] || 0) + 1; });
-      [["all", "Todas"]].concat(ORDER.map(function (s) { return [s, STATUS_LABELS[s]]; })).forEach(function (pair) {
+      items.forEach(function (it) { var v = viewStatus(it); counts[v] = (counts[v] || 0) + 1; });
+      [["all", "Todas"]].concat(VIEW_ORDER.map(function (s) { return [s, VIEW_LABELS[s]]; })).forEach(function (pair) {
         var b = el("button", "chip", pair[1]);
         b.type = "button";
         b.setAttribute("aria-pressed", filter === pair[0] ? "true" : "false");
@@ -392,6 +415,7 @@
       ORDER.forEach(function (k) {
         var o = el("option", "", STATUS_LABELS[k]);
         o.value = k;
+        if (k === "confirmed" && !activeBooking(it)) { o.disabled = true; o.textContent = "Confirmado (usá Confirmar reserva)"; }
         if (it.status === k) o.selected = true;
         s.appendChild(o);
       });
@@ -425,7 +449,8 @@
       shown.forEach(function (it) {
         var card = el("article", "item");
         var head = el("div", "item-head");
-        head.appendChild(el("span", "badge s-" + it.status, STATUS_LABELS[it.status] || it.status));
+        var vs = viewStatus(it);
+        head.appendChild(el("span", "badge s-" + vs, VIEW_LABELS[vs] || it.status));
         head.appendChild(el("span", "label muted", fmtDateTime(it.created_at)));
         if (it.notification_status) head.appendChild(el("span", "mail " + it.notification_status, MAIL_LABELS[it.notification_status] || it.notification_status));
         card.appendChild(head);
@@ -439,6 +464,9 @@
         prov.appendChild(el("b", "", it.provider.name || "Proveedor sin nombre"));
         info.appendChild(prov);
         if (it.quotes && it.quotes.length) info.appendChild(el("p", "card-quote", "Cotización: " + quotePrice(it.quotes[0]) + " · " + AVAIL[it.quotes[0].availability]));
+        var act = activeBooking(it);
+        if (act) info.appendChild(el("p", "card-booking", "Reserva: " + amount(act.final_total_amount, act.currency) + " · Comisión " +
+          amount(act.commission_amount, act.currency) + " (" + COMMISSION_LABELS[act.commission_status] + ")"));
         var lastProp = currentProposal(it);
         if (lastProp) info.appendChild(el("p", "card-proposal " + lastProp.status, "Propuesta: " + (PROPOSAL_LABELS[lastProp.status] || lastProp.status) +
           (lastProp.status === "proposal_sent" ? " · " + opensText(lastProp) : "")));
@@ -471,11 +499,17 @@
     function changeStatus(it, status, select) {
       var previous = it.status;
       if (status === previous) return;
+      var act = activeBooking(it);
+      if (act && status === "cancelled" && !window.confirm("Esta solicitud tiene una reserva confirmada. Al cancelarla, la reserva también queda cancelada y la comisión pendiente pasa a exenta. ¿Seguir?")) {
+        select.value = previous;
+        return;
+      }
       $all("select.status").forEach(function (s) { s.disabled = true; });
       api("PATCH", "/api/admin-inquiries", { id: it.id, status: status }).then(function (data) {
         it.status = data.item.status;
         it.updated_at = data.item.updated_at;
-        toast("Estado: " + STATUS_LABELS[it.status]);
+        if (data.booking) replaceBooking(it, data.booking);
+        toast("Estado: " + STATUS_LABELS[it.status] + (data.booking ? " · Reserva cancelada" : ""));
         render();
         if ($("detail").open) openDetail(it);
       }).catch(function (err) {
@@ -669,6 +703,338 @@
       return f;
     }
 
+    /* ---------- Reserva confirmada y comisión (plan_bookings) ---------- */
+
+    var bookingsReady = true;
+    var COMMISSION_LABELS = { pending: "Pendiente", invoiced: "Facturada", paid: "Pagada", waived: "Exenta" };
+    var ACCEPT_CHANNELS = { whatsapp: "WhatsApp", phone: "Teléfono", email: "Email", other: "Otro" };
+
+    function activeBooking(it) {
+      return (it.bookings || []).filter(function (bk) { return bk.booking_status === "confirmed"; })[0] || null;
+    }
+    function replaceBooking(it, bk) {
+      it.bookings = [bk].concat((it.bookings || []).filter(function (x) { return x.id !== bk.id; }));
+    }
+    function viewStatus(it) {
+      var cp = currentProposal(it);
+      if (["inquiry_requested", "provider_contacted", "quoted"].indexOf(it.status) !== -1 && cp && cp.status === "proposal_accepted") return "proposal_accepted";
+      return it.status;
+    }
+    function acceptanceText(bk) {
+      return bk.acceptance_source === "proposal_link" ? "aceptó desde el link"
+        : "aceptación manual (" + (ACCEPT_CHANNELS[bk.acceptance_channel] || bk.acceptance_channel) + ")";
+    }
+    function commissionText(bk) {
+      return bk.commission_type === "percentage" ? String(bk.commission_rate).replace(".", ",") + "% del total" : "Monto fijo";
+    }
+
+    function renderMetrics(m) {
+      var box = $("metrics");
+      box.innerHTML = "";
+      var curs = m ? Object.keys(m).sort() : [];
+      if (!curs.length) {
+        box.hidden = !m;
+        if (m) box.appendChild(el("p", "muted", "Todavía no hay reservas confirmadas."));
+        return;
+      }
+      curs.forEach(function (cur) {
+        var x = m[cur], card = el("div", "metric");
+        card.appendChild(el("h4", "", cur === "USD" ? "Reservas en dólares (USD)" : "Reservas en pesos (ARS)"));
+        var dl = el("dl");
+        [["Reservas confirmadas", String(x.count)], ["Valor total confirmado", amount(x.total, cur)],
+         ["Comisión pendiente", amount(x.commission_pending, cur)], ["Comisión cobrada", amount(x.commission_paid, cur)]].forEach(function (r) {
+          dl.appendChild(el("dt", "", r[0])); dl.appendChild(el("dd", "", r[1]));
+        });
+        card.appendChild(dl);
+        box.appendChild(card);
+      });
+      box.hidden = false;
+    }
+
+    // Montos en formato argentino → centavos (igual que el servidor). null si está vacío, NaN si es inválido.
+    function toCents(v) {
+      var s = String(v || "").replace(/[$\s]/g, "");
+      if (!s) return null;
+      if (/,/.test(s)) s = s.replace(/\./g, "").replace(",", ".");
+      else if (/^\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, "");
+      var m = /^(\d+)(?:\.(\d{1,2}))?$/.exec(s);
+      return m ? Number(m[1]) * 100 + Number(((m[2] || "") + "00").slice(0, 2)) : NaN;
+    }
+    function toRateH(v) {
+      var s = String(v || "").replace(/[%\s]/g, "").replace(",", ".");
+      if (!s) return null;
+      var m = /^(\d{1,3})(?:\.(\d{1,2}))?$/.exec(s);
+      return m ? Number(m[1]) * 100 + Number(((m[2] || "") + "00").slice(0, 2)) : NaN;
+    }
+    // Vista previa del cálculo (el servidor lo vuelve a hacer y Supabase lo controla).
+    function previewCommission(f) {
+      var total = toCents(f.elements.final_total_amount.value);
+      if (total === null || isNaN(total) || total <= 0) return { error: "Cargá el monto final." };
+      if (f.elements.commission_type.value === "percentage") {
+        var r = toRateH(f.elements.commission_rate.value);
+        if (r === null || isNaN(r) || r <= 0 || r > 3000) return { error: "El porcentaje tiene que ser mayor a 0 y hasta 30%." };
+        return { cents: Number((BigInt(total) * BigInt(r) * 2n + 10000n) / 20000n) };
+      }
+      var fx = toCents(f.elements.commission_fixed_amount.value);
+      if (fx === null || isNaN(fx)) return { error: "Cargá el monto fijo." };
+      if (fx > total) return { error: "La comisión fija no puede ser mayor al monto final." };
+      return { cents: fx };
+    }
+
+    function confirmForm(it, onDone) {
+      var quotes = it.quotes || [];
+      var accepted = (it.proposals || []).filter(function (pp) { return pp.status === "proposal_accepted"; })[0] || null;
+      var acceptedQuote = accepted && quotes.filter(function (q) { return q.id === accepted.provider_quote_id; })[0];
+      var f = el("form", "form");
+      f.noValidate = true;
+
+      // ¿Cómo aceptó el usuario?
+      var src = el("div", "wide");
+      src.appendChild(el("label", "", "¿Cómo aceptó el usuario?"));
+      var rr = el("div", "radio-row");
+      function radio(value, text, disabled) {
+        var l = el("label"), r = el("input");
+        r.type = "radio"; r.name = "acceptance_source"; r.value = value; r.disabled = !!disabled;
+        l.appendChild(r); l.appendChild(document.createTextNode(text));
+        rr.appendChild(l);
+        return r;
+      }
+      var rLink = radio("proposal_link", accepted ? "Aceptó desde el link de la propuesta" : "Desde el link (todavía no aceptó)", !accepted);
+      var rManual = radio("manual", "Aceptación manual (WhatsApp, teléfono…)");
+      (accepted ? rLink : rManual).checked = true;
+      src.appendChild(rr);
+      f.appendChild(src);
+
+      var manualBox = el("div", "wide form"); manualBox.style.marginTop = "0";
+      manualBox.appendChild(field("Canal de aceptación", options(input("acceptance_channel", "select"), [["", "Elegí…"]].concat(Object.keys(ACCEPT_CHANNELS).map(function (k) { return [k, ACCEPT_CHANNELS[k]]; })))));
+      manualBox.appendChild(field("Dónde y cuándo aceptó (obligatorio)", input("acceptance_note", "textarea", { rows: "2", maxlength: "500", placeholder: "Ej: Aceptó por WhatsApp el 02/10." }), true));
+      f.appendChild(manualBox);
+
+      var quoteInfo = el("p", "wide muted");
+      f.appendChild(quoteInfo);
+
+      f.appendChild(field("Monto final", input("final_total_amount", "text", { inputmode: "decimal", placeholder: "Ej: 500.000" })));
+      f.appendChild(field("Moneda", options(input("currency", "select"), [["ARS", "Pesos (ARS)"], ["USD", "Dólares (USD)"]])));
+      f.appendChild(field("Tipo de comisión", options(input("commission_type", "select"), [["percentage", "Porcentaje"], ["fixed", "Monto fijo"]])));
+      var rateWrap = field("Porcentaje (hasta 30%)", input("commission_rate", "text", { inputmode: "decimal", placeholder: "Ej: 8" }));
+      var fixedWrap = field("Monto fijo de comisión", input("commission_fixed_amount", "text", { inputmode: "decimal", placeholder: "Ej: 30.000" }));
+      f.appendChild(rateWrap); f.appendChild(fixedWrap);
+      var calcBox = el("div", "wide");
+      calcBox.appendChild(el("label", "", "LISTO cobra"));
+      var calc = el("p", "calc", "—");
+      calcBox.appendChild(calc);
+      f.appendChild(calcBox);
+      var conf = input("confirmed_at", "date", { max: todayAR() }); conf.value = todayAR();
+      f.appendChild(field("Fecha de confirmación", conf));
+      f.appendChild(field("Fecha estimada de cobro (opcional)", input("commission_due_date", "date")));
+      f.appendChild(field("Notas internas", input("internal_notes", "textarea", { rows: "2", maxlength: "2000" }), true));
+      var err = el("p", "error"); err.hidden = true; f.appendChild(err);
+      var row = el("div", "row wide");
+      var save = el("button", "btn", "Confirmar reserva →"); save.type = "submit";
+      var cancel = el("button", "btn btn-ghost", "Volver"); cancel.type = "button";
+      row.appendChild(save); row.appendChild(cancel);
+      f.appendChild(row);
+      f.appendChild(el("p", "wide muted", "Al confirmar, la solicitud pasa a Confirmado. No se cobra ni se avisa a nadie: sólo se registra."));
+
+      function chosenQuote() {
+        return rLink.checked && acceptedQuote ? acceptedQuote : quotes[0];
+      }
+      function prefill() {
+        var q = chosenQuote();
+        quoteInfo.textContent = q ? "Cotización: " + quotePrice(q) + (q === quotes[0] ? " (la actual)" : " (la de la propuesta aceptada)") : "";
+        if (q && q.total_price !== null && q.total_price !== undefined && !f.elements.final_total_amount.dataset.touched) {
+          f.elements.final_total_amount.value = Number(q.total_price).toLocaleString("es-AR", { maximumFractionDigits: 2 });
+        }
+        if (q && !f.elements.currency.dataset.touched) f.elements.currency.value = q.currency || "ARS";
+      }
+      function update() {
+        manualBox.hidden = !rManual.checked;
+        var pct = f.elements.commission_type.value === "percentage";
+        rateWrap.hidden = !pct; fixedWrap.hidden = pct;
+        var pv = previewCommission(f);
+        calc.className = "calc" + (pv.error ? " bad" : "");
+        calc.textContent = pv.error ? pv.error : amount(pv.cents / 100, f.elements.currency.value);
+      }
+      ["final_total_amount", "currency"].forEach(function (n) { f.elements[n].addEventListener("input", function () { f.elements[n].dataset.touched = "1"; }); });
+      f.addEventListener("input", update);
+      f.addEventListener("change", function (e) { if (e.target.name === "acceptance_source") prefill(); update(); });
+      cancel.addEventListener("click", function () { onDone(false); });
+      // IDs propios (el formulario de cotización usa "q-…" en el mismo detalle).
+      Array.prototype.forEach.call(f.querySelectorAll("[id^='q-']"), function (x) { x.id = "b-" + x.id.slice(2); });
+      Array.prototype.forEach.call(f.querySelectorAll("label[for^='q-']"), function (l) { l.htmlFor = "b-" + l.htmlFor.slice(2); });
+      prefill(); update();
+
+      var saving = false;
+      f.addEventListener("submit", function (e) {
+        e.preventDefault();
+        if (saving) return;
+        err.hidden = true;
+        var manual = rManual.checked;
+        if (manual && !f.elements.acceptance_channel.value) { err.textContent = "Elegí por dónde aceptó el usuario."; err.hidden = false; return; }
+        if (manual && f.elements.acceptance_note.value.trim().length < 5) { err.textContent = "Escribí dónde y cuándo aceptó (ej: “Aceptó por WhatsApp el 02/10.”)."; err.hidden = false; return; }
+        var pv = previewCommission(f);
+        if (pv.error) { err.textContent = pv.error; err.hidden = false; return; }
+        var q = chosenQuote();
+        var v = {
+          plan_inquiry_id: it.id, provider_quote_id: q && q.id,
+          plan_proposal_id: manual ? null : accepted.id,
+          acceptance_source: manual ? "manual" : "proposal_link",
+          acceptance_channel: manual ? f.elements.acceptance_channel.value : null,
+          acceptance_note: manual ? f.elements.acceptance_note.value.trim() : null,
+          final_total_amount: f.elements.final_total_amount.value.trim(), currency: f.elements.currency.value,
+          commission_type: f.elements.commission_type.value,
+          commission_rate: f.elements.commission_type.value === "percentage" ? f.elements.commission_rate.value.trim() : null,
+          commission_fixed_amount: f.elements.commission_type.value === "fixed" ? f.elements.commission_fixed_amount.value.trim() : null,
+          expected_commission_amount: pv.cents / 100,
+          confirmed_at: f.elements.confirmed_at.value, commission_due_date: f.elements.commission_due_date.value || null,
+          internal_notes: f.elements.internal_notes.value.trim()
+        };
+        saving = true; save.disabled = true; save.textContent = "Confirmando…";
+        api("POST", "/api/admin-bookings", v).then(function (data) {
+          replaceBooking(it, data.booking);
+          if (data.item) { it.status = data.item.status; it.updated_at = data.item.updated_at; }
+          toast(data.status_pending ? data.warning : "Reserva confirmada · Estado: Confirmado");
+          onDone(true);
+        }).catch(function (e2) {
+          if (e2.message === "__session__") return;
+          err.textContent = e2.message; err.hidden = false;
+          saving = false; save.disabled = false; save.textContent = "Confirmar reserva →";
+        });
+      });
+      return f;
+    }
+
+    function bookingBlock(it) {
+      var s = block("Reserva");
+      if (!bookingsReady) { s.appendChild(el("p", "banner", "Corré el SQL de reservas (SUPABASE.md, Paso 10) para poder confirmar reservas.")); return s; }
+      var act = activeBooking(it);
+      var shown = act || (it.bookings || [])[0] || null;
+      var state = el("p", "");
+      state.appendChild(el("span", "b-status " + (act ? "yes" : shown ? "bad" : "no"), act ? "Confirmada" : shown ? "Cancelada" : "No confirmada"));
+      s.appendChild(state);
+
+      if (act && ["confirmed", "completed"].indexOf(it.status) === -1) {
+        // La reserva se guardó pero el estado no llegó a cambiar (por ejemplo, un corte de conexión).
+        var fix = el("div", "banner");
+        fix.appendChild(document.createTextNode("La reserva está registrada pero la solicitud no quedó en Confirmado. "));
+        var fb = el("button", "btn btn-sm", "Completar estado"); fb.type = "button";
+        fb.addEventListener("click", function () {
+          fb.disabled = true;
+          api("POST", "/api/admin-bookings", { action: "sync_status", plan_inquiry_id: it.id }).then(function (data) {
+            it.status = data.item.status; it.updated_at = data.item.updated_at;
+            toast("Estado: Confirmado"); render(); openDetail(it);
+          }).catch(function (e) { if (e.message !== "__session__") toast(e.message); fb.disabled = false; });
+        });
+        fix.appendChild(fb);
+        s.appendChild(fix);
+      }
+      if (!act && it.status === "confirmed") s.appendChild(el("p", "banner", "Sin registro comercial: esta solicitud quedó en Confirmado antes de existir las reservas. Registrala con CONFIRMAR RESERVA."));
+
+      if (shown) {
+        var box = el("div", "booking" + (act ? "" : " cancelled"));
+        box.appendChild(section("", [
+          ["Fecha de confirmación", fmtDateTime(shown.confirmed_at)],
+          ["Monto final", amount(shown.final_total_amount, shown.currency)],
+          ["Comisión acordada", commissionText(shown)],
+          ["Comisión LISTO", amount(shown.commission_amount, shown.currency)],
+          ["Estado de cobro", COMMISSION_LABELS[shown.commission_status] || shown.commission_status],
+          ["Aceptación", acceptanceText(shown) + (shown.acceptance_note ? " · “" + shown.acceptance_note + "”" : "")],
+          ["Notas internas", shown.internal_notes],
+          ["Cancelada", shown.cancelled_at ? fmtDateTime(shown.cancelled_at) : null]
+        ].filter(function (r) { return r[1] !== null && r[1] !== undefined && r[1] !== ""; })));
+        s.appendChild(box);
+      }
+
+      if (act) {
+        var crow = el("div", "d-actions");
+        var cb = el("button", "btn btn-ghost btn-sm", "Cancelar reserva"); cb.type = "button";
+        if (act.commission_status === "paid") {
+          cb.disabled = true;
+          s.appendChild(el("p", "muted", "No se puede cancelar: la comisión ya está pagada. Si fue un error, se corrige en Supabase."));
+        }
+        cb.addEventListener("click", function () {
+          if (!window.confirm("¿Cancelar la reserva? La solicitud pasa a Cancelado y la comisión pendiente queda exenta.")) return;
+          cb.disabled = true;
+          api("PATCH", "/api/admin-bookings", { booking_id: act.id, action: "cancel" }).then(function (data) {
+            replaceBooking(it, data.booking);
+            if (data.item) { it.status = data.item.status; it.updated_at = data.item.updated_at; }
+            toast("Reserva cancelada · Estado: Cancelado"); load(); openDetail(it);
+          }).catch(function (e) { if (e.message !== "__session__") toast(e.message); cb.disabled = false; });
+        });
+        crow.appendChild(cb);
+        s.appendChild(crow);
+        return s;
+      }
+
+      var closed = it.status === "cancelled" || it.status === "completed";
+      if (closed) { s.appendChild(el("p", "muted", "La solicitud está " + STATUS_LABELS[it.status] + ": no se puede confirmar una reserva.")); return s; }
+      if (!(it.quotes || []).length) { s.appendChild(el("p", "muted", "Para confirmar una reserva, primero cargá la cotización.")); return s; }
+      var accepted = (it.proposals || []).some(function (pp) { return pp.status === "proposal_accepted"; });
+      s.appendChild(el("p", "muted", accepted ? "El usuario aceptó la propuesta. Confirmá sólo cuando el lugar haya confirmado la reserva."
+        : "Todavía no hay propuesta aceptada desde el link. Si el usuario aceptó por otro canal, usá aceptación manual."));
+      var go = el("button", "btn", "Confirmar reserva →"); go.type = "button";
+      var holder = el("div");
+      go.addEventListener("click", function () {
+        go.hidden = true;
+        holder.appendChild(confirmForm(it, function (saved) {
+          if (saved) { load(); openDetail(it); return; }
+          holder.innerHTML = ""; go.hidden = false;
+        }));
+      });
+      s.appendChild(go);
+      s.appendChild(holder);
+      return s;
+    }
+
+    function commissionBlock(it) {
+      var s = block("Comisión");
+      var act = activeBooking(it);
+      if (!bookingsReady || !act) { s.appendChild(el("p", "muted", "Se gestiona cuando la reserva está confirmada.")); return s; }
+      var st = el("p", "");
+      st.appendChild(el("span", "b-status c-" + act.commission_status, COMMISSION_LABELS[act.commission_status]));
+      s.appendChild(st);
+      s.appendChild(section("", [
+        ["A cobrar", amount(act.commission_amount, act.currency) + " (" + commissionText(act) + ")"],
+        ["Cobro estimado", act.commission_due_date ? fmtDate(act.commission_due_date) : null],
+        ["Facturada", act.commission_invoiced_at ? fmtDateTime(act.commission_invoiced_at) : null],
+        ["Pagada", act.commission_paid_at ? fmtDateTime(act.commission_paid_at) : null]
+      ].filter(function (r) { return r[1]; })));
+      if (act.commission_status === "paid" || act.commission_status === "waived") {
+        s.appendChild(el("p", "muted", "Estado final. Si hubo un error, se corrige en Supabase."));
+        return s;
+      }
+      var row = el("div", "row");
+      function action(name, text, extra) {
+        var btn = el("button", "btn btn-ghost btn-sm", text); btn.type = "button";
+        btn.addEventListener("click", function () {
+          var body = { booking_id: act.id, action: name };
+          if (extra) { var more = extra(); if (!more) return; Object.assign(body, more); }
+          var asks = { invoiced: "¿Marcar la comisión como FACTURADA?", paid: "¿Marcar la comisión como PAGADA? Es un estado final.", waived: "¿Marcar la comisión como EXENTA? Es un estado final." };
+          if (!window.confirm(asks[name])) return;
+          btn.disabled = true;
+          api("PATCH", "/api/admin-bookings", body).then(function (data) {
+            replaceBooking(it, data.booking);
+            toast("Comisión: " + COMMISSION_LABELS[data.booking.commission_status]);
+            load(); openDetail(it);
+          }).catch(function (e) { if (e.message !== "__session__") toast(e.message); btn.disabled = false; });
+        });
+        row.appendChild(btn);
+      }
+      if (act.commission_status === "pending") action("invoiced", "Marcar como facturada");
+      var paidDate = input("paid_at", "date", { max: todayAR() }); paidDate.value = todayAR();
+      paidDate.setAttribute("aria-label", "Fecha de cobro");
+      paidDate.style.cssText = "padding:8px;background:var(--ink);border:1px solid rgba(239,232,220,.35);color-scheme:dark";
+      row.appendChild(paidDate);
+      action("paid", "Marcar como pagada", function () {
+        if (!paidDate.value) { toast("Elegí la fecha de cobro."); return null; }
+        return { paid_at: paidDate.value };
+      });
+      action("waived", "Marcar como exenta");
+      s.appendChild(row);
+      s.appendChild(el("p", "muted", "No se factura ni se cobra nada desde LISTO: sólo se registra."));
+      return s;
+    }
+
     /* ---------- Propuesta para el usuario (/propuesta/CODE) ---------- */
 
     var PROPOSAL_LABELS = { proposal_sent: "Enviada", proposal_accepted: "Aceptada", proposal_declined: "Pidió otra opción", proposal_replaced: "Reemplazada" };
@@ -757,7 +1123,8 @@
     function openDetail(it) {
       var b = $("d-body");
       b.innerHTML = "";
-      b.appendChild(el("span", "badge s-" + it.status, STATUS_LABELS[it.status] || it.status));
+      var dvs = viewStatus(it);
+      b.appendChild(el("span", "badge s-" + dvs, VIEW_LABELS[dvs] || it.status));
       b.appendChild(el("h2", "d-title", it.contact.name || "Sin nombre"));
       var sel = statusSelect(it);
       sel.style.maxWidth = "320px";
@@ -848,6 +1215,10 @@
       else s4.appendChild(el("p", "banner", "Corré el SQL de cotizaciones (SUPABASE.md, Paso 8) para poder guardar."));
       b.appendChild(s4);
 
+      // RESERVA y COMISIÓN
+      b.appendChild(bookingBlock(it));
+      b.appendChild(commissionBlock(it));
+
       // HISTORIAL
       var s5 = block("Historial");
       var events = [{ at: it.created_at, text: "Solicitud recibida" }];
@@ -858,6 +1229,13 @@
         if (pp.first_viewed_at) events.push({ at: pp.first_viewed_at, text: "El usuario abrió la propuesta" });
         if (pp.responded_at) events.push({ at: pp.responded_at, text: pp.status === "proposal_accepted" ? "El usuario aceptó la propuesta" : "El usuario pidió otra opción" +
           (pp.user_comment ? ": “" + pp.user_comment + "”" : "") });
+      });
+      (it.bookings || []).forEach(function (bk) {
+        events.push({ at: bk.confirmed_at, text: "Reserva confirmada · " + amount(bk.final_total_amount, bk.currency) + " · " + acceptanceText(bk) });
+        if (bk.commission_invoiced_at) events.push({ at: bk.commission_invoiced_at, text: "Comisión facturada · " + amount(bk.commission_amount, bk.currency) });
+        if (bk.commission_paid_at) events.push({ at: bk.commission_paid_at, text: "Comisión pagada · " + amount(bk.commission_amount, bk.currency) });
+        if (bk.commission_status === "waived") events.push({ at: bk.cancelled_at || bk.updated_at, text: "Comisión exenta" });
+        if (bk.cancelled_at) events.push({ at: bk.cancelled_at, text: "Reserva cancelada" });
       });
       events.sort(function (x, y) { return String(y.at).localeCompare(String(x.at)); });
       var tl = el("ol", "timeline");

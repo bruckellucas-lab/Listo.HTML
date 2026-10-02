@@ -16,6 +16,7 @@ var auth = require("./_lib/admin-auth");
 var store = require("./_lib/providers-store");
 var inquiries = require("./_lib/inquiries");
 var notify = require("./_lib/notify");
+var bookings = require("./_lib/bookings");
 
 var UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 var LIMIT = 500;
@@ -35,7 +36,9 @@ var SELECT_QUOTES = SELECT_BASE + ",provider_contacted_at,provider_contact_chann
   "provider_quotes!provider_quotes_plan_inquiry_id_fkey(" + QUOTE_FIELDS + ")";
 // Completo: suma las propuestas enviadas al usuario (requiere el SQL del Paso 9).
 var PROPOSAL_FIELDS = "id,created_at,public_code,status,provider_quote_id,first_viewed_at,last_viewed_at,view_count,responded_at,user_comment";
-var SELECT = SELECT_QUOTES + ",plan_proposals!plan_proposals_plan_inquiry_id_fkey(" + PROPOSAL_FIELDS + ")";
+var SELECT_PROPOSALS = SELECT_QUOTES + ",plan_proposals!plan_proposals_plan_inquiry_id_fkey(" + PROPOSAL_FIELDS + ")";
+// Completo: suma las reservas confirmadas y su comisión (requiere el SQL del Paso 10).
+var SELECT = SELECT_PROPOSALS + ",plan_bookings!plan_bookings_plan_inquiry_id_fkey(" + bookings.FIELDS + ")";
 var CHANNELS = ["whatsapp", "phone", "email", "instagram", "other"];
 
 function cfg() {
@@ -80,8 +83,28 @@ function toItem(row) {
     }),
     proposals: (Array.isArray(row.plan_proposals) ? row.plan_proposals : []).slice().sort(function (a, b) {
       return String(b.created_at).localeCompare(String(a.created_at));
+    }),
+    bookings: (Array.isArray(row.plan_bookings) ? row.plan_bookings : []).slice().sort(function (a, b) {
+      return String(b.created_at).localeCompare(String(a.created_at));
     })
   };
+}
+
+// Métricas básicas, siempre separadas por moneda (pesos y dólares nunca se suman).
+// Sólo reservas confirmadas: las canceladas no cuentan.
+function metricsOf(rows) {
+  var out = {};
+  (rows || []).forEach(function (b) {
+    if (b.booking_status !== "confirmed") return;
+    var m = out[b.currency] || (out[b.currency] = { count: 0, total: 0, commission_pending: 0, commission_paid: 0 });
+    var c = Math.round(Number(b.commission_amount) * 100);
+    m.count++;
+    m.total += Math.round(Number(b.final_total_amount) * 100);
+    if (b.commission_status === "pending" || b.commission_status === "invoiced") m.commission_pending += c;
+    if (b.commission_status === "paid") m.commission_paid += c;
+  });
+  Object.keys(out).forEach(function (k) { ["total", "commission_pending", "commission_paid"].forEach(function (f) { out[k][f] = out[k][f] / 100; }); });
+  return out;
 }
 
 function explain(err) {
@@ -108,31 +131,42 @@ module.exports = async function handler(req, res) {
         return store.request(fetch, base + "plan_inquiries?select=" + encodeURIComponent(select) +
           "&order=created_at.desc&limit=" + LIMIT, { method: "GET", headers: store.headersFor(c.key) }, "listar");
       };
-      // Si todavía no se corrió algún SQL (propuestas o cotizaciones), el panel sigue funcionando sin esa parte.
+      // Si todavía no se corrió algún SQL (reservas, propuestas o cotizaciones), el panel sigue
+      // funcionando sin esa parte: se prueba de lo más completo a lo más básico.
       var MISSING = ["PGRST200", "PGRST201", "PGRST204", "42703", "42P01", "PGRST205"];
-      var schemaReady = true, proposalsReady = true, rows;
-      try {
-        rows = await list(SELECT);
-      } catch (err) {
-        if (MISSING.indexOf(err.code) === -1) throw err;
-        console.error("[admin] falta el SQL de propuestas:", err.code);
-        proposalsReady = false;
-        try {
-          // Primero con el vínculo por nombre; si Supabase no lo reconoce, sin nombre (como antes).
-          rows = await list(SELECT_QUOTES).catch(function (e) {
-            if (e.code !== "PGRST200") throw e;
-            return list(SELECT_QUOTES.replace("provider_quotes!provider_quotes_plan_inquiry_id_fkey(", "provider_quotes("));
-          });
-        } catch (err2) {
-          if (MISSING.indexOf(err2.code) === -1) throw err2;
-          console.error("[admin] falta el SQL de cotizaciones:", err2.code);
-          schemaReady = false;
-          rows = await list(SELECT_BASE);
+      var schemaReady = true, proposalsReady = true, bookingsReady = true, rows;
+      var quotesOnly = function () {
+        // Primero con el vínculo por nombre; si Supabase no lo reconoce, sin nombre (como antes).
+        return list(SELECT_QUOTES).catch(function (e) {
+          if (e.code !== "PGRST200") throw e;
+          return list(SELECT_QUOTES.replace("provider_quotes!provider_quotes_plan_inquiry_id_fkey(", "provider_quotes("));
+        });
+      };
+      var steps = [
+        function () { return list(SELECT); },
+        function () { bookingsReady = false; return list(SELECT_PROPOSALS); },
+        function () { proposalsReady = false; return quotesOnly(); },
+        function () { schemaReady = false; return list(SELECT_BASE); }
+      ];
+      for (var i = 0; i < steps.length; i++) {
+        try { rows = await steps[i](); break; }
+        catch (errStep) {
+          if (MISSING.indexOf(errStep.code) === -1 || i === steps.length - 1) throw errStep;
+          console.error("[admin] falta un SQL (" + ["reservas", "propuestas", "cotizaciones"][i] + "):", errStep.code);
         }
+      }
+      // Métricas sobre TODAS las reservas confirmadas (no sólo las solicitudes de la lista).
+      var metrics = null;
+      if (bookingsReady) {
+        try {
+          metrics = metricsOf(await store.request(fetch, base + "plan_bookings?select=booking_status,currency,final_total_amount,commission_amount,commission_status&booking_status=eq.confirmed",
+            { method: "GET", headers: store.headersFor(c.key) }, "métricas"));
+        } catch (errM) { console.error("[admin] métricas:", errM.code || ""); }
       }
       var items = (rows || []).map(toItem);
       return http.sendJson(res, 200, {
         ok: true, statuses: inquiries.STATUSES, schema_ready: schemaReady, proposals_ready: proposalsReady,
+        bookings_ready: bookingsReady, metrics: metrics,
         count: items.length, items: items
       });
     } catch (err) {
@@ -172,6 +206,36 @@ module.exports = async function handler(req, res) {
     }
 
     if (inquiries.STATUSES.indexOf(status) === -1) return http.sendJson(res, 400, { ok: false, error: "Estado no válido." });
+
+    // Reserva y estado nunca se contradicen:
+    // - Confirmado sólo con una reserva registrada (se llega con CONFIRMAR RESERVA).
+    // - Con una reserva activa, sólo Confirmado, Completado o Cancelado (que también cancela la reserva).
+    var active = null, bookingCancelled = null;
+    try {
+      active = await bookings.activeFor(c, id);
+    } catch (errB) {
+      if (!bookings.missingTable(errB)) {
+        console.error("[admin] leer reserva:", errB.code || "");
+        return http.sendJson(res, 502, { ok: false, error: explain(errB) });
+      }
+      if (status === "confirmed") return http.sendJson(res, 409, { ok: false, error: "Para confirmar, corré primero el SQL de reservas (SUPABASE.md, Paso 10) y usá CONFIRMAR RESERVA." });
+    }
+    if (status === "confirmed" && !active) {
+      return http.sendJson(res, 409, { ok: false, error: "Confirmado se marca con CONFIRMAR RESERVA (en el detalle), cargando el monto y la comisión." });
+    }
+    if (active && ["confirmed", "completed", "cancelled"].indexOf(status) === -1) {
+      return http.sendJson(res, 409, { ok: false, error: "Esta solicitud tiene una reserva confirmada. Para volver atrás, primero cancelá la reserva." });
+    }
+    if (active && status === "cancelled") {
+      try {
+        var cancelled = await bookings.cancelActive(c, id);
+        if (cancelled.error) return http.sendJson(res, cancelled.status || 409, { ok: false, error: cancelled.error });
+        bookingCancelled = cancelled.booking;
+      } catch (errC) {
+        console.error("[admin] cancelar reserva:", errC.code || "");
+        return http.sendJson(res, 502, { ok: false, error: explain(errC) });
+      }
+    }
     try {
       var updated = await store.request(fetch, base + "plan_inquiries?id=eq." + encodeURIComponent(id) + "&select=id,status,updated_at", {
         method: "PATCH",
@@ -180,7 +244,7 @@ module.exports = async function handler(req, res) {
       }, "cambiar estado");
       var row = Array.isArray(updated) ? updated[0] : null;
       if (!row) return http.sendJson(res, 404, { ok: false, error: "No encontramos esa solicitud." });
-      return http.sendJson(res, 200, { ok: true, item: row });
+      return http.sendJson(res, 200, { ok: true, item: row, booking: bookingCancelled });
     } catch (err) {
       console.error("[admin] cambiar estado:", err.status || "", err.code || "", err.message);
       var msg = err.code === "23505"

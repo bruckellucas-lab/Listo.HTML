@@ -455,3 +455,119 @@ alter table public.plan_proposals enable row level security;
 ```
 
 > Si el panel se publica antes de correr este SQL, todo sigue funcionando y en Cotización aparece un aviso. Generar propuestas queda bloqueado hasta correrlo.
+
+---
+
+## Paso 10 · Reserva confirmada y comisión (/admin)
+
+"Propuesta aceptada" **no** es "Reserva confirmada". La reserva pasa a **Confirmado** solo cuando vos la confirmás desde /admin, después de que el lugar aceptó.
+
+En el detalle de cada solicitud:
+
+- **RESERVA → CONFIRMAR RESERVA →** abre un formulario con:
+  - cómo aceptó el usuario:
+    - **desde el link**: tocó "Aceptar propuesta";
+    - **manual**: aceptó por WhatsApp, teléfono, email u otro canal. El canal y una nota ("Aceptó por WhatsApp el 02/10.") son obligatorios;
+  - el monto final y la moneda;
+  - el tipo de comisión: **porcentaje** (hasta 30%) o **monto fijo**;
+  - la fecha de confirmación y la fecha estimada de cobro (opcional);
+  - las notas internas.
+
+  El panel muestra cuánto cobra LISTO antes de guardar (por ejemplo, 8% de $ 500.000 = $ 40.000). El servidor vuelve a hacer el cálculo y Supabase lo controla. Al confirmar, se crea el registro y la solicitud pasa a **Confirmado**.
+- **COMISIÓN:** botones **Marcar como facturada**, **Marcar como pagada** (con fecha de cobro) y **Marcar como exenta**. Pagada y exenta son estados finales: si hubo un error, se corrige a mano en Supabase.
+- **Cancelar reserva:** la solicitud pasa a Cancelado y la comisión pendiente o facturada queda exenta. Si la comisión ya está pagada, no se puede cancelar.
+- **Confirmado:** solo se marca con CONFIRMAR RESERVA, nunca desde el selector de estado. Mientras haya una reserva activa, la solicitud solo puede estar en Confirmado, Completado o Cancelado.
+- **Arriba de la lista:** se ven las reservas confirmadas, el valor total, la comisión pendiente y la cobrada, separadas por moneda (ARS y USD nunca se suman entre sí).
+
+No se mueve dinero ni se mandan emails: solo se registra la operación. Nada de esto se muestra en la web pública.
+
+### SQL (correr una vez)
+
+En **SQL Editor** → **New query**, pegá todo y tocá **Run**:
+
+```sql
+create table if not exists public.plan_bookings (
+  id                        uuid          primary key default gen_random_uuid(),
+  created_at                timestamptz   not null default now(),
+  updated_at                timestamptz   not null default now(),
+  plan_inquiry_id           uuid          not null,
+  provider_quote_id         uuid          not null,
+  plan_proposal_id          uuid,
+  provider_google_place_id  text          not null,
+
+  -- Cómo aceptó el usuario
+  acceptance_source         text          not null
+                            check (acceptance_source in ('proposal_link','manual')),
+  acceptance_channel        text
+                            check (acceptance_channel is null
+                                   or acceptance_channel in ('whatsapp','phone','email','other')),
+  acceptance_note           text          check (acceptance_note is null or char_length(acceptance_note) <= 500),
+
+  -- Reserva
+  booking_status            text          not null default 'confirmed'
+                            check (booking_status in ('confirmed','cancelled')),
+  confirmed_at              timestamptz   not null,
+  cancelled_at              timestamptz,
+  final_total_amount        numeric(14,2) not null check (final_total_amount > 0),
+  currency                  text          not null check (currency in ('ARS','USD')),
+
+  -- Comisión
+  commission_type           text          not null check (commission_type in ('percentage','fixed')),
+  commission_rate           numeric(5,2),
+  commission_amount         numeric(14,2) not null check (commission_amount >= 0),
+  commission_status         text          not null default 'pending'
+                            check (commission_status in ('pending','invoiced','paid','waived')),
+  commission_due_date       date,
+  commission_invoiced_at    timestamptz,
+  commission_paid_at        timestamptz,
+  internal_notes            text,
+
+  -- Vínculos (con nombre explícito; nunca se borran en cascada)
+  constraint plan_bookings_plan_inquiry_id_fkey
+    foreign key (plan_inquiry_id) references public.plan_inquiries(id) on delete restrict,
+  constraint plan_bookings_provider_quote_id_fkey
+    foreign key (provider_quote_id) references public.provider_quotes(id) on delete restrict,
+  constraint plan_bookings_plan_proposal_id_fkey
+    foreign key (plan_proposal_id) references public.plan_proposals(id) on delete restrict,
+  constraint plan_bookings_provider_fkey
+    foreign key (provider_google_place_id) references public.providers(google_place_id),
+
+  -- Aceptación: por link (con propuesta) o manual (con canal y nota obligatorios)
+  constraint plan_bookings_acceptance_ok check (
+    (acceptance_source = 'proposal_link' and plan_proposal_id is not null
+       and acceptance_channel is null)
+    or (acceptance_source = 'manual' and acceptance_channel is not null
+       and acceptance_note is not null and char_length(btrim(acceptance_note)) >= 5)
+  ),
+
+  -- Comisión: porcentaje entre 0 y 30 con cálculo exacto, o monto fijo no mayor al total
+  constraint plan_bookings_commission_ok check (
+    (commission_type = 'percentage' and commission_rate > 0 and commission_rate <= 30
+       and commission_amount = round(final_total_amount * commission_rate / 100, 2))
+    or (commission_type = 'fixed' and commission_rate is null
+       and commission_amount <= final_total_amount)
+  ),
+
+  -- Facturada: siempre con fecha de facturación
+  constraint plan_bookings_invoiced_has_date
+    check (commission_status <> 'invoiced' or commission_invoiced_at is not null),
+
+  -- Pagada: siempre con fecha de cobro y solo con reserva confirmada
+  constraint plan_bookings_paid_has_date
+    check ((commission_status = 'paid') = (commission_paid_at is not null)),
+  constraint plan_bookings_paid_needs_booking
+    check (commission_status <> 'paid' or booking_status = 'confirmed')
+);
+
+-- Nunca dos reservas confirmadas para la misma solicitud
+create unique index if not exists plan_bookings_one_active
+  on public.plan_bookings (plan_inquiry_id) where booking_status = 'confirmed';
+
+create index if not exists plan_bookings_by_commission
+  on public.plan_bookings (commission_status, confirmed_at desc);
+
+-- Cerrada al público: solo Vercel (con la clave secreta) lee y escribe
+alter table public.plan_bookings enable row level security;
+```
+
+> Si el panel se publica antes de correr este SQL, todo sigue funcionando como antes y la sección Reserva muestra un aviso. Mientras tanto no se puede pasar ninguna solicitud a Confirmado.
