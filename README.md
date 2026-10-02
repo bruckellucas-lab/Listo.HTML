@@ -58,3 +58,7 @@ Para cambiar una foto, buscá en los archivos el código que empieza con `photo-
 3. En **Branch** elegí la rama donde están estos archivos y la carpeta **/ (root)**. Tocá **Save**.
 4. Esperá 1 o 2 minutos: arriba vas a ver el link, con esta forma:
    `https://<tu-usuario>.github.io/<nombre-del-repo>/`
+
+### Bisú Studio — Costeo y precios (herramienta aparte)
+
+- `bisu/`: herramienta interna en **/bisu/** para calcular costo y precio de venta de prendas. Independiente de LISTO (no usa sus APIs ni Supabase). Diseño, fórmulas y decisiones: [bisu/DISENO.md](bisu/DISENO.md). Tests: `cd bisu && node --test`.

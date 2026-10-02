@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="referrer" content="no-referrer">
+  <title>Bisú Studio — Costeo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/bisu/styles.css">
+</head>
+<body>
+  <header class="top">
+    <div class="top-inner">
+      <a class="brand" href="/bisu/" aria-label="Bisú Studio — Costeo">
+        <span class="brand-name">Bisú <em>Studio</em></span>
+        <span class="brand-sub">Costeo &amp; precios</span>
+      </a>
+      <nav class="nav" aria-label="Secciones">
+        <button type="button" class="nav-link" data-action="nav" data-view="calc">Prenda</button>
+        <button type="button" class="nav-link" data-action="nav" data-view="products">Productos</button>
+        <button type="button" class="nav-link" data-action="nav" data-view="config">Configuración</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="main">
+    <!-- Calculadora por pasos -->
+    <section id="view-calc" class="view" hidden>
+      <div class="page-head">
+        <div>
+          <p class="eyebrow" data-out="calc-eyebrow">Nueva prenda</p>
+          <h1 class="page-title" data-out="calc-title">Sin nombre</h1>
+        </div>
+        <div class="head-actions">
+          <button type="button" class="btn btn-ghost" data-action="new-product">Nueva prenda</button>
+          <button type="button" class="btn btn-primary" data-action="save-product">Guardar prenda</button>
+        </div>
+      </div>
+
+      <div class="progress" aria-hidden="true"><span class="progress-bar" data-out="progress"></span></div>
+      <ol class="steps" id="steps"></ol>
+
+      <div class="calc-grid">
+        <div class="step-body" id="step-body"></div>
+        <aside class="summary" data-out="summary" aria-live="polite"></aside>
+      </div>
+
+      <div class="step-nav">
+        <button type="button" class="btn btn-ghost" data-action="prev">← Anterior</button>
+        <button type="button" class="btn btn-primary" data-action="next">Siguiente →</button>
+      </div>
+    </section>
+
+    <!-- Productos guardados -->
+    <section id="view-products" class="view" hidden></section>
+
+    <!-- Configuración general -->
+    <section id="view-config" class="view" hidden></section>
+  </main>
+
+  <div class="mobile-bar" data-out="mobile-bar"></div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <noscript><p class="noscript">Esta herramienta necesita JavaScript activado.</p></noscript>
+  <script type="module" src="/bisu/js/app.js"></script>
+</body>
+</html>
