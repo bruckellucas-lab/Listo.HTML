@@ -635,6 +635,16 @@
     var box = $("#proposals");
     renderSummary();
     box.innerHTML = "";
+
+    if (sensitiveRequirements().length) {
+      state.options = [];
+      state.optionsAt = Date.now();
+      state.hasProposals = true;
+      renderOptions();
+      savePlan();
+      setSearching(false);
+      return;
+    }
     $("#loading").hidden = false;
 
     var category = chooseCategory(d);
@@ -670,6 +680,41 @@
         clearTimeout(timer);
         setSearching(false);
       });
+  }
+
+  /* ---------- Requisitos sensibles (parche de seguridad) ----------
+     Si el pedido menciona kosher, halal, celiaquía o alergias, NO se muestran las
+     opciones genéricas como si cumplieran: todavía no tenemos lugares verificados. */
+  var LISTO_WHATSAPP = "5491158065840";   // +54 11 5806 5840
+  var SENSITIVE = [
+    { label: "Kosher", words: ["kosher", "kasher"] },
+    { label: "Halal", words: ["halal"] },
+    { label: "Apto celíacos / sin TACC", words: ["celiaco", "celiaca", "celiacos", "celiacas", "celiaquia", "sin tacc", "tacc", "apto celiacos"] },
+    { label: "Alergias", words: ["alergia", "alergias", "alergico", "alergica", "alergicos", "alergicas"] }
+  ];
+
+  function sensitiveRequirements() {
+    var d = state.data || {};
+    var custom = (d.customNeeds || []).filter(function (c) { return c.on; }).map(function (c) { return c.label; });
+    var t = normalize([state.text, d.type].concat(custom).filter(Boolean).join(" "));
+    return SENSITIVE.filter(function (s) {
+      return s.words.some(function (w) { return hasWord(t, w); });
+    }).map(function (s) { return s.label; });
+  }
+
+  function renderSensitive(labels) {
+    var msg = "Hola LISTO. Quiero que me ayuden a buscar opciones para este plan:\n“" + state.text + "”\nRequisito: " + labels.join(", ") + ".";
+    $("#proposals").innerHTML =
+      '<div class="proposals-message" role="status">' +
+        '<p class="proposals-message-title">Todavía no tenemos opciones verificadas para este requisito en esta zona.</p>' +
+        '<p class="proposals-message-text">Pediste: ' + escapeHTML(labels.join(", ")) + '. Para no mostrarte lugares que quizás no cumplan, ' +
+          'LISTO sólo muestra opciones verificadas. Si querés buscar sin este requisito, tocá “Empezar de nuevo” y escribí el pedido sin mencionarlo.</p>' +
+        '<div class="proposals-message-actions">' +
+          '<a class="btn btn-dark" style="text-decoration:none" href="https://wa.me/' + LISTO_WHATSAPP + '?text=' + encodeURIComponent(msg) +
+            '" target="_blank" rel="noopener noreferrer">Pedile a LISTO que lo busque <span aria-hidden="true">→</span></a>' +
+          '<button type="button" class="btn-text" data-action="details">← Ajustar el plan</button>' +
+        '</div>' +
+      '</div>';
   }
 
   // Mensaje elegante dentro de LISTO (sin resultados o error). Nunca vuelve a la demo.
@@ -719,6 +764,8 @@
   function renderOptions() {
     var box = $("#proposals");
     var list = state.options || [];
+    var sensitive = sensitiveRequirements();
+    if (sensitive.length) { renderSensitive(sensitive); return; }
     if (!list.length) {
       renderMessage("Todavía no.", "No encontramos una opción que encaje todavía. Probá ampliando la zona o cambiando algún detalle.", false);
       return;
