@@ -20,7 +20,10 @@ const state = {
   customDiscount: "25",
   productSearch: "",
 };
-state.product = S.loadDraft(state.config) || M.newProduct(state.config);
+const savedDraft = S.loadDraft(state.config);
+// Primera visita: arranca con el ejemplo cargado para mostrar cómo funciona.
+state.product = savedDraft || M.exampleProduct(state.config);
+const firstVisit = !savedDraft;
 
 const STEPS = [
   { id: "product", label: "Producto" },
@@ -775,8 +778,36 @@ function loadProductIntoCalc(product) {
   S.saveDraft(state.product);
 }
 
-function confirmDiscard() {
-  return !state.dirty || confirm("Tenés cambios sin guardar en la prenda actual. ¿Descartarlos?");
+/* Diálogo propio (no usa confirm() del navegador, que algunas vistas bloquean). */
+function openDialog(html) {
+  const root = $("#dialog");
+  root.innerHTML = `<div class="dialog-card" role="dialog" aria-modal="true">${html}</div>`;
+  root.hidden = false;
+  return root;
+}
+
+function closeDialog() {
+  const root = $("#dialog");
+  root.hidden = true;
+  root.innerHTML = "";
+}
+
+function ask(message, okLabel = "Seguir", danger = false) {
+  return new Promise((resolve) => {
+    const root = openDialog(`<p class="dialog-text">${esc(message)}</p>
+      <div class="dialog-actions">
+        <button type="button" class="btn btn-ghost" id="dlg-cancel">Cancelar</button>
+        <button type="button" class="btn btn-primary ${danger ? "is-danger" : ""}" id="dlg-ok">${esc(okLabel)}</button>
+      </div>`);
+    const done = (v) => { closeDialog(); resolve(v); };
+    $("#dlg-ok", root).onclick = () => done(true);
+    $("#dlg-cancel", root).onclick = () => done(false);
+    $("#dlg-ok", root).focus();
+  });
+}
+
+async function confirmDiscard() {
+  return !state.dirty || ask("Tenés cambios sin guardar en la prenda actual. ¿Descartarlos?", "Descartar", true);
 }
 
 /* ---------- Listas ---------- */
@@ -865,7 +896,7 @@ function onChange(e) {
   else if (el.dataset.scope === "product") renderCalc();
 }
 
-function onClick(e) {
+async function onClick(e) {
   const btn = e.target.closest("[data-action]");
   if (!btn) return;
   const a = btn.dataset.action;
@@ -887,13 +918,13 @@ function onClick(e) {
       return afterScopeChange(scope);
     }
     case "load-example":
-      if (!confirmDiscard()) return;
+      if (!(await confirmDiscard())) return;
       loadProductIntoCalc(M.exampleProduct(state.config));
       state.dirty = true;
       toast("Ejemplo cargado: Pantalón Siena.");
       return renderCalc();
     case "new-product":
-      if (!confirmDiscard()) return;
+      if (!(await confirmDiscard())) return;
       loadProductIntoCalc(M.newProduct(state.config));
       state.step = 0;
       return show("calc");
@@ -905,12 +936,12 @@ function onClick(e) {
       state.product.publishPrice = "";
       return afterScopeChange("product");
     case "pull-config":
-      if (!confirm("Se reemplazan inflación, márgenes, gastos fijos, medios de pago, impuestos y redondeo de esta prenda por los de Configuración. ¿Seguir?")) return;
+      if (!(await ask("Se reemplazan inflación, márgenes, gastos fijos, medios de pago, impuestos y redondeo de esta prenda por los de Configuración."))) return;
       state.product.settings = M.settingsFromConfig(state.config);
       toast("Configuración general aplicada a esta prenda.");
       return afterScopeChange("product");
     case "edit-product": {
-      if (!confirmDiscard()) return;
+      if (!(await confirmDiscard())) return;
       const p = S.loadProducts(state.config).find((x) => x.id === btn.dataset.id);
       if (!p) return;
       loadProductIntoCalc(p);
@@ -928,7 +959,7 @@ function onClick(e) {
     }
     case "del-product": {
       const p = S.loadProducts(state.config).find((x) => x.id === btn.dataset.id);
-      if (!p || !confirm(`¿Eliminar "${p.name || "Sin nombre"}"? No se puede deshacer.`)) return;
+      if (!p || !(await ask(`¿Eliminar "${p.name || "Sin nombre"}"? No se puede deshacer.`, "Eliminar", true))) return;
       S.deleteProduct(p.id, state.config);
       if (state.product.id === p.id) state.product.id = null;
       toast("Prenda eliminada.");
@@ -936,7 +967,7 @@ function onClick(e) {
     }
     case "export": return exportFile();
     case "reset-config":
-      if (!confirm("¿Volver la configuración a los valores iniciales? Las prendas guardadas no cambian.")) return;
+      if (!(await ask("¿Volver la configuración a los valores iniciales? Las prendas guardadas no cambian.", "Restablecer", true))) return;
       state.config = M.defaultConfig();
       S.saveConfig(state.config);
       return renderConfig();
@@ -960,21 +991,41 @@ function saveCurrent() {
   refreshOutputs();
 }
 
+/* Copia de seguridad: se muestra el texto para copiarlo, y además se ofrece descargarlo. */
 function exportFile() {
-  const blob = new Blob([S.exportAll(state.config)], { type: "application/json" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = "bisu-costeo-" + M.today() + ".json";
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  const json = S.exportAll(state.config);
+  const root = openDialog(`<p class="dialog-text">Copia de seguridad (${esc(M.today())}). Copiala y guardala en un archivo de texto, o descargala.</p>
+    <textarea id="dlg-json" class="dialog-json" readonly></textarea>
+    <div class="dialog-actions">
+      <button type="button" class="btn btn-ghost" id="dlg-close">Cerrar</button>
+      <button type="button" class="btn btn-ghost" id="dlg-download">Descargar</button>
+      <button type="button" class="btn btn-primary" id="dlg-copy">Copiar</button>
+    </div>`);
+  const area = $("#dlg-json", root);
+  area.value = json;
+  $("#dlg-close", root).onclick = closeDialog;
+  $("#dlg-copy", root).onclick = () => {
+    const fallback = () => { area.focus(); area.select(); toast("Texto seleccionado: copialo con Ctrl+C."); };
+    try {
+      navigator.clipboard.writeText(json).then(() => toast("Copia copiada al portapapeles.", "is-ok"), fallback);
+    } catch (e) { fallback(); }
+  };
+  $("#dlg-download", root).onclick = () => {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([json], { type: "application/json" }));
+    a.download = "bisu-costeo-" + M.today() + ".json";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
 }
 
-function importFile(input) {
+async function importFile(input) {
   const file = input.files && input.files[0];
   if (!file) return;
-  if (!confirm("Importar reemplaza la configuración y las prendas guardadas en este navegador. ¿Seguir?")) return;
+  const ok = await ask("Importar reemplaza la configuración y las prendas guardadas en este navegador.", "Importar", true);
+  input.value = "";
+  if (!ok) return;
   file.text().then((text) => {
     const { config, count } = S.importAll(text);
     state.config = config;
@@ -989,6 +1040,8 @@ document.addEventListener("input", onInput);
 document.addEventListener("change", onChange);
 document.addEventListener("click", onClick);
 window.addEventListener("beforeunload", () => S.saveDraft(state.product));
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("#dialog").hidden) $("#dlg-cancel, #dlg-close") && $("#dlg-cancel, #dlg-close").click(); });
 
 recompute();
 show("calc");
+if (firstVisit) toast("Ejemplo cargado: Pantalón Siena. Tocá \"Nueva prenda\" para cargar la tuya.");
