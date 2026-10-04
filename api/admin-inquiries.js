@@ -66,7 +66,7 @@ function toItem(row) {
       guests: req.guests || null, zone: req.zone || null, budget: req.budget || null,
       needs: Array.isArray(req.needs) ? req.needs : (req.needs ? String(req.needs).split(/,\s*/) : []),
       notes: row.notes, original_prompt: req.original_prompt || null,
-      // null = el usuario no respondió "¿Alguna restricción?"; [] = eligió "Ninguna".
+      // null = nunca tocó "¿Alguna restricción?"; [] = la tocó y quedó sin restricciones activas.
       dietary: Array.isArray(req.dietary_requirements) ? req.dietary_requirements : null
     },
     provider: {

@@ -616,10 +616,10 @@
       kosher: "Kosher", halal: "Halal", celiac_safe: "Sin TACC / Celiaquía", gluten_free: "Sin gluten", vegan: "Vegano",
       vegetarian: "Vegetariano", lactose_free: "Sin lactosa", kids_menu: "Menú infantil", allergy: "Alergia"
     };
-    // null = no respondió "¿Alguna restricción?"; [] = eligió "Ninguna".
+    // null = nunca tocó "¿Alguna restricción?"; [] = la tocó y quedó sin restricciones activas.
     function dietNode(list) {
       if (!Array.isArray(list)) return "No informadas";
-      if (!list.length) return "Ninguna";
+      if (!list.length) return "Sin restricciones activas";
       var box = el("div");
       list.forEach(function (d) {
         var parts = [DIET_NAMES[d.code] || d.code];

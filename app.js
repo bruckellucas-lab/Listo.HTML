@@ -443,6 +443,7 @@
   function setDietChip(id, on) {
     var diet = state.data.diet;
     diet.none = false;
+    diet.touched = true;
     if (on) diet.on[id] = true; else delete diet.on[id];
     var at = diet.removed.indexOf(id);
     // Si el usuario quita algo que habíamos detectado en su pedido, se respeta (y se avisa).
@@ -469,7 +470,7 @@
     var btn = mk("button", "diet-choice", label);
     btn.type = "button";
     btn.setAttribute("aria-pressed", on ? "true" : "false");
-    btn.addEventListener("click", function () { onClick(); detailsError.hidden = true; renderDiet(); });
+    btn.addEventListener("click", function () { onClick(); state.data.diet.touched = true; detailsError.hidden = true; renderDiet(); });
     return btn;
   }
 
@@ -477,6 +478,7 @@
     var diet = state.data.diet;
     dietBox.innerHTML = "";
     dietBox.appendChild(dietChip("none", "Ninguna", diet.none, function () {
+      diet.touched = true;
       if (diet.none) { diet.none = false; return; }
       Object.keys(diet.on).forEach(function (id) { setDietChip(id, false); });
       diet.none = true;
@@ -507,7 +509,7 @@
         input.autocomplete = "off";
         input.placeholder = "Ej: maní, mariscos";
         input.value = diet.allergy || "";
-        input.addEventListener("input", function () { diet.allergy = input.value; detailsError.hidden = true; });
+        input.addEventListener("input", function () { diet.allergy = input.value; diet.touched = true; detailsError.hidden = true; });
         wrap.appendChild(input);
         row.appendChild(wrap);
       } else if (r.fixed) {
@@ -868,13 +870,16 @@
   function newDiet(text) {
     var on = detectDiet(text);
     return {
-      none: false, on: on, level: {}, gluten: null,
+      none: false, on: on, level: {}, gluten: null, touched: false,
       allergy: on.allergy ? detectAllergyDetail(text) : "",
       detected: Object.keys(on), removed: []
     };
   }
 
-  // Lo que se guarda en event_requests.dietary_requirements: null = no respondió; [] = eligió "Ninguna".
+  // Lo que se guarda en event_requests.dietary_requirements:
+  //   null → el usuario nunca tocó la sección;
+  //   []   → la tocó y terminó sin restricciones activas ("Ninguna" o quitó las detectadas);
+  //   lista → restricciones activas.
   function dietItems(diet) {
     if (!diet) return null;
     if (diet.none) return [];
@@ -894,7 +899,8 @@
       }
       add({ code: r.code, level: r.fixed ? "hard" : (diet.level[r.id] === "hard" ? "hard" : "soft") });
     });
-    return items.length ? items : null;
+    if (items.length) return items;
+    return diet.touched || diet.removed.length ? [] : null;
   }
 
   function dietProblem(diet) {
