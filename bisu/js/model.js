@@ -179,29 +179,36 @@ export function exampleProduct(config) {
   return p;
 }
 
-/* Completa campos faltantes en datos guardados con versiones anteriores. */
+const isObj = (v) => !!v && typeof v === "object" && !Array.isArray(v);
+const objOr = (v) => (isObj(v) ? v : {});
+
+/* Completa campos faltantes en datos guardados con versiones anteriores.
+   Si lo guardado no tiene la forma esperada, se ignora esa parte. */
 export function normalizeConfig(raw) {
   const base = defaultConfig();
-  if (!raw || typeof raw !== "object") return base;
+  if (!isObj(raw)) return base;
   const out = Object.assign(base, raw);
-  out.fixedCosts = Object.assign(defaultConfig().fixedCosts, raw.fixedCosts || {});
-  out.rounding = Object.assign(defaultConfig().rounding, raw.rounding || {});
-  out.wholesaleRounding = Object.assign(defaultConfig().wholesaleRounding, raw.wholesaleRounding || {});
+  out.fixedCosts = Object.assign(defaultConfig().fixedCosts, objOr(raw.fixedCosts));
+  out.rounding = Object.assign(defaultConfig().rounding, objOr(raw.rounding));
+  out.wholesaleRounding = Object.assign(defaultConfig().wholesaleRounding, objOr(raw.wholesaleRounding));
   if (!Array.isArray(out.paymentMethods) || !out.paymentMethods.length) out.paymentMethods = defaultConfig().paymentMethods;
-  if (!Array.isArray(out.taxes)) out.taxes = defaultConfig().taxes;
+  out.paymentMethods = out.paymentMethods.filter(isObj);
+  if (!out.paymentMethods.length) out.paymentMethods = defaultConfig().paymentMethods;
+  out.taxes = Array.isArray(out.taxes) ? out.taxes.filter(isObj) : defaultConfig().taxes;
   out.version = SCHEMA_VERSION;
   return out;
 }
 
 export function normalizeProduct(raw, config) {
   const base = newProduct(config);
-  if (!raw || typeof raw !== "object") return base;
+  if (!isObj(raw)) return base;
   const out = Object.assign(base, raw);
-  out.labor = Object.assign(base.labor, raw.labor || {});
-  out.processes = Object.assign(base.processes, raw.processes || {});
-  const s = Object.assign(settingsFromConfig(config), raw.settings || {});
-  s.fixedCosts = Object.assign(settingsFromConfig(config).fixedCosts, (raw.settings || {}).fixedCosts || {});
+  out.labor = Object.assign(base.labor, objOr(raw.labor));
+  out.processes = Object.assign(base.processes, objOr(raw.processes));
+  const s = Object.assign(settingsFromConfig(config), objOr(raw.settings));
+  s.fixedCosts = Object.assign(settingsFromConfig(config).fixedCosts, objOr(objOr(raw.settings).fixedCosts));
+  ["paymentMethods", "taxes"].forEach((k) => { if (!Array.isArray(s[k]) || !s[k].length) s[k] = settingsFromConfig(config)[k]; });
   out.settings = s;
-  ["fabrics", "trims", "packaging"].forEach((k) => { if (!Array.isArray(out[k])) out[k] = []; });
+  ["fabrics", "trims", "packaging"].forEach((k) => { out[k] = Array.isArray(out[k]) ? out[k].filter(isObj) : []; });
   return out;
 }

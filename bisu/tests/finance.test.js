@@ -186,3 +186,14 @@ test("lectura de números en formato argentino", async () => {
   assert.equal(parseInput(""), "");
   assert.equal(parseInput("abc"), null);
 });
+
+test("la versión de un solo archivo se genera con JavaScript válido y sin imports", async () => {
+  const { buildStandalone } = await import("../tools/build-standalone.js");
+  for (const artifact of [false, true]) {
+    const html = buildStandalone({ artifact });
+    assert.ok(!/\bimport\s*[{*]|^\s*export\s/m.test(html.split("<script>").slice(1).join("")));
+    assert.ok(html.includes("Error al iniciar Bisú Costing"));
+    assert.equal(artifact, html.includes("window.__BISU_NO_DOWNLOAD__ = true;"));
+    assert.equal(!artifact, html.startsWith("<!doctype html>"));
+  }
+});

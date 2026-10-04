@@ -550,6 +550,12 @@ input[type="range"] { width: 100%; accent-color: var(--ink); height: 28px; margi
 .toast.is-on { opacity: 1; transform: translate(-50%, 0); }
 .toast.is-bad { background: var(--bad); }
 .toast.is-ok { background: var(--ok); }
+/* Error de arranque: visible aunque falle todo lo demás */
+.boot-error { max-width: 860px; margin: 32px auto; padding: 28px; background: var(--bad-soft); border: 1px solid var(--bad); color: var(--ink); display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
+.boot-error-title { margin: 0; font-family: var(--serif); font-size: 30px; color: var(--bad); }
+.boot-error-text { margin: 0; }
+.boot-error-detail { margin: 0; width: 100%; max-height: 260px; overflow: auto; white-space: pre-wrap; word-break: break-word; font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; background: var(--paper); padding: 12px; border: 1px solid var(--line-2); }
+
 /* Diálogo */
 .dialog { position: fixed; inset: 0; z-index: 60; background: rgba(27, 24, 22, .35); display: flex; align-items: center; justify-content: center; padding: 16px; }
 .dialog-card { background: var(--paper); border: 1px solid var(--line); padding: 28px; width: min(520px, 100%); display: flex; flex-direction: column; gap: 18px; }

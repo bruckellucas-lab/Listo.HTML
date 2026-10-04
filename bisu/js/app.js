@@ -12,7 +12,7 @@ import { money, moneyAuto, percent, signedPercent, qty, date, parseInput, inputV
 const state = {
   view: "calc",
   step: 0,
-  config: S.loadConfig(),
+  config: null,
   product: null,
   result: null,
   dirty: false,
@@ -20,10 +20,9 @@ const state = {
   customDiscount: "25",
   productSearch: "",
 };
-const savedDraft = S.loadDraft(state.config);
-// Primera visita: arranca con el ejemplo cargado para mostrar cómo funciona.
-state.product = savedDraft || M.exampleProduct(state.config);
-const firstVisit = !savedDraft;
+
+// En la versión de un solo archivo publicada en Claude no se pueden descargar archivos.
+const CAN_DOWNLOAD = !window.__BISU_NO_DOWNLOAD__;
 
 const STEPS = [
   { id: "product", label: "Producto" },
@@ -145,7 +144,14 @@ function refreshOutputs() {
   $$("[data-out]").forEach((el) => {
     const fn = OUT[el.dataset.out];
     if (!fn) return;
-    const html = fn(r, el.dataset.i !== undefined ? Number(el.dataset.i) : null, el);
+    let html;
+    try {
+      html = fn(r, el.dataset.i !== undefined ? Number(el.dataset.i) : null, el);
+    } catch (e) {
+      // Un dato raro no debe romper toda la pantalla: se muestra "—" y se sigue.
+      console.warn("Bisú: no se pudo mostrar " + el.dataset.out, e);
+      html = "—";
+    }
     if (html !== undefined && el.innerHTML !== html) el.innerHTML = html;
   });
 }
@@ -675,7 +681,11 @@ function renderProducts() {
     .filter((p) => !q || (p.name + " " + p.sku).toLowerCase().includes(q))
     .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)))
     .map((p) => {
-      const r = computeProduct(p);
+      let r;
+      try { r = computeProduct(p); } catch (e) {
+        return `<tr><td>${esc(p.sku || "—")}</td><td><strong>${esc(p.name || "Sin nombre")}</strong><small class="muted block neg">Datos dañados: no se puede calcular</small></td><td colspan="4"></td>
+          <td class="actions"><button type="button" class="btn btn-link danger" data-action="del-product" data-id="${p.id}">Eliminar</button></td></tr>`;
+      }
       const ev = r.atPublish;
       const cat = M.CATEGORIES.find((c) => c.id === p.category);
       return `<tr>
@@ -994,11 +1004,11 @@ function saveCurrent() {
 /* Copia de seguridad: se muestra el texto para copiarlo, y además se ofrece descargarlo. */
 function exportFile() {
   const json = S.exportAll(state.config);
-  const root = openDialog(`<p class="dialog-text">Copia de seguridad (${esc(M.today())}). Copiala y guardala en un archivo de texto, o descargala.</p>
+  const root = openDialog(`<p class="dialog-text">Copia de seguridad (${esc(M.today())}). Copiala y guardala en un archivo de texto${CAN_DOWNLOAD ? ", o descargala" : ""}.</p>
     <textarea id="dlg-json" class="dialog-json" readonly></textarea>
     <div class="dialog-actions">
       <button type="button" class="btn btn-ghost" id="dlg-close">Cerrar</button>
-      <button type="button" class="btn btn-ghost" id="dlg-download">Descargar</button>
+      ${CAN_DOWNLOAD ? '<button type="button" class="btn btn-ghost" id="dlg-download">Descargar</button>' : ""}
       <button type="button" class="btn btn-primary" id="dlg-copy">Copiar</button>
     </div>`);
   const area = $("#dlg-json", root);
@@ -1010,7 +1020,7 @@ function exportFile() {
       navigator.clipboard.writeText(json).then(() => toast("Copia copiada al portapapeles.", "is-ok"), fallback);
     } catch (e) { fallback(); }
   };
-  $("#dlg-download", root).onclick = () => {
+  if (CAN_DOWNLOAD) $("#dlg-download", root).onclick = () => {
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([json], { type: "application/json" }));
     a.download = "bisu-costeo-" + M.today() + ".json";
@@ -1042,6 +1052,47 @@ document.addEventListener("click", onClick);
 window.addEventListener("beforeunload", () => S.saveDraft(state.product));
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("#dialog").hidden) $("#dlg-cancel, #dlg-close") && $("#dlg-cancel, #dlg-close").click(); });
 
-recompute();
-show("calc");
-if (firstVisit) toast("Ejemplo cargado: Pantalón Siena. Tocá \"Nueva prenda\" para cargar la tuya.");
+/* Arranque a prueba de datos rotos: si lo guardado en el navegador no sirve,
+   se ignora y se cargan los valores iniciales con el ejemplo Pantalón Siena. */
+function boot() {
+  try {
+    state.config = S.loadConfig();
+  } catch (e) {
+    console.warn("Bisú: configuración guardada ilegible, se usan valores iniciales.", e);
+    state.config = M.defaultConfig();
+  }
+  let draft = null;
+  try {
+    draft = S.loadDraft(state.config);
+  } catch (e) {
+    console.warn("Bisú: borrador guardado ilegible, se descarta.", e);
+  }
+  // Primera visita: arranca con el ejemplo cargado para mostrar cómo funciona.
+  state.product = draft || M.exampleProduct(state.config);
+  try {
+    recompute();
+  } catch (e) {
+    console.warn("Bisú: el borrador guardado tiene datos inválidos, se carga el ejemplo.", e);
+    S.clearDraft();
+    draft = null;
+    state.product = M.exampleProduct(state.config);
+    try {
+      recompute();
+    } catch (e2) {
+      console.warn("Bisú: la configuración guardada tiene datos inválidos, se usan valores iniciales.", e2);
+      state.config = M.defaultConfig();
+      state.product = M.exampleProduct(state.config);
+      recompute();
+    }
+  }
+  show("calc");
+  window.__bisuReady = true;
+  if (!draft) toast("Ejemplo cargado: Pantalón Siena. Tocá \"Nueva prenda\" para cargar la tuya.");
+}
+
+try {
+  boot();
+} catch (e) {
+  if (window.__bisuFail) window.__bisuFail(e && e.stack ? e.stack : String(e));
+  else throw e;
+}

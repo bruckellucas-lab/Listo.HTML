@@ -205,3 +205,11 @@ Internamente todo se calcula con decimales exactos de 18 posiciones (`js/decimal
 cd bisu
 node --test
 ```
+
+## 11. Versión de un solo archivo
+
+`bisu/bisu-costing.html` es la misma herramienta con todo embebido (HTML + CSS + JS): se abre con doble clic, sin servidor, y en Vercel queda en **/bisu/bisu-costing.html**.
+
+Se genera con `node tools/build-standalone.js` (desde `bisu/`). **No se edita a mano**: el generador valida la sintaxis del JavaScript antes de escribir el archivo, y un test verifica que el resultado sea válido.
+
+Si algo falla al arrancar, la página muestra "Error al iniciar Bisú Costing" con el detalle técnico en lugar de quedar en blanco. Los datos guardados que estén dañados se ignoran y se cargan los valores iniciales.

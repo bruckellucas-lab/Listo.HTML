@@ -12,6 +12,47 @@
   <link rel="stylesheet" href="/bisu/styles.css">
 </head>
 <body>
+  <div class="boot-error" id="boot-error" role="alert" hidden>
+    <p class="boot-error-title">Error al iniciar Bisú Costing</p>
+    <p class="boot-error-text">La herramienta no pudo arrancar. Este es el detalle técnico para diagnosticarlo:</p>
+    <pre class="boot-error-detail" id="boot-error-detail"></pre>
+    <button type="button" class="btn btn-ghost" id="boot-error-reset">Borrar datos guardados y reintentar</button>
+  </div>
+  <!-- Guardia de arranque: script aparte, para que funcione aunque el principal tenga un error. -->
+  <script>
+    (function () {
+      var shown = false;
+      function fail(detail) {
+        var box = document.getElementById("boot-error");
+        if (!box) return;
+        var pre = document.getElementById("boot-error-detail");
+        pre.textContent = (shown ? pre.textContent + "\n\n" : "") + detail;
+        shown = true;
+        box.hidden = false;
+      }
+      window.__bisuFail = fail;
+      window.addEventListener("error", function (e) {
+        if (window.__bisuReady) return;
+        fail((e.message || "Error desconocido") + (e.filename ? "\n" + e.filename + ":" + e.lineno + ":" + e.colno : ""));
+      });
+      window.addEventListener("unhandledrejection", function (e) {
+        if (window.__bisuReady) return;
+        fail(String((e.reason && e.reason.stack) || e.reason));
+      });
+      window.addEventListener("load", function () {
+        setTimeout(function () {
+          if (!window.__bisuReady && !shown) fail("La aplicación no terminó de iniciar: el script principal no se ejecutó.");
+        }, 2000);
+      });
+      document.addEventListener("click", function (e) {
+        if (!e.target || e.target.id !== "boot-error-reset") return;
+        try {
+          Object.keys(localStorage).forEach(function (k) { if (k.indexOf("bisu.") === 0) localStorage.removeItem(k); });
+        } catch (err) { /* sin acceso al almacenamiento */ }
+        location.reload();
+      });
+    })();
+  </script>
   <header class="top">
     <div class="top-inner">
       <a class="brand" href="/bisu/" aria-label="Bisú Studio — Costeo">

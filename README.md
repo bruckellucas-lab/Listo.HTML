@@ -61,4 +61,4 @@ Para cambiar una foto, buscá en los archivos el código que empieza con `photo-
 
 ### Bisú Studio — Costeo y precios (herramienta aparte)
 
-- `bisu/`: herramienta interna en **/bisu/** para calcular costo y precio de venta de prendas. Independiente de LISTO (no usa sus APIs ni Supabase). Diseño, fórmulas y decisiones: [bisu/DISENO.md](bisu/DISENO.md). Tests: `cd bisu && node --test`.
+- `bisu/`: herramienta interna en **/bisu/** para calcular costo y precio de venta de prendas. Independiente de LISTO (no usa sus APIs ni Supabase). Diseño, fórmulas y decisiones: [bisu/DISENO.md](bisu/DISENO.md). Versión de un solo archivo: `bisu/bisu-costing.html` (se genera con `node tools/build-standalone.js`). Tests: `cd bisu && node --test`.
