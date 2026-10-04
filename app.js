@@ -167,7 +167,8 @@
       budget: detectBudget(t),
       needs: detectNeeds(t),
       needLabels: detectNeedLabels(t),
-      customNeeds: []
+      customNeeds: [],
+      diet: newDiet(text)
     };
   }
 
@@ -212,6 +213,11 @@
       state.data = saved.data;
       state.data.customNeeds = state.data.customNeeds || [];
       state.data.needLabels = state.data.needLabels || {};
+      // Planes guardados antes de "¿Alguna restricción?": se detecta desde el texto (siguen protegidos).
+      if (!state.data.diet || typeof state.data.diet !== "object" || !state.data.diet.on) {
+        var custom = state.data.customNeeds.filter(function (c) { return c.on; }).map(function (c) { return c.label; });
+        state.data.diet = newDiet([state.text].concat(custom).join(". "));
+      }
       state.requestId = typeof saved.requestId === "string" ? saved.requestId : null;
       // Recuerda qué pedido ya está guardado: buscar de nuevo sin cambios no crea otro.
       if (state.requestId && typeof saved.requestSig === "string") lastSaved = saved.requestSig;
@@ -387,6 +393,7 @@
     fBudget.value = d.budget ? d.budget.toLocaleString("es-AR") : "";
     sizeGuests();
     renderNeeds();
+    renderDiet();
     detailsError.hidden = true;
   }
 
@@ -420,9 +427,118 @@
     return btn;
   }
 
+  /* ---------- ¿Alguna restricción? ---------- */
+
+  var dietBox = $("#diet");
+  var dietOpts = $("#diet-opts");
+  var dietRemoved = $("#diet-removed");
+
+  function mk(tag, cls, text) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text !== undefined) n.textContent = text;
+    return n;
+  }
+
+  function setDietChip(id, on) {
+    var diet = state.data.diet;
+    diet.none = false;
+    if (on) diet.on[id] = true; else delete diet.on[id];
+    var at = diet.removed.indexOf(id);
+    // Si el usuario quita algo que habíamos detectado en su pedido, se respeta (y se avisa).
+    if (!on && diet.detected.indexOf(id) !== -1 && at === -1) diet.removed.push(id);
+    if (on && at !== -1) diet.removed.splice(at, 1);
+  }
+
+  function dietChip(id, label, on, onClick) {
+    var btn = mk("button", "need", label);
+    btn.type = "button";
+    btn.setAttribute("data-diet", id);
+    btn.setAttribute("aria-pressed", on ? "true" : "false");
+    btn.addEventListener("click", function () {
+      onClick();
+      detailsError.hidden = true;
+      renderDiet();
+      var again = dietBox.querySelector('[data-diet="' + id + '"]');
+      if (again) again.focus();
+    });
+    return btn;
+  }
+
+  function dietChoice(label, on, onClick) {
+    var btn = mk("button", "diet-choice", label);
+    btn.type = "button";
+    btn.setAttribute("aria-pressed", on ? "true" : "false");
+    btn.addEventListener("click", function () { onClick(); detailsError.hidden = true; renderDiet(); });
+    return btn;
+  }
+
+  function renderDiet() {
+    var diet = state.data.diet;
+    dietBox.innerHTML = "";
+    dietBox.appendChild(dietChip("none", "Ninguna", diet.none, function () {
+      if (diet.none) { diet.none = false; return; }
+      Object.keys(diet.on).forEach(function (id) { setDietChip(id, false); });
+      diet.none = true;
+    }));
+    DIET.forEach(function (r) {
+      dietBox.appendChild(dietChip(r.id, r.label, !!diet.on[r.id], function () { setDietChip(r.id, !diet.on[r.id]); }));
+    });
+
+    // Detalle de cada restricción elegida.
+    dietOpts.innerHTML = "";
+    DIET.forEach(function (r) {
+      if (!diet.on[r.id]) return;
+      var row = mk("div", "diet-opt");
+      row.appendChild(mk("span", "diet-opt-label", r.label));
+      if (r.id === "gluten") {
+        row.appendChild(mk("p", "diet-question", "¿Es por celiaquía o simplemente preferís opciones sin gluten?"));
+        row.appendChild(dietChoice("Es por celiaquía", diet.gluten === "celiac", function () { diet.gluten = "celiac"; }));
+        row.appendChild(dietChoice("Solo preferencia", diet.gluten === "pref", function () { diet.gluten = "pref"; }));
+      } else if (r.id === "allergy") {
+        var q = mk("label", "diet-question", "¿A qué sos alérgico/a?");
+        q.htmlFor = "diet-allergy";
+        row.appendChild(q);
+        var wrap = mk("div", "add-need");
+        var input = mk("input");
+        input.id = "diet-allergy";
+        input.type = "text";
+        input.maxLength = 200;
+        input.autocomplete = "off";
+        input.placeholder = "Ej: maní, mariscos";
+        input.value = diet.allergy || "";
+        input.addEventListener("input", function () { diet.allergy = input.value; detailsError.hidden = true; });
+        wrap.appendChild(input);
+        row.appendChild(wrap);
+      } else if (r.fixed) {
+        row.appendChild(mk("span", "diet-fixed", "Obligatorio"));
+      } else {
+        row.appendChild(dietChoice("Obligatorio", diet.level[r.id] === "hard", function () { diet.level[r.id] = "hard"; }));
+        row.appendChild(dietChoice("Preferencia", diet.level[r.id] !== "hard", function () { diet.level[r.id] = "soft"; }));
+      }
+      dietOpts.appendChild(row);
+    });
+
+    var removed = diet.removed.filter(function (id) { return !diet.on[id]; }).map(function (id) { return dietById(id).label; });
+    dietRemoved.textContent = removed.length
+      ? "Quitaste " + joinY(removed) + ": buscamos sin " + (removed.length > 1 ? "esos requisitos." : "ese requisito.")
+      : "";
+    dietRemoved.hidden = !removed.length;
+  }
+
   function addCustomNeed() {
     var label = fNeedExtra.value.trim();
     if (!label) { fNeedExtra.focus(); return; }
+    // Si lo que escribió es una restricción (ej. "Sin TACC"), se marca en "¿Alguna restricción?".
+    var asDiet = Object.keys(detectDiet(label));
+    if (asDiet.length) {
+      asDiet.forEach(function (id) { setDietChip(id, true); });
+      if (asDiet.indexOf("allergy") !== -1 && !state.data.diet.allergy) state.data.diet.allergy = detectAllergyDetail(label);
+      fNeedExtra.value = "";
+      renderDiet();
+      detailsError.hidden = true;
+      return;
+    }
     label = label.charAt(0).toUpperCase() + label.slice(1);
     var exists = state.data.customNeeds.some(function (c) { return normalize(c.label) === normalize(label); }) ||
       NEEDS.some(function (n) { return normalize(needLabel(n)) === normalize(label); });
@@ -487,6 +603,14 @@
       detailsError.hidden = false;
       return;
     }
+    var dietError = dietProblem(state.data.diet);
+    if (dietError) {
+      detailsError.textContent = dietError;
+      detailsError.hidden = false;
+      var focusTo = /alérgico/.test(dietError) ? $("#diet-allergy") : dietOpts.querySelector(".diet-choice");
+      if (focusTo) focusTo.focus();
+      return;
+    }
     detailsError.hidden = true;
     state.selected = null;
     setSearching(true);              // se bloquea ya mismo, antes de la transición
@@ -510,6 +634,7 @@
       zone: d.zone || null,
       budget: d.budget || null,
       needs: getActiveNeeds().map(function (n) { return n.label; }),
+      dietary_requirements: dietItems(d.diet),
       status: "new"
     };
   }
@@ -611,7 +736,15 @@
     if (d.guests) parts.push(d.guests + (d.guests === 1 ? " persona" : " personas"));
     if (d.zone) parts.push(d.zone);
     if (d.budget) parts.push("Hasta " + formatMoney(d.budget));
+    var diet = currentDiet();
+    if (diet.length) parts.push(diet.map(dietLabel).join(" · "));
     $("#proposals-summary").textContent = parts.join("  —  ");
+    // Sólo preferencias: se muestran opciones, aclarando que no están verificadas.
+    var notice = $("#diet-notice");
+    notice.textContent = softPreferences().length && !hardRequirements().length
+      ? "Tus preferencias todavía no están verificadas por LISTO. Confirmalas con el lugar."
+      : "";
+    notice.hidden = !notice.textContent;
   }
 
   function setSearching(on) {
@@ -636,9 +769,9 @@
     renderSummary();
     box.innerHTML = "";
 
-    if (sensitiveRequirements().length) {
-      state.options = [];
-      state.optionsAt = Date.now();
+    if (hardRequirements().length) {
+      state.options = null;
+      state.optionsAt = 0;
       state.hasProposals = true;
       renderOptions();
       savePlan();
@@ -682,35 +815,116 @@
       });
   }
 
-  /* ---------- Requisitos sensibles (parche de seguridad) ----------
-     Si el pedido menciona kosher, halal, celiaquía o alergias, NO se muestran las
-     opciones genéricas como si cumplieran: todavía no tenemos lugares verificados. */
+  /* ---------- Restricciones alimentarias ----------
+     El usuario confirma sus restricciones con chips ("¿Alguna restricción?").
+     Kosher, halal, celiaquía y alergias: SIEMPRE obligatorias.
+     Vegano, vegetariano, sin lactosa y menú infantil: preferencia, salvo que el usuario elija "Obligatorio".
+     Todavía no hay proveedores verificados: con cualquier requisito obligatorio NO se muestran
+     opciones genéricas como si cumplieran. Con sólo preferencias, sí, aclarando que no están verificadas. */
   var LISTO_WHATSAPP = "5491158065840";   // +54 11 5806 5840
-  var SENSITIVE = [
-    { label: "Kosher", words: ["kosher", "kasher"] },
-    { label: "Halal", words: ["halal"] },
-    { label: "Apto celíacos / sin TACC", words: ["celiaco", "celiaca", "celiacos", "celiacas", "celiaquia", "sin tacc", "tacc", "apto celiacos"] },
-    { label: "Alergias", words: ["alergia", "alergias", "alergico", "alergica", "alergicos", "alergicas"] },
-    // Mientras no exista la pregunta "¿celiaquía o preferencia?", también se bloquea.
-    { label: "Sin gluten", words: ["sin gluten", "gluten free", "libre de gluten", "intolerancia al gluten"] }
+  var DIET = [
+    { id: "kosher", label: "Kosher", code: "kosher", fixed: true, words: ["kosher", "kasher"] },
+    { id: "halal", label: "Halal", code: "halal", fixed: true, words: ["halal"] },
+    { id: "vegan", label: "Vegano", code: "vegan", words: ["vegano", "vegana", "veganos", "veganas", "vegan", "plant based"] },
+    { id: "vegetarian", label: "Vegetariano", code: "vegetarian", words: ["vegetariano", "vegetariana", "vegetarianos", "vegetarianas"] },
+    { id: "celiac", label: "Sin TACC / Celiaquía", code: "celiac_safe", fixed: true,
+      words: ["celiaco", "celiaca", "celiacos", "celiacas", "celiaquia", "sin tacc", "tacc", "apto celiacos"] },
+    { id: "gluten", label: "Sin gluten", words: ["sin gluten", "gluten free", "libre de gluten", "intolerancia al gluten"] },
+    { id: "lactose", label: "Sin lactosa", code: "lactose_free", words: ["sin lactosa", "intolerancia a la lactosa", "intolerante a la lactosa"] },
+    { id: "allergy", label: "Alergias", code: "allergy", fixed: true, words: ["alergia", "alergias", "alergico", "alergica", "alergicos", "alergicas"] },
+    { id: "kids", label: "Menú infantil", code: "kids_menu", words: ["menu infantil", "kids menu", "menu para chicos", "menu para ninos"] }
   ];
+  var DIET_NAMES = {
+    kosher: "Kosher", halal: "Halal", celiac_safe: "Sin TACC / Celiaquía", gluten_free: "Sin gluten", vegan: "Vegano",
+    vegetarian: "Vegetariano", lactose_free: "Sin lactosa", kids_menu: "Menú infantil", allergy: "Alergia"
+  };
+  var CAN_BE_HARD = ["vegan", "vegetarian", "lactose_free", "kids_menu"];
 
-  function sensitiveRequirements() {
-    var d = state.data || {};
-    var custom = (d.customNeeds || []).filter(function (c) { return c.on; }).map(function (c) { return c.label; });
-    var t = normalize([state.text, d.type].concat(custom).filter(Boolean).join(" "));
-    return SENSITIVE.filter(function (s) {
-      return s.words.some(function (w) { return hasWord(t, w); });
-    }).map(function (s) { return s.label; });
+  function dietById(id) { return DIET.filter(function (r) { return r.id === id; })[0]; }
+
+  function joinY(list) {
+    return list.length < 2 ? list.join("") : list.slice(0, -1).join(", ") + " y " + list[list.length - 1];
   }
 
-  function renderSensitive(labels) {
-    var msg = "Hola LISTO. Quiero que me ayuden a buscar opciones para este plan:\n“" + state.text + "”\nRequisito: " + labels.join(", ") + ".";
+  // "alérgico al maní" → "maní". Sólo si es corto y claro; si no, queda vacío para que lo escriba el usuario.
+  function detectAllergyDetail(text) {
+    var m = /al[eé]rgic[oa]s?\s+(?:a|al)\s+([^.,;:!?\n]+)|alergias?\s+(?:a|al)\s+([^.,;:!?\n]+)/i.exec(String(text || ""));
+    if (!m) return "";
+    var s = (m[1] || m[2] || "").replace(/\s+(para|en|somos|que|con|el d[ií]a)\b.*$/i, "").replace(/^(el|la|los|las)\s+/i, "").trim();
+    return s.length >= 2 && s.length <= 40 && s.split(/\s+/).length <= 4 ? s : "";
+  }
+
+  function detectDiet(text) {
+    var t = normalize(text);
+    var on = {};
+    DIET.forEach(function (r) {
+      if (r.words.some(function (w) { return hasWord(t, w); })) on[r.id] = true;
+    });
+    if (on.celiac) delete on.gluten;   // si ya dijo "celíaco", no hace falta preguntar por "sin gluten"
+    return on;
+  }
+
+  // Estado inicial de la sección: lo que se detectó en el pedido escrito queda marcado.
+  function newDiet(text) {
+    var on = detectDiet(text);
+    return {
+      none: false, on: on, level: {}, gluten: null,
+      allergy: on.allergy ? detectAllergyDetail(text) : "",
+      detected: Object.keys(on), removed: []
+    };
+  }
+
+  // Lo que se guarda en event_requests.dietary_requirements: null = no respondió; [] = eligió "Ninguna".
+  function dietItems(diet) {
+    if (!diet) return null;
+    if (diet.none) return [];
+    var items = [], seen = {};
+    function add(item) { if (!seen[item.code]) { seen[item.code] = true; items.push(item); } }
+    DIET.forEach(function (r) {
+      if (!diet.on[r.id]) return;
+      if (r.id === "gluten") {
+        if (diet.gluten === "celiac") add({ code: "celiac_safe", level: "hard" });
+        else if (diet.gluten === "pref") add({ code: "gluten_free", level: "soft" });
+        return;
+      }
+      if (r.id === "allergy") {
+        var detail = String(diet.allergy || "").replace(/\s+/g, " ").trim().slice(0, 200);
+        if (detail.length >= 2) add({ code: "allergy", level: "hard", detail: detail });
+        return;
+      }
+      add({ code: r.code, level: r.fixed ? "hard" : (diet.level[r.id] === "hard" ? "hard" : "soft") });
+    });
+    return items.length ? items : null;
+  }
+
+  function dietProblem(diet) {
+    if (!diet || diet.none) return "";
+    if (diet.on.gluten && !diet.gluten) return "Contanos si “Sin gluten” es por celiaquía o una preferencia.";
+    if (diet.on.allergy && String(diet.allergy || "").trim().length < 2) return "Contanos a qué sos alérgico/a.";
+    return "";
+  }
+
+  function dietLabel(item) {
+    var name = DIET_NAMES[item.code] || item.code;
+    if (item.code === "allergy") return name + ": " + item.detail;
+    if (item.level === "soft") return name + " (preferencia)";
+    if (CAN_BE_HARD.indexOf(item.code) !== -1) return name + " (obligatorio)";
+    return name;
+  }
+
+  function currentDiet() { return dietItems(state.data && state.data.diet) || []; }
+  function hardRequirements() { return currentDiet().filter(function (i) { return i.level === "hard"; }); }
+  function softPreferences() { return currentDiet().filter(function (i) { return i.level === "soft"; }); }
+
+  function renderSensitive(items) {
+    var labels = items.map(dietLabel);
+    var msg = "Hola LISTO. Quiero que me ayuden a buscar opciones para este plan:\n“" + state.text + "”\n" +
+      (labels.length > 1 ? "Requisitos: " : "Requisito: ") + labels.join(", ") + ".";
     $("#proposals").innerHTML =
       '<div class="proposals-message" role="status">' +
         '<p class="proposals-message-title">Todavía no tenemos opciones verificadas para este requisito en esta zona.</p>' +
         '<p class="proposals-message-text">Pediste: ' + escapeHTML(labels.join(", ")) + '. Para no mostrarte lugares que quizás no cumplan, ' +
-          'LISTO sólo muestra opciones verificadas. Si querés buscar sin este requisito, tocá “Empezar de nuevo” y escribí el pedido sin mencionarlo.</p>' +
+          'LISTO sólo muestra opciones verificadas. Si querés buscar sin este requisito, tocá “Ajustar el plan” y quitalo.</p>' +
         '<div class="proposals-message-actions">' +
           '<a class="btn btn-dark" style="text-decoration:none" href="https://wa.me/' + LISTO_WHATSAPP + '?text=' + encodeURIComponent(msg) +
             '" target="_blank" rel="noopener noreferrer">Pedile a LISTO que lo busque <span aria-hidden="true">→</span></a>' +
@@ -766,8 +980,8 @@
   function renderOptions() {
     var box = $("#proposals");
     var list = state.options || [];
-    var sensitive = sensitiveRequirements();
-    if (sensitive.length) { renderSensitive(sensitive); return; }
+    var hard = hardRequirements();
+    if (hard.length) { renderSensitive(hard); return; }
     if (!list.length) {
       renderMessage("Todavía no.", "No encontramos una opción que encaje todavía. Probá ampliando la zona o cambiando algún detalle.", false);
       return;

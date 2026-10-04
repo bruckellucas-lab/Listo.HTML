@@ -120,6 +120,14 @@
       }
       return r;
     }).then(function (r) {
+      // Si la base todavía no tuviera la columna de restricciones, el pedido se guarda igual (sin ellas).
+      if (!r.ok && "dietary_requirements" in row && (r.code === "PGRST204" || r.code === "42703") && /dietary_requirements/.test(r.detail)) {
+        var plain = {};
+        Object.keys(row).forEach(function (k) { if (k !== "dietary_requirements") plain[k] = row[k]; });
+        return post(cfg, plain);
+      }
+      return r;
+    }).then(function (r) {
       if (r.ok) return { ok: true };
       var reason = classify(r);
       if (window.console) console.error("[LISTO] Supabase no guardó el pedido (" + (r.status || "sin respuesta") + " " + r.code + "):", r.detail);

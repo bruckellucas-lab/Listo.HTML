@@ -27,7 +27,7 @@ var SELECT_BASE = [
   "id", "created_at", "updated_at", "status", "notification_status", "notified_at",
   "contact_name", "contact_phone", "contact_email", "event_date", "approximate_time", "notes", "plan_selection_id",
   "plan_selections(id,created_at,status,event_request_id,provider_google_place_id,provider_name," +
-    "event_requests(id,created_at,event_type,guests,zone,budget,needs,original_prompt)," +
+    "event_requests(id,created_at,event_type,guests,zone,budget,needs,original_prompt,dietary_requirements)," +
     "providers(name,category,address,zone,rating,review_count,maps_url,website))"
 ].join(",");
 // Con cotizaciones: suma contacto con el proveedor y cotizaciones (requiere el SQL del Paso 8).
@@ -65,7 +65,9 @@ function toItem(row) {
       type: req.event_type || null, date: row.event_date, time: row.approximate_time,
       guests: req.guests || null, zone: req.zone || null, budget: req.budget || null,
       needs: Array.isArray(req.needs) ? req.needs : (req.needs ? String(req.needs).split(/,\s*/) : []),
-      notes: row.notes, original_prompt: req.original_prompt || null
+      notes: row.notes, original_prompt: req.original_prompt || null,
+      // null = el usuario no respondió "¿Alguna restricción?"; [] = eligió "Ninguna".
+      dietary: Array.isArray(req.dietary_requirements) ? req.dietary_requirements : null
     },
     provider: {
       name: prov.name || sel.provider_name || null, category: prov.category || null, address: prov.address || null,
@@ -127,9 +129,16 @@ module.exports = async function handler(req, res) {
 
   if (req.method === "GET") {
     try {
-      var list = function (select) {
+      var get = function (select) {
         return store.request(fetch, base + "plan_inquiries?select=" + encodeURIComponent(select) +
           "&order=created_at.desc&limit=" + LIMIT, { method: "GET", headers: store.headersFor(c.key) }, "listar");
+      };
+      // Si la columna de restricciones todavía no existiera, se lista igual (sin ese dato).
+      var list = function (select) {
+        return get(select).catch(function (e) {
+          if (["42703", "PGRST204", "PGRST200"].indexOf(e.code) === -1 || !/dietary_requirements/.test(String(e.message))) throw e;
+          return get(select.replace(",dietary_requirements)", ")"));
+        });
       };
       // Si todavía no se corrió algún SQL (reservas, propuestas o cotizaciones), el panel sigue
       // funcionando sin esa parte: se prueba de lo más completo a lo más básico.

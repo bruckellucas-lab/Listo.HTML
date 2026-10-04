@@ -527,6 +527,27 @@ figcaption {
 .add-need input:focus { border-bottom-color: var(--amber); }
 .add-need input::placeholder { color: rgba(239, 232, 220, .45); text-transform: uppercase; font-size: 12px; letter-spacing: .2em; }
 
+/* ¿Alguna restricción? (mismos chips que "Necesitás"; los detalles, en letra chica) */
+.row-diet .diet-hint, .row-diet .diet-opts, .row-diet .diet-removed { grid-column: 2; }
+.diet-hint { margin: 0 0 4px; font-size: 13px; opacity: .55; }
+.diet-opts { display: grid; gap: 14px; margin-top: 18px; max-width: 620px; }
+.diet-opts:empty { display: none; }
+.diet-opt { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 18px; }
+.diet-opt-label { min-width: 150px; font-size: 11px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; opacity: .7; }
+.diet-question { flex-basis: 100%; margin: 0; font-size: 15px; opacity: .85; }
+.diet-choice, .diet-fixed {
+  padding: 6px 0;
+  border-bottom: 1px solid transparent;
+  font-size: 11px; font-weight: 600; letter-spacing: .18em; text-transform: uppercase;
+  color: rgba(239, 232, 220, .5);
+  transition: color .3s var(--ease), border-color .3s var(--ease);
+}
+.diet-choice:hover { color: var(--cream); }
+.diet-choice[aria-pressed="true"], .diet-fixed { color: var(--cream); border-bottom-color: var(--amber); }
+.diet-opt .add-need { flex: 1 1 260px; margin-top: 0; }
+.diet-removed { margin: 14px 0 0; font-size: 14px; color: var(--amber); }
+.diet-notice { margin-top: 10px; }
+
 .form-error { margin: 18px 0 0; color: var(--danger); font-size: 14px; }
 
 .actions {
@@ -861,6 +882,8 @@ figcaption {
 
   .row { grid-template-columns: 1fr; gap: 4px; padding: 14px 0 12px; }
   .row-needs .needs, .row-needs .add-need { grid-column: 1; }
+  .row-diet .diet-hint, .row-diet .diet-opts, .row-diet .diet-removed { grid-column: 1; }
+  .diet-opt-label { min-width: 0; flex-basis: 100%; }
   .row-input, .row-prefix, .row-suffix { font-size: clamp(38px, 12vw, 60px); }
   .need { font-size: clamp(28px, 9vw, 40px); }
   .stepper-btn { width: 40px; height: 40px; }

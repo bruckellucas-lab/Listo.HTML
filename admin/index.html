@@ -597,7 +597,37 @@
         .map(function (n) { return String(n).trim().toLowerCase(); });
       if (needs.length) s += " Nos interesaría incluir " + listJoin(needs) + ".";
       s += " ¿Tienen disponibilidad? ¿Podrían indicarnos propuesta y precio aproximado para el grupo?";
+      // Restricciones del usuario: el proveedor tiene que confirmarlas.
+      var diet = Array.isArray(p.dietary) ? p.dietary : [];
+      if (diet.length) {
+        s += "\n\nRestricciones:\n" + diet.map(function (d) {
+          if (d.code === "allergy") return "- ALERGIA OBLIGATORIA: " + d.detail;
+          return "- " + (DIET_NAMES[d.code] || d.code) + (d.level === "hard" ? " obligatorio" : " preferido");
+        }).join("\n");
+        if (diet.some(function (d) { return d.level === "hard"; })) {
+          s += "\n\nPor favor, confírmennos si pueden cumplir con lo obligatorio antes de avanzar.";
+        }
+      }
       return s;
+    }
+
+    /* ---------- Restricciones alimentarias del pedido ---------- */
+    var DIET_NAMES = {
+      kosher: "Kosher", halal: "Halal", celiac_safe: "Sin TACC / Celiaquía", gluten_free: "Sin gluten", vegan: "Vegano",
+      vegetarian: "Vegetariano", lactose_free: "Sin lactosa", kids_menu: "Menú infantil", allergy: "Alergia"
+    };
+    // null = no respondió "¿Alguna restricción?"; [] = eligió "Ninguna".
+    function dietNode(list) {
+      if (!Array.isArray(list)) return "No informadas";
+      if (!list.length) return "Ninguna";
+      var box = el("div");
+      list.forEach(function (d) {
+        var parts = [DIET_NAMES[d.code] || d.code];
+        if (d.code === "allergy" && d.detail) parts.push(String(d.detail).charAt(0).toUpperCase() + String(d.detail).slice(1));
+        parts.push(d.level === "hard" ? "Obligatorio" : "Preferencia");
+        box.appendChild(el("div", "", parts.join(" · ")));
+      });
+      return box;
     }
 
     function copyText(text) {
@@ -1159,6 +1189,7 @@
       s1.appendChild(section("Plan", [
         ["Tipo de plan", p.type], ["Fecha", fmtDate(p.date)], ["Horario", p.time], ["Personas", p.guests],
         ["Zona", p.zone], ["Presupuesto", money(p.budget)], ["Necesidades", (p.needs || []).join(", ")],
+        ["Restricciones", dietNode(p.dietary)],
         ["Comentario", p.notes], ["Pedido original", p.original_prompt]
       ]));
       b.appendChild(s1);

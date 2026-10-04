@@ -214,6 +214,14 @@
               </div>
             </div>
 
+            <div class="row row-needs row-diet">
+              <span class="row-label" id="diet-label">¿Alguna restricción?</span>
+              <p class="diet-hint">Seleccioná todas las que apliquen.</p>
+              <div class="needs" id="diet" role="group" aria-labelledby="diet-label"></div>
+              <div class="diet-opts" id="diet-opts"></div>
+              <p class="diet-removed" id="diet-removed" role="status" hidden></p>
+            </div>
+
             <p class="form-error" id="details-error" role="alert" hidden></p>
 
             <div class="actions">
@@ -241,6 +249,7 @@
         <div class="proposals-sub">
           <p class="summary" id="proposals-summary"></p>
           <p class="notice" role="note"><span class="notice-badge">Google Maps</span> Lugares reales. Precio y disponibilidad a confirmar: todavía no reservamos ni cobramos nada.</p>
+          <p class="notice diet-notice" id="diet-notice" role="note" hidden></p>
         </div>
       </div>
 
