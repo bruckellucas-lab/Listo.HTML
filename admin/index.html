@@ -147,6 +147,35 @@
     .metric dl { border-top: 0; padding-top: 0; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; }
     .metric dd { text-align: right; font-weight: 600; margin: 0; }
     .card-booking { margin: 2px 0 0; font-size: 14px; color: var(--ok); }
+
+    /* Pestañas Solicitudes / Proveedores */
+    .tabs { display: flex; gap: 28px; padding: 0 var(--gutter); border-bottom: 1px solid var(--line); }
+    .tab { padding: 14px 0 12px; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--muted); cursor: pointer;
+      font-size: 11px; font-weight: 600; letter-spacing: .2em; text-transform: uppercase; }
+    .tab[aria-pressed="true"] { color: var(--cream); border-bottom-color: var(--amber); }
+    .tab:hover { color: var(--cream); }
+
+    /* Proveedores */
+    .p-note { max-width: 760px; margin: -8px 0 22px; font-size: 14px; }
+    .p-filters { display: flex; flex-wrap: wrap; gap: 12px 18px; }
+    .p-filters label { display: grid; gap: 4px; }
+    .p-filters select { padding: 9px 10px; min-width: 170px; background: var(--ink); border: 1px solid rgba(239, 232, 220, .35); color: var(--cream); color-scheme: dark; border-radius: 0; }
+    .p-meta { margin: 0; color: var(--muted); font-size: 14px; }
+    .p-attrs { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 8px 0 0; }
+    .a-badge { display: inline-block; padding: 3px 8px; border: 1px solid currentColor; font-size: 10px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; }
+    .a-verified { color: var(--ok); }
+    .a-expired { color: var(--amber); border-style: dashed; }
+    .a-unverified { color: #9FB7D9; }
+    .a-no { color: var(--bad); }
+    .a-unknown { color: var(--muted); }
+    .attr { border: 1px solid var(--line); padding: 14px 16px; margin-top: 10px; background: var(--char); }
+    .attr-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
+    .attr-head h4 { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: .18em; text-transform: uppercase; }
+    .attr-lines { margin: 10px 0 0; padding: 0; list-style: none; display: grid; gap: 3px; font-size: 14px; }
+    .attr-lines .muted { font-size: 13px; }
+    .attr .row { margin-top: 12px; }
+    .attr-warn { color: var(--amber); }
+    .p-form-note { margin: 0; font-size: 13px; color: var(--amber); }
     .booking { border: 1px solid var(--line); padding: 14px 16px; margin-top: 10px; background: var(--char); }
     .booking.cancelled { opacity: .7; }
     .b-status { display: inline-block; padding: 4px 9px; border: 1px solid currentColor; font-size: 10px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; }
@@ -173,6 +202,8 @@
       dialog { width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0; border: 0; }
       .top .brand { font-size: 24px; }
       .top-actions .btn { padding: 8px 10px; }
+      .p-filters label { flex: 1 1 140px; }
+      .p-filters select { min-width: 0; width: 100%; }
     }
   </style>
 </head>
@@ -200,7 +231,12 @@
       </div>
     </header>
 
-    <main>
+    <nav class="tabs" aria-label="Secciones del panel">
+      <button type="button" class="tab" id="tab-requests" aria-pressed="true">Solicitudes</button>
+      <button type="button" class="tab" id="tab-providers" aria-pressed="false">Proveedores</button>
+    </nav>
+
+    <main id="requests-view">
       <div class="summary">
         <span class="big" id="new-count">0</span>
         <p><span class="label">Solicitudes nuevas</span><br><span class="muted" id="total-count"></span></p>
@@ -217,12 +253,51 @@
       <div id="state" class="state" hidden></div>
       <div class="list" id="list"></div>
     </main>
+
+    <!-- Proveedores y sus atributos alimentarios (sólo /admin: nada de esto se ve en la web pública) -->
+    <main id="providers-view" hidden>
+      <div class="summary">
+        <span class="big" id="p-count">0</span>
+        <p><span class="label">Proveedores guardados</span><br><span class="muted" id="p-verified-count"></span></p>
+      </div>
+      <p class="muted p-note">Google ayuda a descubrir lugares, pero no verifica restricciones. "Verificado" sólo con evidencia: certificador, web oficial, documento o confirmación del proveedor.</p>
+
+      <div class="toolbar">
+        <input class="search" id="p-search" type="search" placeholder="Buscar proveedor por nombre" autocomplete="off" aria-label="Buscar proveedor">
+        <div class="p-filters">
+          <label><span class="label muted">Zona</span><select id="p-zone"><option value="">Todas</option></select></label>
+          <label><span class="label muted">Categoría</span><select id="p-category"><option value="">Todas</option></select></label>
+          <label><span class="label muted">Atributo</span><select id="p-attr"><option value="">Todos</option></select></label>
+          <label><span class="label muted">Estado</span><select id="p-status">
+            <option value="">Todos</option>
+            <option value="verified">Verificado (vigente)</option>
+            <option value="expired">Verificación vencida</option>
+            <option value="unverified">No verificado</option>
+            <option value="no">No cumple</option>
+            <option value="unknown">Desconocido</option>
+            <option value="none">Sin atributos cargados</option>
+          </select></label>
+        </div>
+        <div class="chips" id="p-quick" role="group" aria-label="Filtros rápidos">
+          <button type="button" class="chip" data-quick="kosher|verified">Kosher verificados</button>
+          <button type="button" class="chip" data-quick="vegan_options|verified">Opciones veganas verificadas</button>
+          <button type="button" class="chip" data-quick="celiac_safe|verified">Aptos celíacos verificados</button>
+          <button type="button" class="chip" data-quick="|expired">Verificaciones vencidas</button>
+          <button type="button" class="chip" data-quick="|none">Sin atributos</button>
+          <button type="button" class="chip" data-quick="|">Limpiar filtros</button>
+        </div>
+      </div>
+
+      <p class="banner" id="p-banner" hidden></p>
+      <div id="p-state" class="state" hidden></div>
+      <div class="list" id="p-list"></div>
+    </main>
   </div>
 
   <!-- Detalle -->
   <dialog id="detail" aria-labelledby="d-title">
     <div class="d-head">
-      <span class="label muted">Solicitud</span>
+      <span class="label muted" id="d-label">Solicitud</span>
       <button class="btn btn-ghost btn-sm" type="button" id="d-close">Cerrar ✕</button>
     </div>
     <div class="d-body" id="d-body"></div>
@@ -376,7 +451,7 @@
         setState("error", "No pudimos cargar.", err.message, true);
       }).then(function () { loading = false; $("refresh").disabled = false; });
     }
-    $("refresh").addEventListener("click", load);
+    $("refresh").addEventListener("click", function () { if (view === "providers") loadProviders(); else load(); });
 
     function matches(it) {
       if (filter !== "all" && viewStatus(it) !== filter) return false;
@@ -1168,6 +1243,7 @@
     }
 
     function openDetail(it) {
+      $("d-label").textContent = "Solicitud";
       var b = $("d-body");
       b.innerHTML = "";
       var dvs = viewStatus(it);
@@ -1311,6 +1387,403 @@
     }
     $("d-close").addEventListener("click", function () { $("detail").close(); });
     $("detail").addEventListener("click", function (e) { if (e.target === $("detail")) $("detail").close(); });
+
+    /* ---------- Proveedores y atributos alimentarios ----------
+       Sólo para el panel. "Verificado" exige evidencia confiable: una señal de Google,
+       reseñas o nombre nunca verifica (lo controla también el servidor y Supabase). */
+
+    var view = "requests";
+    var providers = [];
+    var providersLoaded = false;
+    var providersLoading = false;
+    var pToday = todayAR();
+    var pAttributes = [];
+    var ATTR_LABELS = {
+      kosher: "Kosher", halal: "Halal", celiac_safe: "Apto celíacos / Sin TACC", gluten_free_options: "Opciones sin gluten",
+      vegan_only: "100% vegano", vegan_options: "Opciones veganas", vegetarian_only: "100% vegetariano",
+      vegetarian_options: "Opciones vegetarianas", lactose_free_options: "Opciones sin lactosa", kids_menu: "Menú infantil"
+    };
+    var ATTR_ORDER = Object.keys(ATTR_LABELS);
+    var ATTR_MONTHS = { kosher: 6, halal: 6, celiac_safe: 6 };
+    var STATE_LABELS = { verified: "Verificado", expired: "Verificación vencida", unverified: "No verificado", no: "No cumple", unknown: "Desconocido" };
+    var SOURCE_LABELS = {
+      certifier: "Certificador", official_website: "Web oficial", provider_document: "Documento del proveedor",
+      provider_direct: "Confirmado directamente por el proveedor", other_trusted: "Otra fuente confiable",
+      google_signal: "Señal de Google", review_signal: "Señal en reviews", name_signal: "Señal por nombre"
+    };
+    var TRUSTED_SOURCES = ["certifier", "official_website", "provider_document", "provider_direct", "other_trusted"];
+    var SIGNAL_SOURCES = ["google_signal", "review_signal", "name_signal"];
+    var KOSHER_LABELS = { meat: "Carne", dairy: "Lácteo", parve: "Parve" };
+    var PROVIDER_STATUS = { discovered: "Descubierto en Google" };
+
+    function setView(next) {
+      view = next;
+      $("requests-view").hidden = next !== "requests";
+      $("providers-view").hidden = next !== "providers";
+      $("tab-requests").setAttribute("aria-pressed", next === "requests" ? "true" : "false");
+      $("tab-providers").setAttribute("aria-pressed", next === "providers" ? "true" : "false");
+      if (next === "providers" && !providersLoaded) loadProviders();
+    }
+    $("tab-requests").addEventListener("click", function () { setView("requests"); });
+    $("tab-providers").addEventListener("click", function () { setView("providers"); });
+
+    function attrOf(p, code) { return (p.attributes || []).filter(function (a) { return a.attribute === code; })[0] || null; }
+    function stateOf(a) { return a ? (a.effective_status || a.status) : "unknown"; }
+
+    function loadProviders() {
+      if (providersLoading) return;
+      providersLoading = true;
+      $("refresh").disabled = true;
+      $("p-list").innerHTML = "";
+      setPState("loading");
+      api("GET", "/api/admin-providers").then(function (data) {
+        providers = data.providers || [];
+        pToday = data.today || todayAR();
+        pAttributes = data.attributes || [];
+        providersLoaded = true;
+        var banner = $("p-banner");
+        banner.textContent = data.dietary_ready === false ? "No pudimos leer la tabla provider_dietary_attributes: se muestran los proveedores sin atributos." : "";
+        banner.hidden = !banner.textContent;
+        if (data.count >= data.limit) { banner.textContent = (banner.textContent ? banner.textContent + " " : "") + "Se muestran los primeros " + data.limit + " proveedores (orden alfabético)."; banner.hidden = false; }
+        fillProviderFilters();
+        setPState(null);
+        renderProviders();
+      }).catch(function (err) {
+        if (err.message === "__session__") return;
+        setPState("error", "No pudimos cargar los proveedores.", err.message);
+      }).then(function () { providersLoading = false; $("refresh").disabled = false; });
+    }
+
+    function setPState(kind, title, text) {
+      var s = $("p-state");
+      s.innerHTML = "";
+      if (!kind) { s.hidden = true; return; }
+      s.hidden = false;
+      if (kind === "loading") { s.appendChild(el("p", "label muted", "Cargando proveedores")); s.appendChild(el("span", "loading-line")); return; }
+      s.appendChild(el("p", "state-title", title));
+      if (text) s.appendChild(el("p", "muted", text));
+    }
+
+    function fillSelect(sel, values, labels) {
+      var keep = sel.value;
+      while (sel.options.length > 1) sel.remove(1);
+      values.forEach(function (v) { var o = el("option", "", labels ? labels[v] : v); o.value = v; sel.appendChild(o); });
+      sel.value = values.indexOf(keep) !== -1 ? keep : "";
+    }
+    function uniqueSorted(list) {
+      var seen = {};
+      return list.filter(function (v) { if (!v || seen[v]) return false; seen[v] = true; return true; }).sort(function (a, b) { return a.localeCompare(b, "es"); });
+    }
+    function fillProviderFilters() {
+      fillSelect($("p-zone"), uniqueSorted(providers.map(function (p) { return p.zone; })));
+      fillSelect($("p-category"), uniqueSorted(providers.map(function (p) { return p.category; })));
+      fillSelect($("p-attr"), ATTR_ORDER, ATTR_LABELS);
+    }
+
+    function providerMatches(p) {
+      var q = norm($("p-search").value.trim());
+      if (q && norm(p.name).indexOf(q) === -1) return false;
+      var zone = $("p-zone").value, cat = $("p-category").value, code = $("p-attr").value, st = $("p-status").value;
+      if (zone && p.zone !== zone) return false;
+      if (cat && p.category !== cat) return false;
+      var list = p.attributes || [];
+      if (st === "none") return !list.length;
+      if (code && st) return st === "unknown" ? stateOf(attrOf(p, code)) === "unknown" : stateOf(attrOf(p, code)) === st;
+      if (code) return !!attrOf(p, code);
+      if (st) return list.some(function (a) { return stateOf(a) === st; });
+      return true;
+    }
+
+    function attrBadge(state, text) { return el("span", "a-badge a-" + state, text || STATE_LABELS[state]); }
+
+    function renderProviders() {
+      var list = $("p-list");
+      list.innerHTML = "";
+      var verified = providers.filter(function (p) { return (p.attributes || []).some(function (a) { return stateOf(a) === "verified"; }); }).length;
+      $("p-count").textContent = providers.length;
+      $("p-verified-count").textContent = verified + (verified === 1 ? " con alguna verificación vigente" : " con alguna verificación vigente");
+      $all("#p-quick .chip").forEach(function (b) {
+        var parts = b.getAttribute("data-quick").split("|");
+        var on = parts[0] + parts[1] !== "" && $("p-attr").value === parts[0] && $("p-status").value === parts[1];
+        b.setAttribute("aria-pressed", on ? "true" : "false");
+      });
+      if (!providers.length) { setPState("empty", "Todavía no hay proveedores.", "Se guardan solos cuando alguien busca opciones en la web."); return; }
+      var shown = providers.filter(providerMatches);
+      if (!shown.length) { setPState("empty", "Sin resultados.", "Probá con otro filtro o búsqueda."); return; }
+      setPState(null);
+      shown.forEach(function (p) {
+        var card = el("article", "item");
+        var head = el("div", "item-head");
+        head.appendChild(el("span", "label muted", PROVIDER_STATUS[p.provider_status] || p.provider_status || "Sin estado"));
+        card.appendChild(head);
+        var info = el("div");
+        info.appendChild(el("h2", "name", p.name || "Sin nombre"));
+        info.appendChild(el("p", "p-meta", [p.category, p.zone].filter(Boolean).join(" · ") || "Sin categoría ni zona"));
+        if (p.address) info.appendChild(el("p", "p-meta", p.address));
+        info.appendChild(el("p", "p-meta", typeof p.rating === "number"
+          ? "★ " + p.rating + (typeof p.review_count === "number" ? " · " + p.review_count + " reseñas" : "") : "Sin rating en Google"));
+        var badges = el("div", "p-attrs");
+        ATTR_ORDER.forEach(function (code) {
+          var a = attrOf(p, code);
+          if (!a || a.status === "unknown") return;
+          var st = stateOf(a);
+          badges.appendChild(attrBadge(st, (st === "verified" ? "✓ " : st === "expired" ? "Vencida · " : STATE_LABELS[st] + " · ") + ATTR_LABELS[code]));
+        });
+        if (!badges.children.length) badges.appendChild(el("span", "muted", "Sin atributos cargados"));
+        info.appendChild(badges);
+        card.appendChild(info);
+        var actions = el("div", "item-actions");
+        var links = el("div", "links");
+        if (p.maps_url) links.appendChild(linkBtn(p.maps_url, "Maps"));
+        if (p.website) links.appendChild(linkBtn(p.website, "Web"));
+        actions.appendChild(links);
+        var more = el("button", "btn btn-sm", "Ver detalle");
+        more.type = "button";
+        more.addEventListener("click", function () { openProvider(p); });
+        actions.appendChild(more);
+        card.appendChild(actions);
+        list.appendChild(card);
+      });
+    }
+
+    var pSearchTimer;
+    $("p-search").addEventListener("input", function () { clearTimeout(pSearchTimer); pSearchTimer = setTimeout(renderProviders, 120); });
+    ["p-zone", "p-category", "p-attr", "p-status"].forEach(function (id) { $(id).addEventListener("change", renderProviders); });
+    $all("#p-quick .chip").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var parts = b.getAttribute("data-quick").split("|");
+        $("p-attr").value = parts[0];
+        $("p-status").value = parts[1];
+        renderProviders();
+      });
+    });
+
+    // Suma meses a una fecha AAAA-MM-DD (mismo cálculo que el servidor).
+    function addMonths(day, months) {
+      var p = day.split("-").map(Number);
+      var y = p[0], m = p[1] - 1 + months, d = p[2];
+      y += Math.floor(m / 12); m = ((m % 12) + 12) % 12;
+      var last = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+      return y + "-" + String(m + 1).padStart(2, "0") + "-" + String(Math.min(d, last)).padStart(2, "0");
+    }
+    function dayOf(ts) { return ts ? new Date(Date.parse(ts) - 3 * 3600e3).toISOString().slice(0, 10) : ""; }
+
+    function attrCard(p, code) {
+      var a = attrOf(p, code);
+      var st = stateOf(a);
+      var box = el("div", "attr");
+      box.setAttribute("data-attr", code);
+      var head = el("div", "attr-head");
+      head.appendChild(el("h4", "", ATTR_LABELS[code]));
+      head.appendChild(attrBadge(st));
+      box.appendChild(head);
+      if (a && a.status !== "unknown") {
+        var lines = el("ul", "attr-lines");
+        var add = function (text, cls) { lines.appendChild(el("li", cls || "", text)); };
+        if (a.certifier) add("Certificador: " + a.certifier);
+        if (a.kosher_category) add(KOSHER_LABELS[a.kosher_category] || a.kosher_category);
+        if (a.source_type) add("Fuente: " + (SOURCE_LABELS[a.source_type] || a.source_type));
+        if (a.source_url) { var li = el("li"); li.appendChild(document.createTextNode("Link: ")); var l = el("a", "", a.source_url); l.href = a.source_url; l.target = "_blank"; l.rel = "noopener noreferrer"; li.appendChild(l); lines.appendChild(li); }
+        if (a.verified_at) add((a.status === "no" ? "Comprobado: " : "Verificado: ") + fmtDate(dayOf(a.verified_at)));
+        if (a.review_after) add("Revisar: " + fmtDate(a.review_after));
+        if (a.evidence_valid_until) add("Evidencia válida hasta: " + fmtDate(a.evidence_valid_until));
+        if (a.status === "verified" && a.expires_on) {
+          var early = a.evidence_valid_until && a.review_after && a.evidence_valid_until < a.review_after;
+          add((st === "expired" ? "Venció el " : "Vence el ") + fmtDate(a.expires_on) + (early ? " (la evidencia vence antes que la revisión)" : ""), st === "expired" ? "attr-warn" : "muted");
+        }
+        if (SIGNAL_SOURCES.indexOf(a.source_type) !== -1) add("Es una señal: no verifica la restricción.", "muted");
+        if (a.verification_notes) add("Notas: " + a.verification_notes, "muted");
+        box.appendChild(lines);
+      }
+      var row = el("div", "row");
+      var edit = el("button", "btn btn-ghost btn-sm", a ? "Editar" : "Cargar"); edit.type = "button";
+      var holder = el("div");
+      edit.addEventListener("click", function () {
+        holder.innerHTML = "";
+        holder.appendChild(attrForm(p, code, a, function (saved) {
+          if (saved) { openProvider(p); renderProviders(); } else holder.innerHTML = "";
+        }));
+        var first = holder.querySelector("select, input");
+        if (first) first.focus();
+      });
+      row.appendChild(edit);
+      if (a) {
+        var del = el("button", "btn btn-ghost btn-sm", "Eliminar"); del.type = "button";
+        del.addEventListener("click", function () {
+          if (!window.confirm("¿Eliminar el atributo “" + ATTR_LABELS[code] + "” de " + (p.name || "este proveedor") + "? Se borra la verificación cargada y no se puede deshacer.")) return;
+          del.disabled = true;
+          api("DELETE", "/api/admin-providers", { provider_google_place_id: p.google_place_id, attribute: code }).then(function () {
+            p.attributes = (p.attributes || []).filter(function (x) { return x.attribute !== code; });
+            toast("Atributo eliminado: " + ATTR_LABELS[code]);
+            openProvider(p); renderProviders();
+          }).catch(function (e) { if (e.message !== "__session__") toast(e.message); del.disabled = false; });
+        });
+        row.appendChild(del);
+      }
+      box.appendChild(row);
+      box.appendChild(holder);
+      return box;
+    }
+
+    function attrForm(p, code, existing, onDone) {
+      var f = el("form", "form");
+      f.noValidate = true;
+      var attrSel = options(input("attribute", "select"), ATTR_ORDER.map(function (c) { return [c, ATTR_LABELS[c]]; }));
+      attrSel.value = code;
+      attrSel.disabled = !!existing;
+      f.appendChild(field("Atributo", attrSel));
+      var statusSel = options(input("status", "select"), [["verified", "Verificado"], ["unverified", "No verificado"], ["no", "No cumple"], ["unknown", "Desconocido"]]);
+      statusSel.value = existing ? existing.status : "verified";
+      f.appendChild(field("Estado", statusSel));
+      var sourceSel = input("source_type", "select");
+      options(sourceSel, [["", "Elegí…"]]);
+      var g1 = el("optgroup"); g1.label = "Fuentes confiables";
+      TRUSTED_SOURCES.forEach(function (s) { var o = el("option", "", SOURCE_LABELS[s]); o.value = s; g1.appendChild(o); });
+      var g2 = el("optgroup"); g2.label = "Señales (no verifican)";
+      SIGNAL_SOURCES.forEach(function (s) { var o = el("option", "", SOURCE_LABELS[s]); o.value = s; g2.appendChild(o); });
+      sourceSel.appendChild(g1); sourceSel.appendChild(g2);
+      sourceSel.value = existing && existing.source_type ? existing.source_type : "";
+      f.appendChild(field("Fuente", sourceSel));
+      var urlIn = input("source_url", "url", { maxlength: "1000", placeholder: "https://…" });
+      urlIn.value = existing && existing.source_url || "";
+      f.appendChild(field("Link de la fuente (opcional)", urlIn, true));
+      var certIn = input("certifier", "text", { maxlength: "200", placeholder: "Tal como figura en la evidencia" });
+      certIn.value = existing && existing.certifier || "";
+      var certWrap = field("Certificador / supervisión", certIn);
+      f.appendChild(certWrap);
+      var catSel = options(input("kosher_category", "select"), [["", "No especificada"], ["meat", "Carne"], ["dairy", "Lácteo"], ["parve", "Parve"]]);
+      catSel.value = existing && existing.kosher_category || "";
+      var catWrap = field("Categoría kosher (sólo si la evidencia lo dice)", catSel);
+      f.appendChild(catWrap);
+      var notes = input("verification_notes", "textarea", { rows: "2", maxlength: "2000", placeholder: "Quién lo confirmó, cómo, qué alcance tiene" });
+      notes.value = existing && existing.verification_notes || "";
+      f.appendChild(field("Notas de verificación", notes, true));
+      var vIn = input("verified_at", "date", { max: pToday });
+      vIn.value = existing && existing.verified_at ? dayOf(existing.verified_at) : pToday;
+      f.appendChild(field("Fecha de verificación", vIn));
+      var rIn = input("review_after", "date");
+      rIn.value = existing && existing.review_after || "";
+      var reviewTouched = !!rIn.value;
+      f.appendChild(field("Revisar después de", rIn));
+      var eIn = input("evidence_valid_until", "date");
+      eIn.value = existing && existing.evidence_valid_until || "";
+      f.appendChild(field("Evidencia válida hasta (opcional)", eIn));
+      var preview = el("p", "wide muted");
+      f.appendChild(preview);
+      var signalNote = el("p", "wide p-form-note", "Las señales de Google, reseñas o nombre no verifican: sólo se pueden guardar como “No verificado”.");
+      f.appendChild(signalNote);
+      var err = el("p", "error"); err.hidden = true; f.appendChild(err);
+      var actions = el("div", "row wide");
+      var save = el("button", "btn", "Guardar"); save.type = "submit";
+      var cancel = el("button", "btn btn-ghost", "Cancelar"); cancel.type = "button";
+      cancel.addEventListener("click", function () { onDone(false); });
+      actions.appendChild(save); actions.appendChild(cancel);
+      f.appendChild(actions);
+      // IDs propios del formulario de atributos.
+      Array.prototype.forEach.call(f.querySelectorAll("[id^='q-']"), function (x) { x.id = "pa-" + x.id.slice(2); });
+      Array.prototype.forEach.call(f.querySelectorAll("label[for^='q-']"), function (l) { l.htmlFor = "pa-" + l.htmlFor.slice(2); });
+
+      function sync() {
+        var c = attrSel.value, st = statusSel.value;
+        var needsCert = st === "verified" && (c === "kosher" || c === "halal");
+        certWrap.querySelector("label").textContent = "Certificador / supervisión" + (needsCert ? " (obligatorio)" : " (opcional)");
+        catWrap.hidden = c !== "kosher";
+        if (c !== "kosher") catSel.value = "";
+        var isVerified = st === "verified";
+        Array.prototype.forEach.call(g2.querySelectorAll("option"), function (o) { o.disabled = isVerified; });
+        if (isVerified && SIGNAL_SOURCES.indexOf(sourceSel.value) !== -1) sourceSel.value = "";
+        signalNote.hidden = !(isVerified || SIGNAL_SOURCES.indexOf(sourceSel.value) !== -1);
+        var unknown = st === "unknown";
+        [sourceSel, urlIn, certIn, catSel, vIn, rIn, eIn].forEach(function (x) { x.disabled = unknown; });
+        if (isVerified && !reviewTouched && vIn.value) rIn.value = addMonths(vIn.value, ATTR_MONTHS[c] || 12);
+        var dates = [rIn.value, eIn.value].filter(Boolean).sort();
+        preview.textContent = isVerified && dates[0]
+          ? "Vence efectivamente el " + fmtDate(dates[0]) + (eIn.value && rIn.value && eIn.value < rIn.value ? " (la evidencia vence antes que la revisión)." : ".")
+          : (isVerified ? "" : st === "unknown" ? "Desconocido: no se guarda evidencia." : "");
+      }
+      rIn.addEventListener("input", function () { reviewTouched = !!rIn.value; sync(); });
+      [attrSel, statusSel, sourceSel, vIn, eIn].forEach(function (x) { x.addEventListener("change", sync); x.addEventListener("input", sync); });
+      sync();
+
+      var saving = false;
+      f.addEventListener("submit", function (e) {
+        e.preventDefault();
+        if (saving) return;
+        err.hidden = true;
+        var c = attrSel.value, st = statusSel.value, src = sourceSel.value, cert = certIn.value.trim(), url = urlIn.value.trim();
+        var problem =
+          st === "verified" && !src ? "Para marcar Verificado, elegí la fuente." :
+          st === "verified" && SIGNAL_SOURCES.indexOf(src) !== -1 ? "Una señal de Google, reseñas o nombre NO alcanza para marcar Verificado." :
+          st === "verified" && (c === "kosher" || c === "halal") && cert.length < 2 ? (c === "kosher" ? "Kosher" : "Halal") + " verificado necesita el certificador." :
+          SIGNAL_SOURCES.indexOf(src) !== -1 && st !== "unverified" ? "Una señal sólo puede guardarse como No verificado." :
+          url && !/^https:\/\//.test(url) ? "El link de la fuente tiene que empezar con https://" : "";
+        if (problem) { err.textContent = problem; err.hidden = false; return; }
+        var body = {
+          provider_google_place_id: p.google_place_id, attribute: c, status: st,
+          source_type: src || null, source_url: url || null, certifier: cert || null, kosher_category: catSel.value || null,
+          verification_notes: notes.value.trim() || null, verified_at: vIn.value || null,
+          review_after: rIn.value || null, evidence_valid_until: eIn.value || null
+        };
+        saving = true; save.disabled = true; save.textContent = "Guardando…";
+        api("POST", "/api/admin-providers", body).then(function (data) {
+          p.attributes = (p.attributes || []).filter(function (x) { return x.attribute !== c; }).concat(data.attribute ? [data.attribute] : []);
+          toast("Guardado: " + ATTR_LABELS[c] + " · " + STATE_LABELS[stateOf(data.attribute)]);
+          onDone(true);
+        }).catch(function (e2) {
+          if (e2.message === "__session__") return;
+          err.textContent = e2.message; err.hidden = false;
+          saving = false; save.disabled = false; save.textContent = "Guardar";
+        });
+      });
+      return f;
+    }
+
+    function openProvider(p) {
+      $("d-label").textContent = "Proveedor";
+      var b = $("d-body");
+      b.innerHTML = "";
+      b.appendChild(el("span", "label muted", PROVIDER_STATUS[p.provider_status] || p.provider_status || "Sin estado"));
+      b.appendChild(el("h2", "d-title", p.name || "Sin nombre"));
+      var s1 = block("Datos");
+      var acts = el("div", "d-actions");
+      if (p.maps_url) acts.appendChild(linkBtn(p.maps_url, "Google Maps"));
+      if (p.website) acts.appendChild(linkBtn(p.website, "Website"));
+      s1.appendChild(acts);
+      s1.appendChild(section("", [
+        ["Categoría", p.category], ["Zona", p.zone], ["Dirección", p.address],
+        ["Rating", typeof p.rating === "number" ? "★ " + p.rating : null],
+        ["Reseñas", typeof p.review_count === "number" ? String(p.review_count) : null],
+        ["Estado", PROVIDER_STATUS[p.provider_status] || p.provider_status],
+        ["google_place_id", p.google_place_id, "mono"]
+      ]));
+      b.appendChild(s1);
+      var s2 = block("Restricciones y atributos");
+      s2.appendChild(el("p", "muted", "Google, reseñas o el nombre del lugar no verifican. “Verificado” sólo con evidencia confiable y fecha."));
+      var addRow = el("div", "row");
+      var addBtn = el("button", "btn btn-sm", "+ Agregar atributo"); addBtn.type = "button";
+      var addHolder = el("div");
+      addBtn.addEventListener("click", function () {
+        // Sólo atributos todavía no cargados: los existentes se editan desde su tarjeta (nunca se pisan sin querer).
+        var free = ATTR_ORDER.filter(function (c) { return !attrOf(p, c); });
+        if (!free.length) { toast("Ya están cargados todos los atributos: usá “Editar” en cada uno."); return; }
+        addHolder.innerHTML = "";
+        addHolder.appendChild(attrForm(p, free[0], null, function (saved) {
+          if (saved) { openProvider(p); renderProviders(); } else addHolder.innerHTML = "";
+        }));
+        var fAttr = addHolder.querySelector("select");
+        if (fAttr) {
+          Array.prototype.slice.call(fAttr.options).forEach(function (o) { if (free.indexOf(o.value) === -1) o.remove(); });
+          fAttr.focus();
+        }
+      });
+      addRow.appendChild(addBtn);
+      s2.appendChild(addRow);
+      s2.appendChild(addHolder);
+      ATTR_ORDER.forEach(function (code) { s2.appendChild(attrCard(p, code)); });
+      b.appendChild(s2);
+      var d = $("detail");
+      if (!d.open) { if (d.showModal) d.showModal(); else d.setAttribute("open", ""); }
+    }
 
     /* ---------- Inicio: ¿hay sesión? ---------- */
     api("GET", "/api/admin-login").then(function (data) {
