@@ -5,6 +5,10 @@
    - Marca plan_inquiries.notification_status = 'sent' o 'failed'.
    - El detalle del error queda sólo en los registros de Vercel.
    - No envía nada por WhatsApp: sólo incluye un link para abrirlo.
+   - El email trae SÓLO lo necesario para reaccionar (contacto, WhatsApp,
+     plan, fecha, horario, personas, zona y lugar). No replica el email del
+     usuario, sus comentarios, el pedido original, restricciones
+     alimentarias ni IDs internos: todo eso queda en Supabase / panel.
    ========================================================= */
 "use strict";
 
@@ -48,10 +52,6 @@ function stripFifteen(n) {
   return n;
 }
 
-function money(n) {
-  return typeof n === "number" ? "$" + Math.round(n).toLocaleString("es-AR") : (n ? String(n) : "");
-}
-
 function dateAR(iso) {
   var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ""));
   return m ? m[3] + "/" + m[2] + "/" + m[1] : String(iso || "");
@@ -63,36 +63,22 @@ function nowAR() {
   } catch (e) { return new Date().toISOString(); }
 }
 
-function needsText(needs) {
-  if (Array.isArray(needs)) return needs.join(", ");
-  return needs ? String(needs) : "";
-}
-
-// Arma el email con todo el contexto (sólo para el equipo de LISTO).
+// Arma el email con lo mínimo para reaccionar (sólo para el equipo de LISTO).
+// El resto del detalle (comentarios, pedido original, restricciones, email) se ve en /admin.
 function buildEmail(ctx) {
   var r = ctx.request || {}, p = ctx.provider || {}, c = ctx.contact || {};
   var wa = whatsappNumber(c.contact_phone);
   var waLink = wa ? "https://wa.me/" + wa : "";
-  var rating = typeof p.rating === "number" ? "★ " + p.rating + (typeof p.review_count === "number" ? " (" + p.review_count + " reseñas)" : "") : "";
   var rows = [
     ["Contacto", c.contact_name],
     ["WhatsApp", c.contact_phone],
-    ["Email", c.contact_email],
     ["Plan", r.event_type],
     ["Fecha", dateAR(c.event_date)],
     ["Horario", c.approximate_time],
     ["Personas", r.guests],
     ["Zona", r.zone],
-    ["Presupuesto", money(r.budget)],
-    ["Necesidades", needsText(r.needs)],
-    ["Comentario", c.notes],
     ["Proveedor elegido", p.name || ctx.providerName],
-    ["Dirección", p.address],
-    ["Rating", rating],
     ["Google Maps", p.maps_url],
-    ["Pedido original", r.original_prompt],
-    ["event_request_id", ctx.eventRequestId],
-    ["plan_selection_id", ctx.selectionId],
     ["Recibido", ctx.receivedAt]
   ].filter(function (row) { return row[1] !== null && row[1] !== undefined && row[1] !== ""; });
 
@@ -102,7 +88,7 @@ function buildEmail(ctx) {
   var html = '<div style="font-family:Arial,Helvetica,sans-serif;max-width:640px;margin:0 auto;color:#141210">' +
     '<p style="font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#5E4431;margin:0 0 8px">LISTO · Quiero avanzar</p>' +
     '<h1 style="font-size:24px;margin:0 0 6px">' + esc(ctx.updated ? "Solicitud actualizada" : "Nueva solicitud") + '</h1>' +
-    '<p style="margin:0 0 18px;color:#5A5046">Todavía no hay reserva confirmada: hay que consultar disponibilidad y condiciones con el lugar.</p>' +
+    '<p style="margin:0 0 18px;color:#5A5046">Todavía no hay reserva confirmada: hay que consultar disponibilidad y condiciones con el lugar. El detalle completo está en /admin.</p>' +
     (waLink ? '<p style="margin:0 0 22px"><a href="' + esc(waLink) + '" style="display:inline-block;background:#141210;color:#EFE8DC;text-decoration:none;padding:14px 22px;font-weight:bold;letter-spacing:2px;font-size:13px">ABRIR WHATSAPP</a></p>' : '') +
     '<table cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;font-size:14px">' +
     rows.map(function (row) {
@@ -114,7 +100,7 @@ function buildEmail(ctx) {
     '</table></div>';
 
   var text = (ctx.updated ? "Solicitud actualizada" : "Nueva solicitud") + " — LISTO\n" +
-    "Todavía no hay reserva confirmada.\n\n" +
+    "Todavía no hay reserva confirmada. El detalle completo está en /admin.\n\n" +
     rows.map(function (row) { return row[0] + ": " + row[1]; }).join("\n") +
     (waLink ? "\n\nABRIR WHATSAPP: " + waLink : "");
 
@@ -128,8 +114,8 @@ function loadContext(cfg, eventRequestId, placeId, fetchImpl) {
     return store.request(doFetch, api(cfg, path), { method: "GET", headers: store.headersFor(cfg.key) }, step).then(first);
   };
   return Promise.all([
-    get("event_requests?select=event_type,guests,zone,budget,needs,original_prompt&id=eq." + encodeURIComponent(eventRequestId), "leer pedido"),
-    get("providers?select=name,address,rating,review_count,maps_url&google_place_id=eq." + encodeURIComponent(placeId), "leer proveedor")
+    get("event_requests?select=event_type,guests,zone&id=eq." + encodeURIComponent(eventRequestId), "leer pedido"),
+    get("providers?select=name,maps_url&google_place_id=eq." + encodeURIComponent(placeId), "leer proveedor")
   ]).then(function (res) { return { request: res[0] || {}, provider: res[1] || {} }; });
 }
 
@@ -184,8 +170,7 @@ function notifyInquiry(cfg, info, fetchImpl) {
       }).then(function (ctx) {
         return sendEmail(apiKey, buildEmail({
           request: ctx.request, provider: ctx.provider, contact: info.contact,
-          providerName: info.providerName, eventRequestId: info.eventRequestId,
-          selectionId: info.selectionId, updated: info.updated, receivedAt: nowAR()
+          providerName: info.providerName, updated: info.updated, receivedAt: nowAR()
         }), fetchImpl);
       });
 
@@ -221,7 +206,6 @@ function buildProposalEmail(ctx) {
     ["Comentario del usuario", ctx.comment],
     ["Contacto", c.contact_name],
     ["WhatsApp", c.contact_phone],
-    ["Email", c.contact_email],
     ["Proveedor", providerName],
     ["Dirección", p.address],
     ["Plan", r.event_type],
@@ -263,7 +247,7 @@ function notifyProposalResponse(cfg, info, fetchImpl) {
   var apiKey = String(process.env.RESEND_API_KEY || "").trim();
   if (!apiKey) { console.error("[notify] respuesta de propuesta sin email: falta RESEND_API_KEY"); return Promise.resolve(false); }
   var doFetch = fetchImpl || fetch;
-  var path = "plan_inquiries?select=contact_name,contact_phone,contact_email,event_date,approximate_time," +
+  var path = "plan_inquiries?select=contact_name,contact_phone,event_date,approximate_time," +
     "plan_selections(provider_name,event_requests(event_type,guests,zone),providers(name,address))&id=eq." + encodeURIComponent(info.planInquiryId);
   return store.request(doFetch, api(cfg, path), { method: "GET", headers: store.headersFor(cfg.key) }, "leer contexto propuesta")
     .then(first, function (err) {

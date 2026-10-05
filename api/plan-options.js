@@ -16,21 +16,7 @@ var places = require("./_lib/google-places");
 var store = require("./_lib/providers-store");
 var photos = require("./_lib/photos");
 var plan = require("./_lib/plan");
-
-// Límite simple por visitante (por instancia del servidor): evita ráfagas que gasten cuota.
-var WINDOW_MS = 10 * 60 * 1000;
-var MAX_PER_WINDOW = 30;
-var hits = {};
-
-function rateLimited(req) {
-  var ip = String(req.headers["x-forwarded-for"] || req.socket && req.socket.remoteAddress || "?").split(",")[0].trim();
-  var now = Date.now();
-  var list = (hits[ip] || []).filter(function (t) { return now - t < WINDOW_MS; });
-  list.push(now);
-  hits[ip] = list;
-  if (Object.keys(hits).length > 5000) hits = {};
-  return list.length > MAX_PER_WINDOW;
-}
+var rateLimit = require("./_lib/rate-limit");
 
 function sendError(res, status, message) {
   return http.sendJson(res, status, { ok: false, error: message });
@@ -47,9 +33,9 @@ module.exports = async function handler(req, res) {
   if (!plan.CATEGORIES[category]) return sendError(res, 400, "Tipo de lugar no válido.");
   var zone = plan.cleanZone(q.zone);
 
-  if (rateLimited(req)) {
-    return sendError(res, 429, "Hiciste muchas búsquedas seguidas. Esperá unos minutos y probá de nuevo.");
-  }
+  // Límite por visitante (persistente en Supabase; si Supabase no responde, en memoria:
+  // la búsqueda nunca se cae por esto).
+  if (!(await rateLimit.guard(req, res, "plan_options", { limitMessage: "Hiciste muchas búsquedas seguidas. Esperá unos minutos y probá de nuevo." }))) return;
 
   var apiKey = http.env("GOOGLE_PLACES_API_KEY");
   if (!apiKey) return sendError(res, 503, "LISTO no puede buscar lugares en este momento. Probá de nuevo más tarde.");
@@ -84,7 +70,8 @@ module.exports = async function handler(req, res) {
   }
 
   // 3) Elegir 3 y armar lo que ve el usuario (sólo datos informados por Google).
-  var secret = http.env("LISTO_ADMIN_TOKEN");
+  // Sin PHOTO_SIGNING_SECRET las opciones salen igual, sin foto (placeholder de LISTO).
+  var secret = photos.signingSecret();
   var options = plan.pickOptions(converted.rows, zone, statusById, 3).map(function (row) {
     var photo = secret ? photos.photosForPlace(placeById[row.google_place_id], secret, { max: 1 })[0] || null : null;
     return {

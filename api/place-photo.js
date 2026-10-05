@@ -20,7 +20,7 @@ module.exports = async function handler(req, res) {
   }
 
   var q = http.queryOf(req);
-  var problem = photos.verify(http.env("LISTO_ADMIN_TOKEN"), q.name, q.w, q.exp, q.sig);
+  var problem = photos.verify(photos.signingSecret(), q.name, q.w, q.exp, q.sig);
   if (problem) {
     var status = problem === "sin-secreto" ? 503 : problem === "vencido" ? 410 : 403;
     return http.sendJson(res, status, { ok: false, error: "Link de foto no válido (" + problem + ")." });

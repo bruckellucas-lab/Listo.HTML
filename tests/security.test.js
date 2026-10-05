@@ -22,7 +22,7 @@ global.fetch = function () { throw new Error("Las pruebas no deben llamar a inte
 var http = require("../api/_lib/http");
 var auth = require("../api/_lib/admin-auth");
 
-var FRONTEND = ["index.html", "app.js", "config.js", "supabase.js", "styles.css", "admin/index.html", "propuesta/index.html"];
+var FRONTEND = ["index.html", "app.js", "event-request.js", "styles.css", "admin/index.html", "propuesta/index.html"];
 var MAX_FUNCTIONS = 12;   // límite de Vercel Hobby
 
 function fakeRes() {
@@ -50,7 +50,7 @@ async function call(file, req) {
 }
 
 // Escrituras que tienen que exigir JSON.
-var PUBLIC_WRITES = [["plan-selection.js", "POST"], ["plan-inquiry.js", "POST"], ["proposal.js", "POST"]];
+var PUBLIC_WRITES = [["event-request.js", "POST"], ["plan-selection.js", "POST"], ["plan-inquiry.js", "POST"], ["proposal.js", "POST"]];
 var ADMIN_WRITES = [
   ["admin-login.js", "POST"], ["admin-inquiries.js", "PATCH"], ["admin-quotes.js", "POST"], ["admin-proposals.js", "POST"],
   ["admin-bookings.js", "POST"], ["admin-bookings.js", "PATCH"], ["admin-providers.js", "POST"], ["admin-providers.js", "DELETE"]
@@ -62,21 +62,32 @@ test("frontend: ninguna clave privada ni nombre de variable secreta", function (
     assert.doesNotMatch(s, /sb_secret_[A-Za-z0-9_-]{10,}/, f);
     assert.doesNotMatch(s, /AIza[0-9A-Za-z_-]{30,}/, f + ": clave de Google");
     // (el panel sí puede nombrar ADMIN_PASSWORD en un aviso de configuración: es el nombre, no el valor)
-    assert.doesNotMatch(s, /SUPABASE_SECRET_KEY|GOOGLE_PLACES_API_KEY|LISTO_ADMIN_TOKEN|RESEND_API_KEY|process\.env/, f);
+    assert.doesNotMatch(s, /SUPABASE_SECRET_KEY|GOOGLE_PLACES_API_KEY|LISTO_ADMIN_TOKEN|RESEND_API_KEY|RATE_LIMIT_SECRET|PHOTO_SIGNING_SECRET|process\.env/, f);
   });
 });
 
-test("config.js usa sólo la clave pública de Supabase", function () {
-  var m = /supabaseKey:\s*"([^"]*)"/.exec(read("config.js"));
-  assert.ok(m, "config.js tiene supabaseKey");
-  var key = m[1];
-  assert.doesNotMatch(key, /^sb_secret_/);
-  if (/^eyJ/.test(key)) {
-    var role = JSON.parse(Buffer.from(key.split(".")[1], "base64").toString()).role;
-    assert.notEqual(role, "service_role");
-  } else {
-    assert.match(key, /^(sb_publishable_|PEGAR_ACA)/);
-  }
+test("el navegador ya no escribe en Supabase ni tiene claves de Supabase", function () {
+  assert.equal(fs.existsSync(path.join(ROOT, "config.js")), false, "config.js se eliminó");
+  assert.equal(fs.existsSync(path.join(ROOT, "supabase.js")), false, "supabase.js se eliminó");
+  FRONTEND.forEach(function (f) {
+    var s = read(f);
+    assert.doesNotMatch(s, /\/rest\/v1|supabase\.co|sb_publishable_|sb_secret_|LISTO_CONFIG|["']apikey["']/i, f);
+  });
+  var html = read("index.html");
+  assert.match(html, /<script src="event-request\.js"><\/script>\s*<script src="app\.js"><\/script>/);
+  assert.doesNotMatch(html, /config\.js|supabase\.js/);
+  var client = read("event-request.js");
+  assert.match(client, /var ENDPOINT = "\/api\/event-request";/);
+  assert.match(client, /"Content-Type": "application\/json"/);
+});
+
+test("LISTO_ADMIN_TOKEN no se usa en ningún lado del código", function () {
+  var files = FRONTEND.slice();
+  ["api", "api/_lib"].forEach(function (dir) {
+    fs.readdirSync(path.join(ROOT, dir)).filter(function (f) { return /\.js$/.test(f); }).forEach(function (f) { files.push(dir + "/" + f); });
+  });
+  assert.ok(files.length > 20);
+  files.forEach(function (f) { assert.doesNotMatch(read(f), /LISTO_ADMIN_TOKEN/, f); });
 });
 
 test("repositorio: ningún archivo guardado con claves reales", function () {
@@ -186,7 +197,10 @@ test("vercel.json: encabezados de seguridad globales y los de /propuesta", funct
 test("Vercel Hobby: como máximo " + MAX_FUNCTIONS + " funciones en /api", function () {
   var fns = fs.readdirSync(path.join(ROOT, "api")).filter(function (f) { return /\.js$/.test(f) && f[0] !== "_"; });
   assert.ok(fns.length <= MAX_FUNCTIONS, "hay " + fns.length + " funciones: " + fns.join(", "));
-  ["plan-options.js", "place-photo.js"].forEach(function (f) { assert.ok(fns.indexOf(f) !== -1, "falta " + f); });
+  ["plan-options.js", "place-photo.js", "event-request.js"].forEach(function (f) { assert.ok(fns.indexOf(f) !== -1, "falta " + f); });
+  assert.deepEqual(fns.slice().sort(), ["admin-bookings.js", "admin-inquiries.js", "admin-login.js", "admin-proposals.js", "admin-providers.js",
+    "admin-quotes.js", "event-request.js", "place-photo.js", "plan-inquiry.js", "plan-options.js", "plan-selection.js", "proposal.js"],
+    "no apareció ninguna función nueva sin querer");
 });
 
 test("respuestas JSON: sin caché y sin indexar", function () {

@@ -11,20 +11,7 @@
 var http = require("./_lib/http");
 var photos = require("./_lib/photos");
 var selections = require("./_lib/selections");
-
-var WINDOW_MS = 10 * 60 * 1000;
-var MAX_PER_WINDOW = 40;
-var hits = {};
-
-function rateLimited(req) {
-  var ip = String(req.headers["x-forwarded-for"] || (req.socket && req.socket.remoteAddress) || "?").split(",")[0].trim();
-  var now = Date.now();
-  var list = (hits[ip] || []).filter(function (t) { return now - t < WINDOW_MS; });
-  list.push(now);
-  hits[ip] = list;
-  if (Object.keys(hits).length > 5000) hits = {};
-  return list.length > MAX_PER_WINDOW;
-}
+var rateLimit = require("./_lib/rate-limit");
 
 function readBody(req) {
   if (req.body && typeof req.body === "object") return Promise.resolve(req.body);
@@ -42,9 +29,8 @@ module.exports = async function handler(req, res) {
     res.setHeader("Allow", "POST");
     return http.sendJson(res, 405, { ok: false, error: "Método no permitido." });
   }
-  if (rateLimited(req)) return http.sendJson(res, 429, { ok: false, error: "Demasiados intentos seguidos. Esperá unos minutos." });
-
   if (!http.requireJson(req, res)) return;
+  if (!(await rateLimit.guard(req, res, "plan_selection"))) return;
   var body = await readBody(req);
   var requestId = body && String(body.event_request_id || "");
   var placeId = body && String(body.google_place_id || "");

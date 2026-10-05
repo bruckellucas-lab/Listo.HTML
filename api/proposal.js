@@ -20,12 +20,12 @@ var store = require("./_lib/providers-store");
 var photos = require("./_lib/photos");
 var proposals = require("./_lib/proposals");
 var notify = require("./_lib/notify");
+var rateLimit = require("./_lib/rate-limit");
 
 var WINDOW_MS = 10 * 60 * 1000;
 var MAX_VIEWS = 60;        // aperturas por IP cada 10 minutos
 var MAX_MISSES = 8;        // códigos inexistentes por IP cada 10 minutos (corta los intentos de adivinar)
-var MAX_ANSWERS = 10;      // respuestas por IP cada 10 minutos
-var hits = { view: {}, miss: {}, answer: {} };
+var hits = { view: {}, miss: {} };   // las respuestas se limitan en Supabase (rate-limit.js)
 
 function ipOf(req) {
   return String(req.headers["x-forwarded-for"] || (req.socket && req.socket.remoteAddress) || "?").split(",")[0].trim();
@@ -43,8 +43,8 @@ function count(kind, ip, add) {
 var PHOTO_TTL_MS = 50 * 60 * 1000;
 var photoCache = {};
 async function photoFor(placeId) {
-  var apiKey = http.env("GOOGLE_PLACES_API_KEY"), secret = http.env("LISTO_ADMIN_TOKEN");
-  if (!placeId || !photos.PLACE_ID_RE.test(placeId) || !apiKey || secret.length < 12) return null;
+  var apiKey = http.env("GOOGLE_PLACES_API_KEY"), secret = photos.signingSecret();
+  if (!placeId || !photos.PLACE_ID_RE.test(placeId) || !apiKey || !secret) return null;
   var hit = photoCache[placeId];
   if (hit && Date.now() - hit.at < PHOTO_TTL_MS) return hit.photo;
   try {
@@ -127,10 +127,11 @@ async function handleGet(req, res, cfg) {
 
 async function handlePost(req, res, cfg) {
   var ip = ipOf(req);
-  if (count("miss", ip, false) >= MAX_MISSES || count("answer", ip, true) > MAX_ANSWERS) {
+  if (count("miss", ip, false) >= MAX_MISSES) {
     return http.sendJson(res, 429, { ok: false, error: "Demasiados intentos seguidos. Esperá unos minutos." });
   }
   if (!http.requireJson(req, res)) return;
+  if (!(await rateLimit.guard(req, res, "proposal_response"))) return;
   var body = await http.readJson(req, 6000);
   if (!body || typeof body !== "object") return http.sendJson(res, 400, { ok: false, error: "No pudimos leer tu respuesta. Probá de nuevo." });
   var code = String(body.code || "");

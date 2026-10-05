@@ -11,8 +11,8 @@ Escribís lo que querés hacer (una cena, un cumpleaños, una juntada, una noche
 - `index.html`: el contenido de las tres pantallas (inicio, "esto entendimos" y opciones).
 - `styles.css`: el diseño editorial (tipografía Anton + Inter, paleta carbón/crema/madera, adaptación a celular).
 - `app.js`: la lógica. Interpreta el texto, deja editar cada dato tocándolo y muestra 3 lugares reales (con fotos, Maps, compartir y elegir).
-- `config.js`: **el único archivo donde se pegan los datos de Supabase** (Project URL y clave pública).
-- `supabase.js`: guarda cada pedido en la tabla `event_requests` al tocar "Buscar opciones".
+- `event-request.js`: al tocar "Buscar opciones", manda el pedido a `/api/event-request`. La web no tiene ninguna clave de Supabase.
+- `api/event-request.js`: valida el pedido y lo guarda en `event_requests` desde Vercel (clave secreta).
 
 Para activar el guardado en Supabase, seguí la guía paso a paso: [SUPABASE.md](SUPABASE.md).
 
@@ -54,13 +54,19 @@ Para cambiar una foto, buscá en los archivos el código que empieza con `photo-
 
 - `tests/`: pruebas sin dependencias (sólo Node 18 o más nuevo). No llaman a Google, Supabase ni Resend.
 - `npm run check`: revisa la sintaxis de todos los archivos y que `/api` no pase de **12 funciones** (el límite de Vercel Hobby; con 13 el deploy falla).
-- `npm test`: corre las pruebas (lugares, propuestas, reservas y comisión, restricciones alimentarias y controles de seguridad).
+- `npm test`: corre las pruebas (lugares, propuestas, reservas y comisión, restricciones alimentarias, guardado de pedidos, límite de pedidos, firma de fotos, email interno y controles de seguridad).
+- `supabase/migrations/`: cambios de la base versionados desde P1A (se corren a mano; ver su README).
 - `.github/workflows/test.yml`: GitHub corre ambos controles en cada push y pull request. No publica nada.
 
 ### Seguridad
 
 - Las claves privadas viven sólo en Vercel. La web nunca las ve.
 - Los pedidos que guardan o cambian datos tienen que llegar como JSON (si no, responden 415).
+- El navegador no escribe en Supabase: todo pasa por `/api` (Vercel).
+- Límite de pedidos por visitante **persistente** en Supabase (`api/_lib/rate-limit.js` + migration `supabase/migrations/20261005120000_p1a_rate_limits.sql`). Se guarda una huella HMAC, nunca la IP. Necesita `RATE_LIMIT_SECRET` en Vercel.
+- Las fotos se firman con `PHOTO_SIGNING_SECRET` (sólo para eso).
+- El email interno de cada solicitud lleva sólo lo necesario para reaccionar; el resto se ve en /admin.
+- Pendiente P1B: Cloudflare Turnstile (anti-robots) en los formularios públicos.
 - `vercel.json` agrega a todas las páginas: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY` (nadie puede meter LISTO dentro de otra página) y `Permissions-Policy` (sin cámara, micrófono ni ubicación).
 - Pendiente a futuro: una Content-Security-Policy estricta. Hoy no se activa porque la web usa scripts y estilos dentro del HTML y fotos/tipografías externas; activarla sin preparar eso rompería la página.
 

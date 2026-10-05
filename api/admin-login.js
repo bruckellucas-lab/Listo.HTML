@@ -9,6 +9,7 @@
 
 var http = require("./_lib/http");
 var auth = require("./_lib/admin-auth");
+var rateLimit = require("./_lib/rate-limit");
 
 module.exports = async function handler(req, res) {
   if (req.method === "GET") {
@@ -31,6 +32,7 @@ module.exports = async function handler(req, res) {
   }
 
   if (!http.requireJson(req, res)) return;
+  if (!(await rateLimit.guard(req, res, "admin_login"))) return;
   var body = await http.readJson(req, 2000);
   if (!body || !auth.checkPassword(body.password)) {
     auth.registerFail(req);

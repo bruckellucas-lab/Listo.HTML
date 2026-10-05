@@ -89,13 +89,15 @@ Tipos de columna recomendados para `providers`:
 | `GOOGLE_PLACES_API_KEY` | La clave de Google (`AIza...`) del Paso 2 |
 | `SUPABASE_URL` | Tu Project URL, por ejemplo `https://exofavwtifiqaeyvybpc.supabase.co` |
 | `SUPABASE_SECRET_KEY` | La clave secreta `sb_secret_...` del Paso 4b |
-| `LISTO_ADMIN_TOKEN` | Una contraseña que inventes vos, de **12 caracteres o más** (por ejemplo `listo-prueba-2026-palermo`) |
+| `PHOTO_SIGNING_SECRET` | Secreto aleatorio largo para firmar fotos (**32 caracteres o más**, generado al azar; no lo reutilices en otra variable) |
 
 3. En **Environments** dejá marcados **Production** y **Preview**. Si aparece la opción **Sensitive**, activala.
 4. Tocá **Save** en cada una.
 5. **Importante:** las variables se aplican solo a publicaciones nuevas. Andá a **Deployments** → en la más reciente tocá **⋯** → **Redeploy** → **Redeploy**.
 
-`LISTO_ADMIN_TOKEN` se usa para firmar los links de las fotos (ver "Fotos reales de Google Places"). Sin esa variable, las fotos no se muestran.
+`PHOTO_SIGNING_SECRET` se usa **sólo** para firmar los links de las fotos (ver "Fotos reales de Google Places"). Si falta, la búsqueda funciona igual pero las opciones salen sin foto (con el placeholder de LISTO), y `/api/place-photo` rechaza los links.
+
+> `LISTO_ADMIN_TOKEN` ya no se usa (antes firmaba las fotos). Desde P1A se puede borrar de Vercel, una vez que P1A esté en producción.
 
 ---
 
@@ -136,7 +138,7 @@ Tipos de columna recomendados para `providers`:
 
 1. **La búsqueda trae las referencias de fotos** (campo `places.photos`). No cambia el costo de la búsqueda: ya se cobraba como *Text Search Enterprise* por pedir rating y sitio web.
 2. **Por cada foto, el servidor arma un link propio y firmado**: `/api/place-photo?name=…&w=…&exp=…&sig=…`.
-   - La firma usa tu `LISTO_ADMIN_TOKEN`, así que **no hace falta ninguna variable nueva**.
+   - La firma usa `PHOTO_SIGNING_SECRET` (sólo para esto; nunca llega al navegador).
    - Vence en **1 hora**.
    - Nadie puede cambiarle el tamaño ni usarlo para otra foto.
 3. **Cuando el navegador muestra la foto**, `/api/place-photo` le pide a Google la imagen (*Place Photos New*, con la clave en el servidor) y redirige a la URL temporal de Google. Esa URL **no contiene la clave**.

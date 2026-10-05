@@ -4,7 +4,8 @@
    Cómo funciona, sin exponer la clave de Google:
    1) Google nos da "referencias" de fotos (places/ID/photos/REF)
       junto con la búsqueda o el detalle del lugar.
-   2) Por cada referencia armamos un link propio y FIRMADO:
+   2) Por cada referencia armamos un link propio y FIRMADO
+      (con PHOTO_SIGNING_SECRET, que se usa sólo para esto):
         /api/place-photo?name=...&w=480&exp=...&sig=...
       La firma impide que otros usen ese link para gastar cuota,
       y vence en 1 hora.
@@ -25,6 +26,15 @@ var LINK_TTL_SECONDS = 60 * 60;           // los links firmados duran 1 hora
 var MAX_PHOTOS_PER_PLACE = 6;             // tope para la galería del detalle
 var NAME_RE = /^places\/[A-Za-z0-9_-]{10,500}\/photos\/[A-Za-z0-9_-]{10,4096}$/;
 var PLACE_ID_RE = /^[A-Za-z0-9_-]{10,500}$/;
+var MIN_SECRET = 32;
+
+// Secreto SÓLO para firmar fotos (variable PHOTO_SIGNING_SECRET en Vercel).
+// Si falta o es corto, devuelve "": las opciones se muestran sin foto
+// (con el placeholder de LISTO) y /api/place-photo rechaza todos los links.
+function signingSecret() {
+  var s = String(process.env.PHOTO_SIGNING_SECRET || "").trim();
+  return s.length >= MIN_SECRET ? s : "";
+}
 
 function signingKey(secret) {
   return "listo-photo:" + secret;
@@ -141,6 +151,8 @@ module.exports = {
   ALLOWED_WIDTHS: ALLOWED_WIDTHS,
   LINK_TTL_SECONDS: LINK_TTL_SECONDS,
   MAX_PHOTOS_PER_PLACE: MAX_PHOTOS_PER_PLACE,
+  MIN_SECRET: MIN_SECRET,
+  signingSecret: signingSecret,
   PLACE_ID_RE: PLACE_ID_RE,
   signedSrc: signedSrc,
   verify: verify,
