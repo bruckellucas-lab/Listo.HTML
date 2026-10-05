@@ -54,6 +54,7 @@ module.exports = async function handler(req, res) {
   }
   if (rateLimited(req)) return http.sendJson(res, 429, { ok: false, error: "Demasiados intentos seguidos. Esperá unos minutos." });
 
+  if (!http.requireJson(req, res)) return;
   var body = await readBody(req);
   if (!body || typeof body !== "object") return http.sendJson(res, 400, { ok: false, error: "No pudimos leer el formulario. Probá de nuevo." });
 

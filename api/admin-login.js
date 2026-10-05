@@ -30,6 +30,7 @@ module.exports = async function handler(req, res) {
     return http.sendJson(res, 429, { ok: false, error: "Demasiados intentos fallidos. Esperá 15 minutos y probá de nuevo." });
   }
 
+  if (!http.requireJson(req, res)) return;
   var body = await http.readJson(req, 2000);
   if (!body || !auth.checkPassword(body.password)) {
     auth.registerFail(req);

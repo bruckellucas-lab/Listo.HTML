@@ -5,11 +5,12 @@
 "use strict";
 
 // Únicas categorías que la web puede pedir (no se aceptan búsquedas libres).
-var CATEGORIES = {
+// Sin "prototipo": así "constructor" o "toString" no pasan como categoría.
+var CATEGORIES = Object.assign(Object.create(null), {
   restaurantes: "restaurantes",
   bares: "bares",
   salones: "salones para eventos"
-};
+});
 
 // Barrios y localidades de Buenos Aires: se les agrega ", Buenos Aires" para que
 // Google no confunda, por ejemplo, Belgrano (CABA) con otra localidad.

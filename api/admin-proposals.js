@@ -39,6 +39,7 @@ module.exports = async function handler(req, res) {
   var url = http.env("SUPABASE_URL"), key = http.env("SUPABASE_SECRET_KEY");
   if (!url || !key || /^sb_publishable_/.test(key)) return http.sendJson(res, 503, { ok: false, error: "Falta configurar Supabase en Vercel." });
 
+  if (!http.requireJson(req, res)) return;
   var body = await http.readJson(req, 2000);
   if (!body) return http.sendJson(res, 400, { ok: false, error: "No pudimos leer el pedido." });
   var inquiryId = String(body.plan_inquiry_id || ""), quoteId = String(body.provider_quote_id || "");

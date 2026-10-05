@@ -1,8 +1,6 @@
 /* LISTO — utilidades compartidas por las funciones de Vercel. */
 "use strict";
 
-var crypto = require("crypto");
-
 function env(name) { return String(process.env[name] || "").trim(); }
 
 function sendJson(res, status, payload) {
@@ -11,15 +9,6 @@ function sendJson(res, status, payload) {
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("X-Robots-Tag", "noindex");
   res.end(JSON.stringify(payload));
-}
-
-// Compara la contraseña de prueba sin filtrar pistas por el tiempo de respuesta.
-function tokenOk(given) {
-  var expected = env("LISTO_ADMIN_TOKEN");
-  if (expected.length < 12 || typeof given !== "string") return false;
-  var a = crypto.createHash("sha256").update(given).digest();
-  var b = crypto.createHash("sha256").update(expected).digest();
-  return crypto.timingSafeEqual(a, b);
 }
 
 function queryOf(req) {
@@ -39,4 +28,18 @@ function readJson(req, maxBytes) {
   });
 }
 
-module.exports = { env: env, sendJson: sendJson, tokenOk: tokenOk, queryOf: queryOf, readJson: readJson };
+// Los pedidos que guardan o cambian datos tienen que llegar como JSON.
+// Así un formulario de otro sitio (que no puede mandar JSON sin permiso) no llega a nada.
+function isJson(req) {
+  var type = String((req.headers && req.headers["content-type"]) || "").split(";")[0].trim().toLowerCase();
+  return type === "application/json";
+}
+
+// Si el pedido no es JSON responde 415 y devuelve false.
+function requireJson(req, res) {
+  if (isJson(req)) return true;
+  sendJson(res, 415, { ok: false, error: "El pedido tiene que enviarse como JSON." });
+  return false;
+}
+
+module.exports = { env: env, sendJson: sendJson, queryOf: queryOf, readJson: readJson, isJson: isJson, requireJson: requireJson };

@@ -44,6 +44,7 @@ module.exports = async function handler(req, res) {
   }
   if (rateLimited(req)) return http.sendJson(res, 429, { ok: false, error: "Demasiados intentos seguidos. Esperá unos minutos." });
 
+  if (!http.requireJson(req, res)) return;
   var body = await readBody(req);
   var requestId = body && String(body.event_request_id || "");
   var placeId = body && String(body.google_place_id || "");

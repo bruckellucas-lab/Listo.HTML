@@ -130,6 +130,7 @@ async function handlePost(req, res, cfg) {
   if (count("miss", ip, false) >= MAX_MISSES || count("answer", ip, true) > MAX_ANSWERS) {
     return http.sendJson(res, 429, { ok: false, error: "Demasiados intentos seguidos. Esperá unos minutos." });
   }
+  if (!http.requireJson(req, res)) return;
   var body = await http.readJson(req, 6000);
   if (!body || typeof body !== "object") return http.sendJson(res, 400, { ok: false, error: "No pudimos leer tu respuesta. Probá de nuevo." });
   var code = String(body.code || "");

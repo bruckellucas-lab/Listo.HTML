@@ -158,6 +158,7 @@ module.exports = async function handler(req, res) {
   if (req.headers["x-listo-admin"] !== "1") return http.sendJson(res, 403, { ok: false, error: "Pedido no permitido." });
   var url = http.env("SUPABASE_URL"), key = http.env("SUPABASE_SECRET_KEY");
   if (!url || !key || /^sb_publishable_/.test(key)) return http.sendJson(res, 503, { ok: false, error: "Falta configurar Supabase en Vercel." });
+  if (!http.requireJson(req, res)) return;
   var body = await http.readJson(req, 12000);
   if (!body || typeof body !== "object") return http.sendJson(res, 400, { ok: false, error: "No pudimos leer el pedido." });
   var cfg = { url: url, key: key };

@@ -1,0 +1,9 @@
+{
+  "name": "listo",
+  "private": true,
+  "description": "LISTO — controles automáticos (sin dependencias).",
+  "scripts": {
+    "check": "node tests/check-syntax.js",
+    "test": "node --test"
+  }
+}

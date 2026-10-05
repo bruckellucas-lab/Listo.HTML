@@ -105,6 +105,7 @@ module.exports = async function handler(req, res) {
 
   if (req.method === "POST") {
     if (req.headers["x-listo-admin"] !== "1") return http.sendJson(res, 403, { ok: false, error: "Pedido no permitido." });
+    if (!http.requireJson(req, res)) return;
     var body = await http.readJson(req, 12000);
     if (!body) return http.sendJson(res, 400, { ok: false, error: "No pudimos leer el formulario." });
     var checked = validate(body);

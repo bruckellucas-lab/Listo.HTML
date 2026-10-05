@@ -1,0 +1,24 @@
+# LISTO — controles automáticos en cada push y pull request.
+# Sólo revisa el código: no publica nada, no usa claves y no instala paquetes.
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Sintaxis y límite de funciones
+        run: node tests/check-syntax.js
+      - name: Pruebas
+        run: node --test

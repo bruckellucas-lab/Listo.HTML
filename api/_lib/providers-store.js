@@ -92,20 +92,8 @@ function saveProviders(cfg, rows, fetchImpl) {
     });
 }
 
-// Explicación entendible para cada error de Supabase.
-function explainStoreError(err) {
-  var code = err.code || "";
-  if (code === "42P10") return "Falta la regla que evita duplicados en providers (índice único en google_place_id). Corré el SQL de la guía GOOGLE-PLACES.md.";
-  if (code === "PGRST205" || code === "42P01" || err.status === 404) return "No encontramos la tabla providers en Supabase.";
-  if (code === "PGRST204" || code === "42703") return "Una columna de providers no coincide: " + err.message;
-  if (code === "42501" || err.status === 401 || err.status === 403) return "Supabase rechazó la clave. Revisá que SUPABASE_SECRET_KEY en Vercel sea la clave secreta (sb_secret_... o service_role).";
-  if (code === "22P02" || code === "22003" || err.status === 400) return "Algún dato no coincide con el tipo de columna en providers: " + err.message;
-  return "Supabase no pudo guardar (" + (err.status || "sin respuesta") + "): " + err.message;
-}
-
 module.exports = {
   saveProviders: saveProviders,
-  explainStoreError: explainStoreError,
   normalizeUrl: normalizeUrl,
   headersFor: headersFor,
   request: request,

@@ -187,6 +187,7 @@ module.exports = async function handler(req, res) {
   if (req.method === "PATCH") {
     // Defensa extra contra pedidos desde otros sitios (además de SameSite=Strict).
     if (req.headers["x-listo-admin"] !== "1") return http.sendJson(res, 403, { ok: false, error: "Pedido no permitido." });
+    if (!http.requireJson(req, res)) return;
     var body = await http.readJson(req, 1000);
     var id = body && String(body.id || "");
     var status = body && String(body.status || "");

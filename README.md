@@ -20,9 +20,8 @@ Para activar el guardado en Supabase, seguí la guía paso a paso: [SUPABASE.md]
 
 - `api/plan-options.js`: función pública de Vercel que usa la web. Busca restaurantes, bares o salones en la zona pedida, elige 3, guarda los proveedores sin duplicar y devuelve fotos con links firmados.
 
-- `api/places-search.js`: función de Vercel (servidor) que busca lugares reales en Google Places y los guarda en la tabla `providers`.
+- `api/place-photo.js`: muestra cada foto de Google con un link firmado que vence (la clave de Google nunca llega al navegador).
 - `api/_lib/`: la lógica de Google Places y del guardado sin duplicados.
-- `prueba-google.html`: página interna para probar la búsqueda (protegida con contraseña).
 
 Guía paso a paso: [GOOGLE-PLACES.md](GOOGLE-PLACES.md).
 
@@ -50,6 +49,20 @@ Guía: [SUPABASE.md](SUPABASE.md), Paso 10.
 
 Las fotos son de [Unsplash](https://unsplash.com) (uso libre) y se cargan directamente desde su servidor.
 Para cambiar una foto, buscá en los archivos el código que empieza con `photo-` y reemplazalo por el de otra imagen de Unsplash.
+
+### Pruebas automáticas
+
+- `tests/`: pruebas sin dependencias (sólo Node 18 o más nuevo). No llaman a Google, Supabase ni Resend.
+- `npm run check`: revisa la sintaxis de todos los archivos y que `/api` no pase de **12 funciones** (el límite de Vercel Hobby; con 13 el deploy falla).
+- `npm test`: corre las pruebas (lugares, propuestas, reservas y comisión, restricciones alimentarias y controles de seguridad).
+- `.github/workflows/test.yml`: GitHub corre ambos controles en cada push y pull request. No publica nada.
+
+### Seguridad
+
+- Las claves privadas viven sólo en Vercel. La web nunca las ve.
+- Los pedidos que guardan o cambian datos tienen que llegar como JSON (si no, responden 415).
+- `vercel.json` agrega a todas las páginas: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY` (nadie puede meter LISTO dentro de otra página) y `Permissions-Policy` (sin cámara, micrófono ni ubicación).
+- Pendiente a futuro: una Content-Security-Policy estricta. Hoy no se activa porque la web usa scripts y estilos dentro del HTML y fotos/tipografías externas; activarla sin preparar eso rompería la página.
 
 ## Verla online con GitHub Pages (gratis)
 

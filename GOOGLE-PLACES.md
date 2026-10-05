@@ -1,9 +1,8 @@
 # LISTO · Google Places → Vercel → Supabase
 
-Esta etapa **no cambia la web de LISTO**. Agrega:
+La búsqueda de lugares la hace `api/plan-options.js`, una función que corre en los servidores de Vercel: busca en Google Places, guarda en `providers` (sin duplicar) y devuelve las 3 opciones con fotos.
 
-- `api/places-search.js`: una función que corre en los servidores de Vercel. Busca en Google Places y guarda en `providers`.
-- `prueba-google.html`: una página interna para probarla (no está enlazada desde la web).
+> La página de prueba `prueba-google.html` y sus funciones `api/places-search.js` y `api/place-photos.js` se eliminaron (octubre 2026): eran sólo de prueba y Vercel Hobby permite como máximo 12 funciones.
 
 Las claves de Google y la clave secreta de Supabase viven **solo en Vercel**. Nunca aparecen en la web ni en GitHub.
 
@@ -96,26 +95,16 @@ Tipos de columna recomendados para `providers`:
 4. Tocá **Save** en cada una.
 5. **Importante:** las variables se aplican solo a publicaciones nuevas. Andá a **Deployments** → en la más reciente tocá **⋯** → **Redeploy** → **Redeploy**.
 
-`LISTO_ADMIN_TOKEN` existe para que nadie más pueda usar tu búsqueda y gastar tu cuota de Google. Sin esa contraseña, la función responde "Contraseña de prueba incorrecta" y no llama a Google.
+`LISTO_ADMIN_TOKEN` se usa para firmar los links de las fotos (ver "Fotos reales de Google Places"). Sin esa variable, las fotos no se muestran.
 
 ---
 
-## Paso 6 · Probar "restaurantes en Palermo"
+## Paso 6 · Probar "cena en Palermo"
 
-1. Abrí `https://TU-DIRECCION-DE-VERCEL/prueba-google.html`.
-2. En **1 · Configuración en Vercel** tiene que haber todos ✓. Si hay algún ✗, falta esa variable (o falta el Redeploy del Paso 5).
-3. En **Contraseña de prueba** escribí tu `LISTO_ADMIN_TOKEN`.
-4. Dejá la búsqueda **restaurantes en Palermo** y tocá **BUSCAR (SIN GUARDAR)**.
-5. Tiene que aparecer una tabla con restaurantes reales (nombre, categoría, zona, dirección, rating, reseñas y links a Maps y a la web). Tocá **Maps** en alguno para verificar que es real.
-
-## Paso 7 · Guardar en providers
-
-1. Si los resultados se ven bien, tocá **BUSCAR Y GUARDAR EN PROVIDERS**.
-2. Tiene que decir: *"Guardado en providers: 10 nuevo(s), 0 actualizado(s)"*.
-3. En Supabase → **Table Editor** → **providers** vas a ver las filas con `source = google` y `provider_status = discovered`.
-4. Tocá **BUSCAR Y GUARDAR** otra vez: ahora tiene que decir *"0 nuevo(s), 10 actualizado(s)"*. Eso confirma que **no se duplican**.
-
-También podés probar `bares en Belgrano` o `salones para eventos en Núñez`.
+1. Abrí tu dirección de Vercel (la web de LISTO).
+2. Escribí, por ejemplo, **cena para 6 en Palermo** y tocá **Buscar opciones**.
+3. Tienen que aparecer 3 lugares reales, con fotos y link a Maps. Tocá **Maps** en alguno para verificar que es real.
+4. En Supabase → **Table Editor** → **providers** vas a ver esas filas con `source = google` y `provider_status = discovered`. Si repetís la búsqueda, **no se duplican**.
 
 ---
 
@@ -132,13 +121,12 @@ También podés probar `bares en Belgrano` o `salones para eventos en Núñez`.
 | Mensaje | Qué hacer |
 |---|---|
 | ✗ en alguna variable | Cargala en Vercel (Paso 5) y hacé **Redeploy**. |
-| "Contraseña de prueba incorrecta" | Escribí exactamente el `LISTO_ADMIN_TOKEN` de Vercel. |
 | "Google rechazó la clave…" | Revisá que **Places API (New)** esté habilitada, que la facturación esté activa y que la clave tenga permitida esa API (Pasos 1 y 3). |
 | "Se alcanzó el límite de búsquedas…" | Llegaste a la cuota diaria del Paso 3. Esperá o subila. |
 | "Falta la regla que evita duplicados…" | Corré el SQL del Paso 4a. |
 | "Supabase rechazó la clave…" | En `SUPABASE_SECRET_KEY` tiene que ir la **secreta** (`sb_secret_...` o `service_role`), no la pública. |
 | "Una columna de providers no coincide…" | Revisá que los nombres de columna sean exactamente los de la lista. |
-| "No se encontró la función /api/places-search" | La página tiene que abrirse desde tu dirección de Vercel, no desde GitHub Pages ni desde tu computadora. |
+| No aparecen opciones | La web tiene que abrirse desde tu dirección de Vercel, no desde GitHub Pages ni desde tu computadora. |
 
 ---
 
@@ -153,7 +141,7 @@ También podés probar `bares en Belgrano` o `salones para eventos en Núñez`.
    - Nadie puede cambiarle el tamaño ni usarlo para otra foto.
 3. **Cuando el navegador muestra la foto**, `/api/place-photo` le pide a Google la imagen (*Place Photos New*, con la clave en el servidor) y redirige a la URL temporal de Google. Esa URL **no contiene la clave**.
 4. **Nada de esto se guarda en Supabase.** Solo queda el `google_place_id`. Las fotos se resuelven en el momento, porque las referencias y las URLs de Google pueden vencer y Google no permite guardarlas.
-5. **Detalle de proveedor (preparado para el futuro):** `/api/place-photos?place_id=…` toma el `google_place_id` guardado, le pide a Google **solo el campo `photos`** y devuelve hasta **6 fotos** firmadas, con sus autores. Por ahora pide la contraseña de prueba.
+5. **Propuesta para el usuario:** `/api/proposal` toma el `google_place_id` guardado, le pide a Google **solo el campo `photos`** y devuelve **1 foto** firmada, con su autor.
 
 ## Atribuciones (lo que pide Google)
 
@@ -171,12 +159,11 @@ Se muestra un **placeholder de LISTO** (fondo madera oscuro con "LISTO · Sin fo
 |---|---|---|
 | Buscar (con referencias de fotos) | 1 *Text Search* (igual que antes) | sin cambio |
 | Mostrar 1 foto | 1 *Place Details Photos* | ~USD 7 cada 1.000, con **1.000 gratis por mes** |
-| Abrir el detalle de un proveedor guardado | 1 *Place Details* (solo `photos`) + 1 por cada foto que se vea | según la tabla de precios de Google |
+| Abrir una propuesta (/propuesta/CÓDIGO) | 1 *Place Details* (solo `photos`) + 1 por cada foto que se vea | según la tabla de precios de Google |
 
 Medidas para no gastar de más:
 
 - **Fotos solo cuando se ven:** las fotos se cargan recién cuando aparecen en pantalla.
-- **Galería a pedido:** la galería solo se pide al tocar "Ver fotos".
 - **Tope de fotos:** como máximo 6 fotos por lugar.
 - **Tamaños fijos:** 480 px en la lista y 1200 px en la galería.
 - **Sin pagar dos veces la misma foto:** el navegador recuerda cada foto 30 minutos.
@@ -186,11 +173,10 @@ Medidas para no gastar de más:
 
 ## Probar las fotos
 
-1. Abrí `https://TU-DIRECCION-DE-VERCEL/prueba-google.html` y buscá **restaurantes en Palermo**.
-2. Cada tarjeta tiene que mostrar una **foto real** con su autor debajo. Si el lugar no tiene fotos, aparece el placeholder de LISTO.
-3. Tocá **Ver fotos (N)**: se abre la galería con hasta 6 fotos, cada una con su autor.
-4. Sección **3**: pegá un `google_place_id` de la tabla `providers` y tocá **Ver fotos**. Así va a funcionar el detalle de un proveedor guardado.
-5. Probalo también en el celular.
+1. En la web de LISTO buscá, por ejemplo, **cena en Palermo**.
+2. Cada opción tiene que mostrar una **foto real** con su autor debajo. Si el lugar no tiene fotos, aparece el placeholder de LISTO.
+3. Abrí una propuesta (/propuesta/CÓDIGO): muestra una foto del lugar con su autor.
+4. Probalo también en el celular.
 
 ---
 
