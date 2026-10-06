@@ -62,7 +62,7 @@ test("frontend: ninguna clave privada ni nombre de variable secreta", function (
     assert.doesNotMatch(s, /sb_secret_[A-Za-z0-9_-]{10,}/, f);
     assert.doesNotMatch(s, /AIza[0-9A-Za-z_-]{30,}/, f + ": clave de Google");
     // (el panel sí puede nombrar ADMIN_PASSWORD en un aviso de configuración: es el nombre, no el valor)
-    assert.doesNotMatch(s, /SUPABASE_SECRET_KEY|GOOGLE_PLACES_API_KEY|LISTO_ADMIN_TOKEN|RESEND_API_KEY|RATE_LIMIT_SECRET|PHOTO_SIGNING_SECRET|process\.env/, f);
+    assert.doesNotMatch(s, /SUPABASE_SECRET_KEY|GOOGLE_PLACES_API_KEY|LISTO_ADMIN_TOKEN|RESEND_API_KEY|RATE_LIMIT_SECRET|PHOTO_SIGNING_SECRET|TURNSTILE_SECRET_KEY|process\.env/, f);
   });
 });
 
@@ -79,6 +79,26 @@ test("el navegador ya no escribe en Supabase ni tiene claves de Supabase", funct
   var client = read("event-request.js");
   assert.match(client, /var ENDPOINT = "\/api\/event-request";/);
   assert.match(client, /"Content-Type": "application\/json"/);
+});
+
+test("Turnstile en el navegador: sólo en Quiero avanzar, clave pública y token sólo en memoria", function () {
+  var html = read("index.html"), app = read("app.js");
+  assert.doesNotMatch(html, /challenges\.cloudflare\.com/, "el script no se carga en la home");
+  assert.match(html, /<div id="a-turnstile"><\/div>/);
+  assert.ok(html.indexOf('id="a-turnstile"') > html.indexOf('id="advance-form"'), "el widget está dentro del formulario Quiero avanzar");
+  assert.match(app, /var TURNSTILE_SITE_KEY = "0x4AAAAAAFPe9GFrf2X1_2xQ_uNcyIfPasU";/);
+  assert.match(app, /action: "plan_inquiry"/);
+  assert.match(app, /"response-field": false/);
+  assert.match(app, /setupVerification\(\);/);
+  assert.equal(app.split("loadTurnstile(").length - 1, 2, "se carga sólo desde setupVerification");
+  // Lo que se guarda en el navegador no incluye el token.
+  var save = app.slice(app.indexOf("function savePlan()"), app.indexOf("function loadPlan()"));
+  assert.doesNotMatch(save, /turnstile|token/i);
+  assert.doesNotMatch(app, /(localStorage|sessionStorage)[^\n]*turnstile/i);
+  assert.match(app, /v\.turnstile_token = turnstileToken;\s*turnstileToken = "";/, "un solo uso");
+  ["admin/index.html", "propuesta/index.html", "event-request.js"].forEach(function (f) {
+    assert.doesNotMatch(read(f), /turnstile/i, f + " no usa Turnstile");
+  });
 });
 
 test("LISTO_ADMIN_TOKEN no se usa en ningún lado del código", function () {

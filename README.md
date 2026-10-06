@@ -66,7 +66,7 @@ Para cambiar una foto, buscá en los archivos el código que empieza con `photo-
 - Límite de pedidos por visitante **persistente** en Supabase (`api/_lib/rate-limit.js` + migration `supabase/migrations/20261005120000_p1a_rate_limits.sql`). Se guarda una huella HMAC, nunca la IP. Necesita `RATE_LIMIT_SECRET` en Vercel.
 - Las fotos se firman con `PHOTO_SIGNING_SECRET` (sólo para eso).
 - El email interno de cada solicitud lleva sólo lo necesario para reaccionar; el resto se ve en /admin.
-- Pendiente P1B: Cloudflare Turnstile (anti-robots) en los formularios públicos.
+- **Cloudflare Turnstile (P1B)** sólo en "Quiero avanzar": el widget se carga recién al abrir ese formulario (clave pública en `app.js`) y `/api/plan-inquiry` valida el token en el servidor con `TURNSTILE_SECRET_KEY` (sólo en Vercel), revisando acción `plan_inquiry` y que el dominio coincida. Sin verificación válida no se guarda nada ni se manda el email. Cada dominio nuevo (por ejemplo un Preview) hay que agregarlo en Cloudflare → Turnstile → el widget → **Hostnames**.
 - `vercel.json` agrega a todas las páginas: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY` (nadie puede meter LISTO dentro de otra página) y `Permissions-Policy` (sin cámara, micrófono ni ubicación).
 - Pendiente a futuro: una Content-Security-Policy estricta. Hoy no se activa porque la web usa scripts y estilos dentro del HTML y fotos/tipografías externas; activarla sin preparar eso rompería la página.
 

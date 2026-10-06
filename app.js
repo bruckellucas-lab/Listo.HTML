@@ -1158,6 +1158,71 @@
   var advanceOption = null;
   var sendingInquiry = false;
 
+  /* Verificación anti-robots (Cloudflare Turnstile): sólo en "Quiero avanzar".
+     El script se carga recién al abrir el formulario. El token queda sólo en memoria,
+     se usa una vez y después se pide uno nuevo (Cloudflare los da de un solo uso). */
+  var TURNSTILE_SITE_KEY = "0x4AAAAAAFPe9GFrf2X1_2xQ_uNcyIfPasU";   // clave pública
+  var TURNSTILE_SRC = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+  var turnstileLoad = null;
+  var turnstileWidget = null;
+  var turnstileToken = "";
+  var verifyMsg = $("#advance-verify-msg");
+
+  function verifyNotice(msg) { verifyMsg.textContent = msg || ""; verifyMsg.hidden = !msg; }
+
+  function loadTurnstile() {
+    if (window.turnstile) return Promise.resolve(window.turnstile);
+    if (turnstileLoad) return turnstileLoad;
+    var script = document.createElement("script");
+    turnstileLoad = new Promise(function (resolve, reject) {
+      script.src = TURNSTILE_SRC;
+      script.async = true;
+      script.onload = function () { if (window.turnstile) resolve(window.turnstile); else reject(new Error("turnstile")); };
+      script.onerror = function () { reject(new Error("turnstile")); };
+      document.head.appendChild(script);
+    }).catch(function (err) {
+      turnstileLoad = null;                     // se puede reintentar al volver a abrir
+      if (script.parentNode) script.parentNode.removeChild(script);
+      throw err;
+    });
+    return turnstileLoad;
+  }
+
+  // quiet: reintento desde "Enviar" (el aviso ya se muestra como error del formulario).
+  function setupVerification(quiet) {
+    if (turnstileWidget !== null) return;       // ya está: Cloudflare lo mantiene vigente
+    verifyNotice("");
+    loadTurnstile().then(function (ts) {
+      if (turnstileWidget !== null) return;
+      turnstileWidget = ts.render("#a-turnstile", {
+        sitekey: TURNSTILE_SITE_KEY,
+        action: "plan_inquiry",
+        theme: "dark",
+        size: "flexible",
+        language: "es",
+        "response-field": false,
+        callback: function (token) { turnstileToken = token; verifyNotice(""); },
+        "expired-callback": function () { turnstileToken = ""; },
+        "timeout-callback": function () { turnstileToken = ""; verifyNotice("La verificación se interrumpió. Completala de nuevo."); },
+        "error-callback": function () {
+          turnstileToken = "";
+          verifyNotice("No pudimos completar la verificación de seguridad. Revisá tu conexión y probá de nuevo.");
+          return true;
+        }
+      });
+    }, function () {
+      if (!quiet) verifyNotice("No pudimos cargar la verificación de seguridad. Revisá tu conexión (o un bloqueador de contenido) y volvé a intentar.");
+    });
+  }
+
+  // Después de cada envío el token ya no sirve: se pide uno nuevo (los datos del formulario quedan).
+  function resetVerification() {
+    turnstileToken = "";
+    if (turnstileWidget !== null && window.turnstile) {
+      try { window.turnstile.reset(turnstileWidget); } catch (e) { /* se vuelve a crear al reabrir */ }
+    }
+  }
+
   function inquiryKey(placeId) { return (state.requestId || "") + "|" + placeId; }
   function inquirySent(placeId) { return !!(state.inquiries && state.inquiries[inquiryKey(placeId)]); }
 
@@ -1201,6 +1266,7 @@
       ? "Ya recibimos tu solicitud para este lugar. Si querés, podés actualizar tus datos."
       : "Dejanos tus datos y te ayudamos a consultar disponibilidad y condiciones con este lugar.";
     if (advanceDialog.showModal) advanceDialog.showModal(); else advanceDialog.setAttribute("open", "");
+    setupVerification();
     setTimeout(function () { $("#a-name").focus(); }, 50);
   }
 
@@ -1253,6 +1319,18 @@
     };
     var problem = checkAdvance(v);
     if (problem) { advanceFail(problem[0], problem[1]); return; }
+    if (!turnstileToken) {
+      if (turnstileWidget === null) {
+        verifyNotice("");
+        advanceFail("No pudimos cargar la verificación de seguridad. Revisá tu conexión (o un bloqueador de contenido) y volvé a tocar “Enviar solicitud”.");
+        setupVerification(true);                                 // reintenta cargarla
+      } else {
+        advanceFail("Completá la verificación de seguridad (abajo del formulario) y volvé a enviar.");
+      }
+      return;
+    }
+    v.turnstile_token = turnstileToken;
+    turnstileToken = "";                                         // un solo uso
 
     var o = advanceOption;
     var wasSent = inquirySent(o.google_place_id);
@@ -1281,6 +1359,7 @@
       markSelected(state.selected);
       advanceForm.reset();
       showAdvanceView(true);
+      verifyNotice("");
       if (wasSent) toast("Actualizamos tus datos de contacto.");
     }).catch(function (err) {
       var aborted = err && err.name === "AbortError";
@@ -1288,6 +1367,8 @@
         : friendlyError(err, "No pudimos enviar tu solicitud. Revisá tu conexión y probá de nuevo."));
     }).then(function () {
       clearTimeout(timer);
+      v.turnstile_token = "";
+      resetVerification();
       setSendingInquiry(false);
     });
   });

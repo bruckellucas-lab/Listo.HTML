@@ -2,12 +2,14 @@
    LISTO — Función serverless de Vercel
    Ruta: POST /api/plan-inquiry   ("Quiero avanzar")
    Cuerpo: { event_request_id, google_place_id, name, phone, email?,
-             event_date, approximate_time, notes? }
+             event_date, approximate_time, notes?, turnstile_token }
 
    Guarda los datos de contacto en plan_inquiries con status
    'inquiry_requested'. NO es una reserva confirmada.
    Los datos personales sólo se escriben desde acá (clave secreta en
    Vercel) y nunca se devuelven ni se registran en los logs.
+   Orden: JSON → límite por visitante → campo trampa → validaciones →
+   Cloudflare Turnstile (anti-robots) → recién ahí se guarda y se avisa.
    ========================================================= */
 "use strict";
 
@@ -17,6 +19,7 @@ var selections = require("./_lib/selections");
 var inquiries = require("./_lib/inquiries");
 var notify = require("./_lib/notify");
 var rateLimit = require("./_lib/rate-limit");
+var turnstile = require("./_lib/turnstile");
 
 function readBody(req) {
   if (req.body && typeof req.body === "object") return Promise.resolve(req.body);
@@ -60,6 +63,11 @@ module.exports = async function handler(req, res) {
   if (!url || !key || /^sb_publishable_/.test(key)) {
     return http.sendJson(res, 503, { ok: false, error: "LISTO no puede recibir solicitudes en este momento." });
   }
+
+  // Anti-robots: SIEMPRE antes de guardar en Supabase o mandar el email.
+  // El token es de un solo uso: no se guarda ni se registra.
+  var human = await turnstile.verify(req, body.turnstile_token);
+  if (!human.ok) return http.sendJson(res, human.status, { ok: false, error: human.error, verification: true });
 
   try {
     var cfg = { url: url, key: key };
