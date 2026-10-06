@@ -22,7 +22,7 @@ global.fetch = function () { throw new Error("Las pruebas no deben llamar a inte
 var http = require("../api/_lib/http");
 var auth = require("../api/_lib/admin-auth");
 
-var FRONTEND = ["index.html", "app.js", "event-request.js", "styles.css", "admin/index.html", "propuesta/index.html"];
+var FRONTEND = ["index.html", "app.js", "event-request.js", "turnstile-client.js", "styles.css", "admin/index.html", "propuesta/index.html"];
 var MAX_FUNCTIONS = 12;   // límite de Vercel Hobby
 
 function fakeRes() {
@@ -74,7 +74,7 @@ test("el navegador ya no escribe en Supabase ni tiene claves de Supabase", funct
     assert.doesNotMatch(s, /\/rest\/v1|supabase\.co|sb_publishable_|sb_secret_|LISTO_CONFIG|["']apikey["']/i, f);
   });
   var html = read("index.html");
-  assert.match(html, /<script src="event-request\.js"><\/script>\s*<script src="app\.js"><\/script>/);
+  assert.match(html, /<script src="event-request\.js"><\/script>\s*<script src="turnstile-client\.js"><\/script>\s*<script src="app\.js"><\/script>/);
   assert.doesNotMatch(html, /config\.js|supabase\.js/);
   var client = read("event-request.js");
   assert.match(client, /var ENDPOINT = "\/api\/event-request";/);
@@ -82,20 +82,25 @@ test("el navegador ya no escribe en Supabase ni tiene claves de Supabase", funct
 });
 
 test("Turnstile en el navegador: sólo en Quiero avanzar, clave pública y token sólo en memoria", function () {
-  var html = read("index.html"), app = read("app.js");
-  assert.doesNotMatch(html, /challenges\.cloudflare\.com/, "el script no se carga en la home");
+  var html = read("index.html"), app = read("app.js"), client = read("turnstile-client.js");
+  assert.doesNotMatch(html, /challenges\.cloudflare\.com/, "el script de Cloudflare no se carga en la home");
   assert.match(html, /<div id="a-turnstile"><\/div>/);
   assert.ok(html.indexOf('id="a-turnstile"') > html.indexOf('id="advance-form"'), "el widget está dentro del formulario Quiero avanzar");
   assert.match(app, /var TURNSTILE_SITE_KEY = "0x4AAAAAAFPe9GFrf2X1_2xQ_uNcyIfPasU";/);
   assert.match(app, /action: "plan_inquiry"/);
-  assert.match(app, /"response-field": false/);
-  assert.match(app, /setupVerification\(\);/);
-  assert.equal(app.split("loadTurnstile(").length - 1, 2, "se carga sólo desde setupVerification");
+  assert.match(app, /if \(verifier\) verifier\.setup\(\);/, "se prepara al abrir Quiero avanzar");
+  assert.equal(app.split("verifier.setup(").length - 1, 1, "y en ningún otro lado");
+  assert.match(client, /"feedback-enabled": false/);
+  assert.match(client, /appearance: "interaction-only"/);
   // Lo que se guarda en el navegador no incluye el token.
   var save = app.slice(app.indexOf("function savePlan()"), app.indexOf("function loadPlan()"));
   assert.doesNotMatch(save, /turnstile|token/i);
-  assert.doesNotMatch(app, /(localStorage|sessionStorage)[^\n]*turnstile/i);
-  assert.match(app, /v\.turnstile_token = turnstileToken;\s*turnstileToken = "";/, "un solo uso");
+  assert.doesNotMatch(app, /(localStorage|sessionStorage)[^\n]*(turnstile|token)/i);
+  assert.doesNotMatch(client, /localStorage|sessionStorage/);
+  // Un error de verificación no borra el formulario: sólo se limpia después de un envío exitoso.
+  var submit = app.slice(app.indexOf('advanceForm.addEventListener("submit"'), app.indexOf("/* ---------- Aviso flotante"));
+  assert.equal(submit.split("advanceForm.reset()").length - 1, 1);
+  assert.ok(submit.indexOf("advanceForm.reset()") > submit.indexOf("state.inquiries[inquiryKey"), "el reset es parte del éxito");
   ["admin/index.html", "propuesta/index.html", "event-request.js"].forEach(function (f) {
     assert.doesNotMatch(read(f), /turnstile/i, f + " no usa Turnstile");
   });

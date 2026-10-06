@@ -764,7 +764,10 @@ figcaption {
 .advance-field input:focus, .advance-field textarea:focus { border-bottom-color: var(--amber); }
 .advance-field input::placeholder, .advance-field textarea::placeholder { color: rgba(239, 232, 220, .35); }
 .advance-field.has-error input { border-bottom-color: var(--danger); }
-.advance-verify { margin-top: 22px; min-height: 65px; }
+/* Turnstile en modo "sólo si hace falta": sin hueco reservado; ocupa lugar sólo si
+   Cloudflare pide interacción o hay un aviso. */
+.advance-verify { margin-top: 0; }
+.advance-verify.is-active { margin-top: 22px; }
 .advance-verify-msg { margin: 8px 0 0; font-size: 13px; opacity: .8; }
 .advance-bar { margin-top: 20px; background: rgba(239, 232, 220, .15); }
 .advance-bar::after { background: var(--cream); }
