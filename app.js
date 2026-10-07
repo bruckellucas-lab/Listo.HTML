@@ -1161,7 +1161,7 @@
   /* Verificación anti-robots (Cloudflare Turnstile): sólo en "Quiero avanzar".
      La lógica está en turnstile-client.js; el script de Cloudflare se pide recién al
      abrir el formulario. El token queda sólo en memoria y se usa una vez. */
-  var TURNSTILE_SITE_KEY = "0x4AAAAAAFPe9GFrf2X1_2xQ_uNcyIfPasU";   // clave pública
+  var TURNSTILE_SITE_KEY = "0x4AAAAAAFPe9K2tA52qoILL";   // clave pública
   var verifyMsg = $("#advance-verify-msg");
   var verifier = window.ListoVerify ? window.ListoVerify.create({
     siteKey: TURNSTILE_SITE_KEY,

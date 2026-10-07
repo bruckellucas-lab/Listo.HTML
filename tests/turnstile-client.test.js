@@ -40,7 +40,7 @@ function setup(extra) {
   var c = clock(), api = fakeApi(), logs = [], notices = [], box = { active: false, classList: { toggle: function (n, on) { box.active = !!on; } } };
   var loads = 0;
   var v = V.create(Object.assign({
-    siteKey: "0x4AAAAAAFPe9GFrf2X1_2xQ_uNcyIfPasU", action: "plan_inquiry", container: "#a-turnstile", box: box,
+    siteKey: "0x4AAAAAAFPe9K2tA52qoILL", action: "plan_inquiry", container: "#a-turnstile", box: box,
     notice: function (m) { notices.push(m); }, log: function () { logs.push(Array.prototype.join.call(arguments, " ")); },
     load: function () { loads++; return Promise.resolve(api); },
     setTimeout: c.setTimeout, clearTimeout: c.clearTimeout
@@ -53,7 +53,7 @@ test("opciones del widget: Managed sin caja (interaction-only), sin Troubleshoot
   var t = setup();
   await t.v.setup();
   var o = t.api.opts;
-  assert.equal(o.sitekey, "0x4AAAAAAFPe9GFrf2X1_2xQ_uNcyIfPasU");
+  assert.equal(o.sitekey, "0x4AAAAAAFPe9K2tA52qoILL");
   assert.equal(o.action, "plan_inquiry");
   assert.equal(o.appearance, "interaction-only");
   assert.equal(o["feedback-enabled"], false, "sin el link Troubleshoot");

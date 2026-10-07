@@ -86,7 +86,7 @@ test("Turnstile en el navegador: sólo en Quiero avanzar, clave pública y token
   assert.doesNotMatch(html, /challenges\.cloudflare\.com/, "el script de Cloudflare no se carga en la home");
   assert.match(html, /<div id="a-turnstile"><\/div>/);
   assert.ok(html.indexOf('id="a-turnstile"') > html.indexOf('id="advance-form"'), "el widget está dentro del formulario Quiero avanzar");
-  assert.match(app, /var TURNSTILE_SITE_KEY = "0x4AAAAAAFPe9GFrf2X1_2xQ_uNcyIfPasU";/);
+  assert.match(app, /var TURNSTILE_SITE_KEY = "0x4AAAAAAFPe9K2tA52qoILL";/);
   assert.match(app, /action: "plan_inquiry"/);
   assert.match(app, /if \(verifier\) verifier\.setup\(\);/, "se prepara al abrir Quiero avanzar");
   assert.equal(app.split("verifier.setup(").length - 1, 1, "y en ningún otro lado");
