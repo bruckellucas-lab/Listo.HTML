@@ -39,20 +39,13 @@ function count(kind, ip, add) {
   return list.length;
 }
 
-// Foto: una sola consulta a Google por lugar cada ~50 minutos (los links firmados duran 1 hora).
-var PHOTO_TTL_MS = 50 * 60 * 1000;
-var photoCache = {};
+// Foto: se pide a Google en cada apertura (los nombres de foto no se pueden cachear).
 async function photoFor(placeId) {
   var apiKey = http.env("GOOGLE_PLACES_API_KEY"), secret = photos.signingSecret();
   if (!placeId || !photos.PLACE_ID_RE.test(placeId) || !apiKey || !secret) return null;
-  var hit = photoCache[placeId];
-  if (hit && Date.now() - hit.at < PHOTO_TTL_MS) return hit.photo;
   try {
     var place = await photos.fetchPlacePhotos(apiKey, placeId);
-    var photo = photos.photosForPlace(place, secret, { max: 1 })[0] || null;
-    if (Object.keys(photoCache).length > 500) photoCache = {};
-    photoCache[placeId] = { at: Date.now(), photo: photo };
-    return photo;
+    return photos.photosForPlace(place, secret, { max: 1 })[0] || null;
   } catch (err) {
     console.error("[proposal] foto:", err.status || "", err.message);
     return null;   // sin foto se muestra la propuesta igual

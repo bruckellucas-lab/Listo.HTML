@@ -192,16 +192,37 @@
     hasProposals: false
   };
 
+  // Se guarda SÓLO lo propio del pedido y los ids (google_place_id). Nada de contenido de
+  // Google (nombres, direcciones, ratings, fotos): queda en memoria mientras se usa la página
+  // y, al volver, las opciones se piden de nuevo (políticas de Google Maps Platform).
   function savePlan() {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
         text: state.text, data: state.data,
         requestId: state.requestId, requestSig: state.requestId ? lastSaved : "",
         selected: state.selected, selectedAt: state.selectedAt,
-        options: state.options, optionsAt: state.optionsAt, inquiries: state.inquiries
+        inquiries: state.inquiries
       }));
     } catch (e) { /* sin almacenamiento: no pasa nada */ }
   }
+
+  // Planes guardados por versiones anteriores pueden tener opciones de Google: se borran.
+  function scrubStoredPlan() {
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      var saved = JSON.parse(raw);
+      if (!saved || typeof saved !== "object") { localStorage.removeItem(STORAGE_KEY); return; }
+      if ("options" in saved || "optionsAt" in saved) {
+        delete saved.options;
+        delete saved.optionsAt;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+      }
+    } catch (e) {
+      try { localStorage.removeItem(STORAGE_KEY); } catch (e2) { /* sin almacenamiento */ }
+    }
+  }
+  scrubStoredPlan();
 
   function loadPlan() {
     try {
@@ -224,8 +245,9 @@
       state.selected = typeof saved.selected === "string" ? saved.selected : null;
       state.selectedAt = saved.selectedAt || null;
       state.inquiries = saved.inquiries && typeof saved.inquiries === "object" ? saved.inquiries : {};
-      state.options = Array.isArray(saved.options) ? saved.options : null;
-      state.optionsAt = typeof saved.optionsAt === "number" ? saved.optionsAt : 0;
+      // Las opciones (contenido de Google) nunca se reutilizan desde el almacenamiento.
+      state.options = null;
+      state.optionsAt = 0;
       return true;
     } catch (e) { return false; }
   }
@@ -954,26 +976,34 @@
   }
 
   function ratingText(o) {
-    if (typeof o.rating !== "number") return "Sin rating en Google todavía";
+    if (typeof o.rating !== "number") return "Sin rating todavía";
     var txt = "★ " + o.rating.toLocaleString("es-AR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-    if (typeof o.review_count === "number") txt += " · " + o.review_count.toLocaleString("es-AR") + " reseñas en Google";
+    if (typeof o.review_count === "number") txt += " · " + o.review_count.toLocaleString("es-AR") + " reseñas";
     return txt;
   }
+
+  // Atribución de Google Maps: el texto exacto "Google Maps", sin traducir ni transformar.
+  var GMAPS = '<span class="gmaps-attr">Google Maps</span>';
 
   function safeHttps(url) {
     return /^https:\/\//.test(url || "") ? url : "";
   }
 
+  // Foto de Google: autor/es (con su link) y acceso a la foto en Google Maps (googleMapsUri de la foto).
   function photoHTML(o, num) {
     var p = o.photo;
-    var credit = "Sin fotos en Google";
+    var credit = "Sin fotos";
     var img = '<span class="photo-empty" aria-hidden="true">LISTO</span>';
     if (p && p.thumb && p.large) {
       var authors = (p.attributions || []).map(function (a) {
         var href = safeHttps(a.uri);
         return href ? '<a href="' + escapeHTML(href) + '" target="_blank" rel="noopener noreferrer">' + escapeHTML(a.name) + '</a>' : escapeHTML(a.name);
       }).join(", ");
-      credit = "Foto: " + (authors ? authors + " · " : "") + "Google Maps";
+      var source = safeHttps(p.source);
+      var gm = source
+        ? '<a class="gmaps-attr" href="' + escapeHTML(source) + '" target="_blank" rel="noopener noreferrer" title="Ver la foto en Google Maps">Google Maps</a>'
+        : GMAPS;
+      credit = "Foto: " + (authors ? authors + " · " : "") + gm;
       img = '<img src="' + escapeHTML(p.large) + '" srcset="' + escapeHTML(p.thumb) + ' 480w, ' + escapeHTML(p.large) + ' 1200w" ' +
         'sizes="(max-width: 720px) 100vw, (max-width: 1024px) 50vw, 33vw" alt="' + escapeHTML(o.name) + '" loading="lazy" referrerpolicy="no-referrer">';
     }
@@ -1005,6 +1035,7 @@
             '<h3 class="card-title">' + escapeHTML(o.name) + '</h3>' +
             '<p class="card-zone">' + escapeHTML(where || "Dirección a confirmar") + '</p>' +
             '<p class="card-desc">' + escapeHTML(ratingText(o)) + '</p>' +
+            '<p class="card-attr">Datos del lugar: ' + GMAPS + '</p>' +
             '<p class="card-price">' + PRICE_NOTE + '</p>' +
             '<div class="card-links">' +
               (maps ? '<a class="card-cta" href="' + escapeHTML(maps) + '" target="_blank" rel="noopener noreferrer">Ver en Maps <span aria-hidden="true">→</span></a>' : '') +
@@ -1042,9 +1073,9 @@
     var head = d.type || "Plan";
     if (d.guests) head += " para " + d.guests;
     lines.push(head + " — armado con LISTO");
-    lines.push(o.name + ([o.zone].filter(Boolean).length ? " · " + o.zone : ""));
-    if (typeof o.rating === "number") lines.push(ratingText(o));
-    if (safeHttps(o.maps_url)) lines.push("Google Maps: " + o.maps_url);
+    // Sin rating ni otros datos de Google: el nombre y el link al lugar en Google Maps.
+    lines.push(o.name);
+    if (safeHttps(o.maps_url)) lines.push("Ver en Google Maps: " + o.maps_url);
     lines.push(PRICE_NOTE + ".");
     return lines.join("\n");
   }

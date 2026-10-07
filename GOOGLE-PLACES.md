@@ -147,13 +147,24 @@ Tipos de columna recomendados para `providers`:
 
 ## Atribuciones (lo que pide Google)
 
-- Debajo de cada foto se muestra **"Foto: _Autor_ · Google Maps"**, con link al perfil del autor cuando Google lo informa.
-- Si Google no informa autor, se muestra **"Foto: Google Maps"**.
-- La lista de resultados indica **"Datos y fotos: Google Maps"**.
+Fuentes: Google Maps Platform Terms §3.2.2 y políticas de Places API (atribución "Google Maps", fotos).
+
+- Todo contenido de Google se identifica como **Google Maps**, con ese texto exacto (sin traducir, sin mayúsculas forzadas, 12px o más; clase `gmaps-attr`). No se usa logo porque no tenemos el recurso oficial descargado.
+- Cada tarjeta dice **"Datos del lugar: Google Maps"**; el aviso de resultados y el pie también.
+- Debajo de cada foto: **"Foto: _Autor_ · Google Maps"**. El autor enlaza a su perfil (si Google lo informa) y **"Google Maps" enlaza a la foto en Google Maps** (`googleMapsUri` de la foto).
+- La propuesta (/propuesta), /admin y los emails internos muestran "Datos del lugar: Google Maps".
+- La página **Términos** (`terminos.html`, link en el pie) incluye el aviso de Google Maps y los links a sus términos adicionales y a la política de privacidad de Google (Terms §3.2.2(a)).
+
+## Sin caché de contenido de Google (G1A)
+
+- `/api/plan-options` y `/api/place-photo` responden `Cache-Control: no-store` (los nombres de foto no se pueden cachear).
+- La propuesta pide la foto a Google en cada apertura (sin caché en el servidor).
+- El navegador guarda sólo el pedido y los ids (`google_place_id`); las opciones con datos de Google quedan sólo en memoria y, al volver a la página, se piden de nuevo.
+- Pendiente (G1B y siguientes): `providers` y `plan_selections.provider_name` todavía guardan datos de Google; se corrige después de pasar las lecturas a tiempo real.
 
 ## Si no hay fotos
 
-Se muestra un **placeholder de LISTO** (fondo madera oscuro con "LISTO · Sin fotos en Google"). Nunca se usa otra imagen ni se inventa una foto. Si una foto falla al cargar, se ve "Foto no disponible".
+Se muestra un **placeholder de LISTO** (fondo madera oscuro con "LISTO · Sin fotos"). Nunca se usa otra imagen ni se inventa una foto. Si una foto falla al cargar, se ve "Foto no disponible".
 
 ## Costo de las fotos
 
@@ -168,7 +179,7 @@ Medidas para no gastar de más:
 - **Fotos solo cuando se ven:** las fotos se cargan recién cuando aparecen en pantalla.
 - **Tope de fotos:** como máximo 6 fotos por lugar.
 - **Tamaños fijos:** 480 px en la lista y 1200 px en la galería.
-- **Sin pagar dos veces la misma foto:** el navegador recuerda cada foto 30 minutos.
+- **Sin caché de fotos:** cada vez que se muestra una foto se pide a Google (las referencias de foto no se pueden cachear).
 - **Links protegidos:** firmados y con vencimiento, así nadie los usa para gastar tu cuota.
 
 **Recomendado:** en Google Cloud → **APIs y servicios** → **Places API (New)** → **Cuotas**, limitá también las consultas de fotos por día (por ejemplo, **"GetPhotoMedia per day" = 300**).
@@ -196,5 +207,5 @@ La web usa `/api/plan-options?category=…&zone=…`, una función pública que 
   - prioriza los que están en la zona pedida;
   - después, los que tienen rating y al menos 20 reseñas.
 - **Providers:** cada búsqueda guarda y actualiza los lugares en `providers`, sin duplicar.
-- **Costo:** cada búsqueda nueva es 1 *Text Search*. La misma búsqueda repetida en los 10 minutos siguientes sale de la caché de Vercel y no vuelve a llamar a Google. Además, cada visitante puede hacer como máximo unas 30 búsquedas cada 10 minutos.
+- **Costo:** cada búsqueda nueva es 1 *Text Search*. Sin caché (políticas de Google): cada búsqueda llama a Google. Cada visitante puede hacer como máximo unas 30 búsquedas cada 10 minutos.
 - **"Elegir esta opción"** por ahora queda registrado solo en el navegador del usuario. Para guardarlo en Supabase hace falta una tabla nueva, pendiente de aprobación.

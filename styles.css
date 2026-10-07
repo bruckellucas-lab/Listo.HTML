@@ -707,7 +707,7 @@ figcaption {
 .card-share { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .card-wa { font-size: 11px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; opacity: .6; margin-top: 18px; transition: opacity .3s var(--ease); }
 .card-wa:hover { opacity: 1; }
-.photo-credit { text-align: right; max-width: 70%; overflow-wrap: anywhere; }
+.photo-credit { text-align: right; max-width: 70%; overflow-wrap: anywhere; font-size: 12px; letter-spacing: normal; text-transform: none; }
 .photo-credit a { text-decoration: underline; text-underline-offset: 2px; }
 .photo-empty {
   position: absolute; inset: 0;
@@ -913,3 +913,10 @@ figcaption {
   *, *::before, *::after { animation: none !important; transition: none !important; }
   .line > span, [data-reveal], .card, .hero-inner .composer, .hero-inner .examples, .hero-meta { transform: none !important; opacity: 1 !important; }
 }
+
+/* Atribución de Google Maps (políticas de Places): el texto exacto "Google Maps",
+   sin mayúsculas forzadas ni espaciado, legible (12px o más). */
+.gmaps-attr { font-family: var(--sans); font-size: 12px; font-weight: 500; letter-spacing: normal; text-transform: none; white-space: nowrap; }
+a.gmaps-attr { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+.card-attr { margin: 8px 0 0; font-size: 12px; color: #4A4138; }
+.footer-meta a { color: inherit; text-decoration: underline; text-underline-offset: 3px; }

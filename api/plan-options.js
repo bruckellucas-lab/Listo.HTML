@@ -88,11 +88,11 @@ module.exports = async function handler(req, res) {
     };
   });
 
-  // Caché corta en Vercel: la misma búsqueda en los próximos minutos no vuelve a pagar Google.
-  // (Menor a la hora de vida de los links firmados de las fotos.)
+  // Sin caché (políticas de Google Maps Platform): la respuesta trae contenido de Google
+  // y nombres de fotos, que no se pueden cachear. Cada búsqueda se pide en el momento.
   res.statusCode = 200;
   res.setHeader("Content-Type", "application/json; charset=utf-8");
-  res.setHeader("Cache-Control", "public, max-age=0, s-maxage=600");
+  res.setHeader("Cache-Control", "no-store");
   res.setHeader("X-Robots-Tag", "noindex");
   res.end(JSON.stringify({ ok: true, category: category, zone: zone, options: options, providers_saved: saved }));
 };

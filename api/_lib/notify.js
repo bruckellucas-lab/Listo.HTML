@@ -22,6 +22,10 @@ var TIMEOUT_MS = 8000;
 function api(cfg, path) { return store.normalizeUrl(cfg.url) + "/rest/v1/" + path; }
 function first(rows) { return Array.isArray(rows) && rows.length ? rows[0] : null; }
 
+// Atribución: nombre, dirección y link del lugar vienen de Google Maps.
+var GMAPS_HTML = '<p style="margin:14px 0 0;font-size:12px;color:#5A5046">Datos del lugar: <span style="font-size:12px;font-weight:bold;letter-spacing:normal;text-transform:none">Google Maps</span></p>';
+var GMAPS_TEXT = "Datos del lugar: Google Maps";
+
 function esc(v) {
   return String(v === null || v === undefined ? "" : v).replace(/[&<>"']/g, function (c) {
     return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
@@ -97,12 +101,12 @@ function buildEmail(ctx) {
       return '<tr><td style="padding:8px 12px 8px 0;border-bottom:1px solid #E2D9CB;color:#8C857A;white-space:nowrap;vertical-align:top">' + esc(row[0]) +
         '</td><td style="padding:8px 0;border-bottom:1px solid #E2D9CB;vertical-align:top">' + val + '</td></tr>';
     }).join("") +
-    '</table></div>';
+    '</table>' + GMAPS_HTML + '</div>';
 
   var text = (ctx.updated ? "Solicitud actualizada" : "Nueva solicitud") + " — LISTO\n" +
     "Todavía no hay reserva confirmada. El detalle completo está en /admin.\n\n" +
     rows.map(function (row) { return row[0] + ": " + row[1]; }).join("\n") +
-    (waLink ? "\n\nABRIR WHATSAPP: " + waLink : "");
+    (waLink ? "\n\nABRIR WHATSAPP: " + waLink : "") + "\n\n" + GMAPS_TEXT;
 
   return { subject: subject, html: html, text: text, waLink: waLink };
 }
@@ -234,11 +238,11 @@ function buildProposalEmail(ctx) {
     rows.map(function (row) {
       return '<tr><td style="padding:8px 12px 8px 0;border-bottom:1px solid #E2D9CB;color:#8C857A;white-space:nowrap;vertical-align:top">' + esc(row[0]) +
         '</td><td style="padding:8px 0;border-bottom:1px solid #E2D9CB;vertical-align:top">' + esc(row[1]) + '</td></tr>';
-    }).join("") + '</table>' + admin + '</div>';
+    }).join("") + '</table>' + GMAPS_HTML + admin + '</div>';
 
   var text = subject + "\n" + lead + "\n\n" +
     rows.map(function (row) { return row[0] + ": " + row[1]; }).join("\n") +
-    (waLink ? "\n\nABRIR WHATSAPP: " + waLink : "") + (ctx.adminUrl ? "\nGestionar: " + ctx.adminUrl : "");
+    (waLink ? "\n\nABRIR WHATSAPP: " + waLink : "") + (ctx.adminUrl ? "\nGestionar: " + ctx.adminUrl : "") + "\n\n" + GMAPS_TEXT;
   return { subject: subject, html: html, text: text };
 }
 

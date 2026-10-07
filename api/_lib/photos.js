@@ -14,6 +14,9 @@
       de Google que NO contiene la clave).
 
    No se guarda nada de esto en Supabase: sólo el google_place_id.
+   Políticas de Places: los nombres de foto (photo names) NO se cachean;
+   se muestran las atribuciones del autor y el link a la foto en Google Maps
+   (googleMapsUri de cada foto).
    ========================================================= */
 "use strict";
 
@@ -85,7 +88,10 @@ function attributionsOf(photo) {
     });
 }
 
+function httpsOrNull(u) { return typeof u === "string" && /^https:\/\//.test(u) ? u : null; }
+
 // Convierte las fotos de un lugar de Google en fotos listas para mostrar (con links firmados).
+// source = la foto en Google Maps (googleMapsUri de la foto), para dar acceso al contenido fuente.
 function photosForPlace(place, secret, opts) {
   opts = opts || {};
   var max = Math.min(MAX_PHOTOS_PER_PLACE, opts.max || MAX_PHOTOS_PER_PLACE);
@@ -99,7 +105,8 @@ function photosForPlace(place, secret, opts) {
         large: signedSrc(secret, p.name, 1200, now),
         width: typeof p.widthPx === "number" ? p.widthPx : null,
         height: typeof p.heightPx === "number" ? p.heightPx : null,
-        attributions: attributionsOf(p)
+        attributions: attributionsOf(p),
+        source: httpsOrNull(p.googleMapsUri)
       };
     });
 }

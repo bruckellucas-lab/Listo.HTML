@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LISTO · Términos</title>
+  <meta name="description" content="Términos de uso de LISTO (versión beta).">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ink: #141210; --cream: #EFE8DC; --muted: rgba(239,232,220,.62); --line: rgba(239,232,220,.16); --amber: #E0A458;
+      --display: "Anton", "Oswald", "Arial Narrow", Impact, sans-serif;
+      --sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      --gutter: clamp(16px, 5vw, 64px);
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: var(--ink); color: var(--cream); font-family: var(--sans); font-size: 16px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+    a { color: inherit; text-underline-offset: 3px; }
+    .top { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 22px var(--gutter); border-bottom: 1px solid var(--line); }
+    .brand { font-family: var(--display); font-size: 26px; letter-spacing: .02em; text-decoration: none; }
+    .label { font-size: 11px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; }
+    main { max-width: 760px; padding: clamp(36px, 6vw, 72px) var(--gutter) 64px; }
+    h1 { font-family: var(--display); font-weight: 400; text-transform: uppercase; font-size: clamp(44px, 9vw, 88px); line-height: .95; margin: 0 0 18px; }
+    h2 { font-family: var(--display); font-weight: 400; text-transform: uppercase; font-size: clamp(24px, 4vw, 32px); line-height: 1.05; margin: 44px 0 12px; }
+    p, li { color: var(--cream); }
+    .muted { color: var(--muted); }
+    .review { border: 1px solid var(--line); border-left: 3px solid var(--amber); padding: 14px 16px; margin: 18px 0 0; font-size: 14px; }
+    .gmaps-attr { font-size: inherit; font-weight: 600; letter-spacing: normal; text-transform: none; white-space: nowrap; }
+    footer { border-top: 1px solid var(--line); padding: 26px var(--gutter) 40px; display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <header class="top"><a class="brand" href="/">LISTO</a><span class="label muted">Términos</span></header>
+  <main>
+    <p class="label muted">Versión beta</p>
+    <h1>Términos<br>de uso.</h1>
+    <p class="muted">Última actualización: 7 de octubre de 2026.</p>
+
+    <h2>Contenido de Google Maps</h2>
+    <p>LISTO incluye funciones y contenido de <span class="gmaps-attr">Google Maps</span>: por ejemplo, lugares, datos de esos lugares (nombre, dirección, rating), fotos y links a Google Maps.</p>
+    <p>El uso de las funciones y del contenido de <span class="gmaps-attr">Google Maps</span> está sujeto a las versiones vigentes de:</p>
+    <ul>
+      <li>los <a href="https://maps.google.com/help/terms_maps/" target="_blank" rel="noopener noreferrer">Términos adicionales de servicio de Google Maps / Google Earth</a> (Google Maps End User Additional Terms of Service);</li>
+      <li>la <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer">Política de Privacidad de Google</a> (Google Privacy Policy).</li>
+    </ul>
+
+    <h2>Qué hace LISTO hoy</h2>
+    <p>LISTO es una versión beta que ayuda a ordenar un plan y a consultar disponibilidad y condiciones con lugares reales. LISTO todavía no reserva ni cobra: los precios, la disponibilidad y la capacidad siempre se confirman con el lugar.</p>
+
+    <div class="review" role="note">
+      <strong>Pendiente de revisión legal.</strong> Esta página sólo cubre el aviso sobre Google Maps y una descripción general del servicio. Los términos completos de LISTO (condiciones del servicio, responsabilidades, datos personales y política de privacidad propia) todavía no fueron redactados ni revisados por un profesional y se publicarán más adelante.
+    </div>
+  </main>
+  <footer><span class="label">LISTO</span><a class="label" href="/">Volver al inicio</a></footer>
+</body>
+</html>

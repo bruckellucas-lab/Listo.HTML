@@ -33,9 +33,8 @@ module.exports = async function handler(req, res) {
     var photoUri = await photos.fetchPhotoUri(apiKey, q.name, parseInt(q.w, 10));
     res.statusCode = 302;
     res.setHeader("Location", photoUri);
-    // Caché corta y privada (sólo el navegador de quien la ve): evita volver a pagar
-    // la misma foto al recargar, sin guardar contenido de Google en ningún servidor.
-    res.setHeader("Cache-Control", "private, max-age=1800");
+    // Sin caché: el link firmado lleva el nombre de la foto, que no se puede cachear.
+    res.setHeader("Cache-Control", "no-store");
     res.setHeader("Referrer-Policy", "no-referrer");
     res.setHeader("X-Robots-Tag", "noindex");
     return res.end();

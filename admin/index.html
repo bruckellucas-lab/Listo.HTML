@@ -27,6 +27,9 @@
 
     .label { font-size: 11px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; }
     .muted { color: var(--muted); }
+    /* Atribución de Google Maps: el texto exacto "Google Maps", legible y sin transformar. */
+    .gmaps-attr { font-size: 12px; font-weight: 500; letter-spacing: normal; text-transform: none; white-space: nowrap; }
+    .gmaps-note { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
     .brand { font-family: var(--display); font-weight: 400; text-transform: uppercase; letter-spacing: .01em; margin: 0; line-height: .9; }
     .brand span { color: var(--muted); }
 
@@ -546,6 +549,7 @@
         var lastProp = currentProposal(it);
         if (lastProp) info.appendChild(el("p", "card-proposal " + lastProp.status, "Propuesta: " + (PROPOSAL_LABELS[lastProp.status] || lastProp.status) +
           (lastProp.status === "proposal_sent" ? " · " + opensText(lastProp) : "")));
+        info.appendChild(gmapsNote());
         card.appendChild(info);
 
         var actions = el("div", "item-actions");
@@ -604,6 +608,13 @@
     var AVAIL = { yes: "Disponibilidad confirmada", no: "Sin disponibilidad", pending: "Disponibilidad pendiente" };
     var schemaReady = function () { return $("schema-banner").hidden; };
     var proposalsReady = true;
+
+    // Nombre, categoría, zona, dirección, rating, web y link del lugar vienen de Google Maps.
+    function gmapsNote() {
+      var p = el("p", "gmaps-note", "Datos del lugar: ");
+      p.appendChild(el("span", "gmaps-attr", "Google Maps"));
+      return p;
+    }
 
     function section(title, rows) {
       var sec = el("section", "d-section");
@@ -1279,6 +1290,7 @@
       var rating = typeof pr.rating === "number" ? "★ " + pr.rating + (typeof pr.review_count === "number" ? " (" + pr.review_count + " reseñas)" : "") : null;
       s2.appendChild(section("", [["Nombre", pr.name], ["Categoría", pr.category], ["Dirección", pr.address], ["Zona", pr.zone], ["Rating", rating],
         ["Website", pr.website ? linkBtn(pr.website, "Abrir") : "No figura en nuestros datos"]]));
+      s2.appendChild(gmapsNote());
       s2.appendChild(contactState(it));
       b.appendChild(s2);
 
@@ -1521,7 +1533,7 @@
         info.appendChild(el("p", "p-meta", [p.category, p.zone].filter(Boolean).join(" · ") || "Sin categoría ni zona"));
         if (p.address) info.appendChild(el("p", "p-meta", p.address));
         info.appendChild(el("p", "p-meta", typeof p.rating === "number"
-          ? "★ " + p.rating + (typeof p.review_count === "number" ? " · " + p.review_count + " reseñas" : "") : "Sin rating en Google"));
+          ? "★ " + p.rating + (typeof p.review_count === "number" ? " · " + p.review_count + " reseñas" : "") : "Sin rating"));
         var badges = el("div", "p-attrs");
         ATTR_ORDER.forEach(function (code) {
           var a = attrOf(p, code);
@@ -1531,6 +1543,7 @@
         });
         if (!badges.children.length) badges.appendChild(el("span", "muted", "Sin atributos cargados"));
         info.appendChild(badges);
+        info.appendChild(gmapsNote());
         card.appendChild(info);
         var actions = el("div", "item-actions");
         var links = el("div", "links");
@@ -1756,6 +1769,7 @@
         ["Estado", PROVIDER_STATUS[p.provider_status] || p.provider_status],
         ["google_place_id", p.google_place_id, "mono"]
       ]));
+      s1.appendChild(gmapsNote());
       b.appendChild(s1);
       var s2 = block("Restricciones y atributos");
       s2.appendChild(el("p", "muted", "Google, reseñas o el nombre del lugar no verifican. “Verificado” sólo con evidencia confiable y fecha."));

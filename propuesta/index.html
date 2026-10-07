@@ -50,8 +50,13 @@
     .hero h1 { font-family: var(--display); font-weight: 400; text-transform: uppercase; font-size: clamp(54px, 11vw, 168px); line-height: .9; margin: 0; padding: .06em 0; overflow-wrap: anywhere;
       animation: rise 1s var(--ease-out) both; }
     .hero .sub { margin: 14px 0 0; color: var(--muted); font-size: 15px; animation: rise 1s .12s var(--ease-out) both; }
-    .credit { position: absolute; right: var(--gutter); bottom: 12px; z-index: 2; font-size: 10px; color: rgba(239,232,220,.5); }
+    .credit { position: absolute; right: var(--gutter); bottom: 12px; z-index: 2; font-size: 12px; color: rgba(239,232,220,.85); text-shadow: 0 1px 8px rgba(0,0,0,.5); }
     .credit a { color: inherit; }
+    /* Atribución de Google Maps: el texto exacto "Google Maps", legible y sin transformar. */
+    .gmaps-attr { font-family: var(--sans, inherit); font-size: 12px; font-weight: 500; letter-spacing: normal; text-transform: none; white-space: nowrap; }
+    a.gmaps-attr { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+    .place-attr { margin: 10px 0 0; font-size: 12px; opacity: .75; }
+    footer a { color: inherit; }
     @keyframes rise { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
 
     main { max-width: 1180px; margin: 0 auto; padding: 0 var(--gutter) 90px; }
@@ -147,6 +152,7 @@
         <p class="label">Tu propuesta</p>
         <h1 id="place-name"></h1>
         <p class="sub" id="place-sub"></p>
+        <p class="place-attr" id="place-attr" hidden>Datos del lugar: <span class="gmaps-attr">Google Maps</span></p>
       </div>
       <p class="credit" id="credit" hidden></p>
     </header>
@@ -159,7 +165,7 @@
       <section id="where-section" hidden>
         <div class="where">
           <div><p class="label muted">Dirección</p><p id="address"></p></div>
-          <a class="btn btn-ghost" id="maps" href="#" target="_blank" rel="noopener noreferrer" hidden>Ver en Maps ↗</a>
+          <a class="btn btn-ghost" id="maps" href="#" target="_blank" rel="noopener noreferrer" hidden>Ver en Google Maps ↗</a>
         </div>
       </section>
 
@@ -204,7 +210,7 @@
       </section>
     </main>
 
-    <footer><span class="label">LISTO</span><span class="label">Tenés el plan. Nosotros hacemos el resto.</span></footer>
+    <footer><span class="label">LISTO</span><span class="label">Tenés el plan. Nosotros hacemos el resto.</span><a class="label" href="/terminos.html">Términos</a></footer>
   </div>
 
   <script>
@@ -251,6 +257,8 @@
 
       $("place-name").textContent = place.name || "Tu propuesta";
       $("place-sub").textContent = [place.category, place.zone].filter(Boolean).join(" · ");
+      // Nombre, categoría, zona, dirección y link del lugar vienen de Google Maps.
+      $("place-attr").hidden = !(place.name || place.category || place.zone || place.address || place.maps_url);
 
       var img = $("photo");
       if (p.photo && p.photo.large) {
@@ -259,18 +267,20 @@
         img.alt = place.name || "";
         img.src = p.photo.large;
         img.hidden = false;
+        // Foto de Google: autor/es (con su link) y acceso a la foto en Google Maps.
         var authors = (p.photo.attributions || []).filter(function (a) { return a && a.name; });
-        if (authors.length) {
-          var credit = $("credit");
-          credit.textContent = "Foto: ";
-          authors.forEach(function (a, i) {
-            if (i) credit.appendChild(document.createTextNode(", "));
-            if (a.uri) { var link = el("a", "", a.name); link.href = a.uri; link.target = "_blank"; link.rel = "noopener noreferrer"; credit.appendChild(link); }
-            else credit.appendChild(document.createTextNode(a.name));
-          });
-          credit.appendChild(document.createTextNode(" · Google Maps"));
-          credit.hidden = false;
-        }
+        var credit = $("credit");
+        credit.textContent = "Foto: ";
+        authors.forEach(function (a, i) {
+          if (i) credit.appendChild(document.createTextNode(", "));
+          if (a.uri && /^https:\/\//.test(a.uri)) { var link = el("a", "", a.name); link.href = a.uri; link.target = "_blank"; link.rel = "noopener noreferrer"; credit.appendChild(link); }
+          else credit.appendChild(document.createTextNode(a.name));
+        });
+        if (authors.length) credit.appendChild(document.createTextNode(" · "));
+        var gm = el(p.photo.source && /^https:\/\//.test(p.photo.source) ? "a" : "span", "gmaps-attr", "Google Maps");
+        if (gm.tagName === "A") { gm.href = p.photo.source; gm.target = "_blank"; gm.rel = "noopener noreferrer"; gm.title = "Ver la foto en Google Maps"; }
+        credit.appendChild(gm);
+        credit.hidden = false;
       }
 
       var facts = $("facts");
