@@ -118,20 +118,35 @@ module.exports = async function handler(req, res) {
         method: "POST", headers: store.headersFor(key, { "Prefer": "return=representation" }), body: JSON.stringify(d)
       }, "guardar cotización");
 
-      // 2) Estado: a "Cotizado" si estaba en Nueva / Contactando / Cotizado. Siempre updated_at = ahora.
+      // 2) Sólo actualizar si el estado sigue siendo el que leímos: no pisar cambios concurrentes.
+      // La cotización YA quedó guardada. Un fallo desde acá no debe pedir otro INSERT.
       var patch = { updated_at: new Date().toISOString() };
       var moved = MOVES_TO_QUOTED.indexOf(inquiry[0].status) !== -1;
       if (moved) patch.status = "quoted";
-      var upd = await store.request(fetch, base + "plan_inquiries?id=eq." + d.plan_inquiry_id + "&select=id,status,updated_at", {
-        method: "PATCH", headers: store.headersFor(key, { "Prefer": "return=representation" }), body: JSON.stringify(patch)
-      }, "actualizar solicitud");
-
-      return http.sendJson(res, 200, {
-        ok: true,
-        quote: created && created[0],
-        item: upd && upd[0],
-        status_changed: moved && inquiry[0].status !== "quoted"
-      });
+      var result = { ok: true, quote: created && created[0], item: null, status_changed: false };
+      try {
+        var upd = await store.request(fetch, base + "plan_inquiries?id=eq." + d.plan_inquiry_id +
+          "&status=eq." + encodeURIComponent(inquiry[0].status) + "&select=id,status,updated_at", {
+          method: "PATCH", headers: store.headersFor(key, { "Prefer": "return=representation" }), body: JSON.stringify(patch)
+        }, "actualizar solicitud");
+        result.item = upd && upd[0] || null;
+        if (result.item) result.status_changed = moved && inquiry[0].status !== "quoted";
+        else result.warning = "La cotización quedó guardada. El estado cambió mientras tanto; actualizá el panel. No vuelvas a guardarla.";
+      } catch (errStatus) {
+        console.error("[admin-quotes] estado:", errStatus.status || "", errStatus.code || "");
+        result.status_pending = true;
+        result.warning = "La cotización quedó guardada, pero no pudimos confirmar la actualización del estado. Actualizá el panel; no vuelvas a guardarla.";
+      }
+      if (!result.item) {
+        // Refrescar es de sólo lectura: nunca repetir el INSERT ni forzar otro cambio de estado.
+        try {
+          var fresh = await get("plan_inquiries?select=id,status,updated_at&id=eq." + d.plan_inquiry_id, "refrescar solicitud");
+          result.item = fresh && fresh[0] || null;
+        } catch (errRead) {
+          console.error("[admin-quotes] refrescar estado:", errRead.status || "", errRead.code || "");
+        }
+      }
+      return http.sendJson(res, 200, result);
     } catch (err) {
       console.error("[admin-quotes] guardar:", err.step || "", err.status || "", err.code || "", err.message);
       return http.sendJson(res, 502, { ok: false, error: explain(err) });

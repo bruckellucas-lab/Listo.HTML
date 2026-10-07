@@ -814,7 +814,7 @@
         api("POST", "/api/admin-quotes", v).then(function (data) {
           it.quotes = [data.quote].concat(it.quotes || []);
           if (data.item) { it.status = data.item.status; it.updated_at = data.item.updated_at; }
-          toast("Cotización guardada" + (data.status_changed ? " · Estado: Cotizado" : ""));
+          toast(data.warning || ("Cotización guardada" + (data.status_changed ? " · Estado: Cotizado" : "")));
           render();
           openDetail(it);
         }).catch(function (e2) {
