@@ -55,6 +55,7 @@ Para cambiar una foto, buscá en los archivos el código que empieza con `photo-
 - `tests/`: pruebas sin dependencias (sólo Node 18 o más nuevo). No llaman a Google, Supabase ni Resend.
 - `npm run check`: revisa la sintaxis de todos los archivos y que `/api` no pase de **12 funciones** (el límite de Vercel Hobby; con 13 el deploy falla).
 - `npm test`: corre las pruebas (lugares, propuestas, reservas y comisión, restricciones alimentarias, guardado de pedidos, límite de pedidos, firma de fotos, email interno y controles de seguridad).
+- `tests/matching/` y `docs/MATCHING-F0.md`: línea base reproducible del matching actual (escenarios sintéticos, sin red).
 - `supabase/migrations/`: cambios de la base versionados desde P1A (se corren a mano; ver su README).
 - `.github/workflows/test.yml`: GitHub corre ambos controles en cada push y pull request. No publica nada.
 

@@ -1,0 +1,237 @@
+{
+  "summary": {
+    "scenarios": 20,
+    "shown": 60,
+    "pertinentRate": 0.55,
+    "inZoneRate": 0.947,
+    "padding": 29,
+    "missed": 19,
+    "scenariosWithFewerThan3Adequate": 7,
+    "scenariosShowingSameForAllUsers": 20,
+    "differentPlansSameQueryPairs": 46,
+    "differentPlansIdenticalTop3": 46,
+    "distinctQueries": 6
+  },
+  "scenarios": [
+    {
+      "id": "cena-pareja-palermo",
+      "category": "restaurantes",
+      "shown": 3,
+      "pertinent": 3,
+      "inZone": 3,
+      "adequate": 10,
+      "padding": 0,
+      "missed": 0,
+      "distinctAcrossUsers": 3
+    },
+    {
+      "id": "aniversario-palermo",
+      "category": "restaurantes",
+      "shown": 3,
+      "pertinent": 2,
+      "inZone": 3,
+      "adequate": 5,
+      "padding": 1,
+      "missed": 1,
+      "distinctAcrossUsers": 3
+    },
+    {
+      "id": "asado-12-palermo",
+      "category": "restaurantes",
+      "shown": 3,
+      "pertinent": 0,
+      "inZone": 3,
+      "adequate": 2,
+      "padding": 3,
+      "missed": 2,
+      "distinctAcrossUsers": 3
+    },
+    {
+      "id": "cumple-15-palermo",
+      "category": "restaurantes",
+      "shown": 3,
+      "pertinent": 1,
+      "inZone": 3,
+      "adequate": 7,
+      "padding": 2,
+      "missed": 2,
+      "distinctAcrossUsers": 3
+    },
+    {
+      "id": "juntada-6-palermo",
+      "category": "restaurantes",
+      "shown": 3,
+      "pertinent": 1,
+      "inZone": 3,
+      "adequate": 5,
+      "padding": 2,
+      "missed": 2,
+      "distinctAcrossUsers": 3
+    },
+    {
+      "id": "reunion-4-palermo",
+      "category": "restaurantes",
+      "shown": 3,
+      "pertinent": 1,
+      "inZone": 3,
+      "adequate": 3,
+      "padding": 2,
+      "missed": 2,
+      "distinctAcrossUsers": 3
+    },
+    {
+      "id": "cena-vegana-palermo",
+      "category": "restaurantes",
+      "shown": 3,
+      "pertinent": 0,
+      "inZone": 3,
+      "adequate": 1,
+      "padding": 3,
+      "missed": 1,
+      "distinctAcrossUsers": 3
+    },
+    {
+      "id": "baby-shower-palermo",
+      "category": "restaurantes",
+      "shown": 3,
+      "pertinent": 0,
+      "inZone": 3,
+      "adequate": 2,
+      "padding": 3,
+      "missed": 2,
+      "distinctAcrossUsers": 3
+    },
+    {
+      "id": "after-8-palermo",
+      "category": "bares",
+      "shown": 3,
+      "pertinent": 2,
+      "inZone": 3,
+      "adequate": 6,
+      "padding": 1,
+      "missed": 1,
+      "distinctAcrossUsers": 3
+    },
+    {
+      "id": "despedida-10-palermo",
+      "category": "bares",
+      "shown": 3,
+      "pertinent": 2,
+      "inZone": 3,
+      "adequate": 6,
+      "padding": 1,
+      "missed": 1,
+      "distinctAcrossUsers": 3
+    },
+    {
+      "id": "tragos-6-palermo",
+      "category": "bares",
+      "shown": 3,
+      "pertinent": 2,
+      "inZone": 3,
+      "adequate": 6,
+      "padding": 1,
+      "missed": 1,
+      "distinctAcrossUsers": 3
+    },
+    {
+      "id": "fiesta-30-palermo",
+      "category": "restaurantes",
+      "shown": 3,
+      "pertinent": 0,
+      "inZone": 3,
+      "adequate": 1,
+      "padding": 3,
+      "missed": 1,
+      "distinctAcrossUsers": 3
+    },
+    {
+      "id": "casamiento-120-palermo",
+      "category": "salones",
+      "shown": 3,
+      "pertinent": 2,
+      "inZone": 3,
+      "adequate": 3,
+      "padding": 1,
+      "missed": 1,
+      "distinctAcrossUsers": 3
+    },
+    {
+      "id": "corporativo-50-palermo",
+      "category": "salones",
+      "shown": 3,
+      "pertinent": 2,
+      "inZone": 3,
+      "adequate": 4,
+      "padding": 1,
+      "missed": 1,
+      "distinctAcrossUsers": 3
+    },
+    {
+      "id": "cumple-45-palermo",
+      "category": "salones",
+      "shown": 3,
+      "pertinent": 2,
+      "inZone": 3,
+      "adequate": 3,
+      "padding": 1,
+      "missed": 1,
+      "distinctAcrossUsers": 3
+    },
+    {
+      "id": "graduacion-25-palermo",
+      "category": "salones",
+      "shown": 3,
+      "pertinent": 3,
+      "inZone": 3,
+      "adequate": 4,
+      "padding": 0,
+      "missed": 0,
+      "distinctAcrossUsers": 3
+    },
+    {
+      "id": "cena-4-caballito",
+      "category": "restaurantes",
+      "shown": 3,
+      "pertinent": 3,
+      "inZone": 2,
+      "adequate": 2,
+      "padding": 1,
+      "missed": 0,
+      "distinctAcrossUsers": 3
+    },
+    {
+      "id": "asado-10-caballito",
+      "category": "restaurantes",
+      "shown": 3,
+      "pertinent": 1,
+      "inZone": 2,
+      "adequate": 1,
+      "padding": 2,
+      "missed": 0,
+      "distinctAcrossUsers": 3
+    },
+    {
+      "id": "cena-6-nunez",
+      "category": "restaurantes",
+      "shown": 3,
+      "pertinent": 3,
+      "inZone": 2,
+      "adequate": 2,
+      "padding": 1,
+      "missed": 0,
+      "distinctAcrossUsers": 3
+    },
+    {
+      "id": "cena-sin-zona",
+      "category": "restaurantes",
+      "shown": 3,
+      "pertinent": 3,
+      "inZone": null,
+      "adequate": 4,
+      "padding": 0,
+      "missed": 0,
+      "distinctAcrossUsers": 3
+    }
+  ]
+}

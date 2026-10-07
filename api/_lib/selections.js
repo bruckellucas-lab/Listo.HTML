@@ -8,6 +8,7 @@
 "use strict";
 
 var store = require("./providers-store");
+var requirements = require("./requirements");
 
 var UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -23,10 +24,9 @@ function saveSelection(cfg, eventRequestId, placeId, fetchImpl) {
     return store.request(doFetch, api(cfg, path), { method: "GET", headers: store.headersFor(cfg.key) }, step);
   };
 
-  // 1) El pedido tiene que existir.
-  return get("event_requests?select=id&id=eq." + encodeURIComponent(eventRequestId), "buscar pedido")
-    .then(function (rows) {
-      if (!first(rows)) { var e = new Error("pedido inexistente"); e.code = "NO_REQUEST"; throw e; }
+  // 1) El pedido tiene que existir y no tener requisitos obligatorios (esos se coordinan a mano).
+  return requirements.assertAutomaticAllowed(cfg, eventRequestId, doFetch)
+    .then(function () {
       // 2) El lugar tiene que existir en providers (el nombre sale de ahí, no del navegador).
       return get("providers?select=google_place_id,name&google_place_id=eq." + encodeURIComponent(placeId), "buscar proveedor");
     })
@@ -67,6 +67,8 @@ function saveSelection(cfg, eventRequestId, placeId, fetchImpl) {
 }
 
 function explain(err) {
+  var r = requirements.explain(err);
+  if (r) return r;
   if (err.code === "NO_REQUEST") return { status: 404, message: "Todavía no terminamos de guardar tu pedido. Esperá un segundo y probá de nuevo." };
   if (err.code === "NO_PROVIDER") return { status: 404, message: "No encontramos ese lugar en LISTO. Volvé a buscar opciones y probá de nuevo." };
   if (err.code === "23505") return { status: 409, message: "Ya estamos guardando tu elección. Esperá un segundo." };

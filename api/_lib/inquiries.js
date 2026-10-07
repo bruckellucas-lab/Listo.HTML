@@ -9,6 +9,7 @@
 
 var store = require("./providers-store");
 var validDate = require("./calendar").validDate;
+var requirements = require("./requirements");
 
 var STATUS = "inquiry_requested";
 
@@ -62,9 +63,12 @@ function saveInquiry(cfg, eventRequestId, placeId, data, fetchImpl) {
     return store.request(doFetch, api(cfg, path), { method: "GET", headers: store.headersFor(cfg.key) }, step);
   };
 
+  // 0) El pedido guardado no puede tener requisitos obligatorios (esos se coordinan a mano).
   // 1) Tiene que existir una elección activa de ESTE pedido para ESTE lugar.
-  return get("plan_selections?select=id,provider_google_place_id&status=eq.interested&event_request_id=eq." +
-    encodeURIComponent(eventRequestId), "buscar elección").then(function (rows) {
+  return requirements.assertAutomaticAllowed(cfg, eventRequestId, doFetch).then(function () {
+    return get("plan_selections?select=id,provider_google_place_id&status=eq.interested&event_request_id=eq." +
+      encodeURIComponent(eventRequestId), "buscar elección");
+  }).then(function (rows) {
     var sel = first(rows);
     if (!sel) { var e = new Error("sin elección"); e.code = "NO_SELECTION"; throw e; }
     if (sel.provider_google_place_id !== placeId) { var e2 = new Error("elección distinta"); e2.code = "OTHER_SELECTION"; throw e2; }
@@ -92,6 +96,8 @@ function saveInquiry(cfg, eventRequestId, placeId, data, fetchImpl) {
 }
 
 function explain(err) {
+  var r = requirements.explain(err);
+  if (r) return r;
   if (err.code === "NO_SELECTION") return { status: 409, message: "Primero elegí una opción y después tocá “Quiero avanzar”." };
   if (err.code === "OTHER_SELECTION") return { status: 409, message: "Tu opción elegida cambió. Volvé a elegirla y probá de nuevo." };
   if (err.code === "PGRST205" || err.code === "42P01") return { status: 503, message: "Falta crear la tabla plan_inquiries en Supabase." };
