@@ -40,7 +40,10 @@ function readCookie(req, name) {
   var parts = raw.split(/;\s*/);
   for (var i = 0; i < parts.length; i++) {
     var eq = parts[i].indexOf("=");
-    if (eq > 0 && parts[i].slice(0, eq) === name) return decodeURIComponent(parts[i].slice(eq + 1));
+    if (eq > 0 && parts[i].slice(0, eq) === name) {
+      try { return decodeURIComponent(parts[i].slice(eq + 1)); }
+      catch (e) { return ""; }   // Cookie inválida: sin sesión, nunca una excepción.
+    }
   }
   return "";
 }

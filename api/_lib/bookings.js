@@ -8,9 +8,9 @@
 "use strict";
 
 var store = require("./providers-store");
+var validDate = require("./calendar").validDate;
 
 var UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-var DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 var CHANNELS = ["whatsapp", "phone", "email", "other"];
 var MAX_RATE = 30;   // mismo tope que en Supabase: 0 < % <= 30
 var FIELDS = "id,created_at,updated_at,plan_inquiry_id,provider_quote_id,plan_proposal_id,provider_google_place_id," +
@@ -18,7 +18,6 @@ var FIELDS = "id,created_at,updated_at,plan_inquiry_id,provider_quote_id,plan_pr
   "commission_type,commission_rate,commission_amount,commission_status,commission_due_date,commission_invoiced_at,commission_paid_at,internal_notes";
 
 function todayAR() { return new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10); }
-function validDate(d) { return DATE_RE.test(d) && !isNaN(Date.parse(d + "T00:00:00Z")); }
 function text(v, max) { var s = String(v === undefined || v === null ? "" : v).trim().slice(0, max); return s || null; }
 
 // Montos en formato argentino ("1.250.000" o "1250000,50"). Devuelve centavos (entero) o error.

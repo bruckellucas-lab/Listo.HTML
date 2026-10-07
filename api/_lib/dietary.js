@@ -8,6 +8,8 @@
    ========================================================= */
 "use strict";
 
+var validDate = require("./calendar").validDate;
+
 var ATTRIBUTES = [
   { code: "kosher", label: "Kosher", months: 6 },
   { code: "halal", label: "Halal", months: 6 },
@@ -26,13 +28,11 @@ var TRUSTED = ["certifier", "official_website", "provider_document", "provider_d
 var SIGNALS = ["google_signal", "review_signal", "name_signal"];
 var NEEDS_CERTIFIER = ["kosher", "halal"];
 var KOSHER_CATEGORIES = ["meat", "dairy", "parve"];
-var DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 var PLACE_ID_RE = /^[A-Za-z0-9_-]{10,500}$/;
 var FIELDS = "id,created_at,updated_at,provider_google_place_id,attribute,status,source_type,source_url,certifier,kosher_category," +
   "verification_notes,verified_at,review_after,evidence_valid_until";
 
 function todayAR() { return new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10); }
-function validDate(d) { return DATE_RE.test(d) && !isNaN(Date.parse(d + "T00:00:00Z")); }
 function text(v, max) { var s = String(v === undefined || v === null ? "" : v).trim(); return s ? s.slice(0, max) : null; }
 function monthsOf(code) { var a = ATTRIBUTES.filter(function (x) { return x.code === code; })[0]; return a ? a.months : 12; }
 

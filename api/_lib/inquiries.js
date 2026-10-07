@@ -8,6 +8,7 @@
 "use strict";
 
 var store = require("./providers-store");
+var validDate = require("./calendar").validDate;
 
 var STATUS = "inquiry_requested";
 
@@ -35,7 +36,7 @@ function validate(body, todayIso) {
   var digits = phone.replace(/\D/g, "");
   if (!/^[+\d\s().-]+$/.test(phone) || digits.length < 8 || digits.length > 15) return { error: "Revisá tu WhatsApp: tiene que ser un número de teléfono." };
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return { error: "Revisá tu email (o dejalo vacío)." };
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || isNaN(Date.parse(date + "T00:00:00Z"))) return { error: "Elegí la fecha del plan." };
+  if (!validDate(date)) return { error: "Elegí la fecha del plan." };
   var today = todayIso || new Date().toISOString().slice(0, 10);
   var limit = new Date(Date.parse(today + "T00:00:00Z") + 2 * 365 * 864e5).toISOString().slice(0, 10);
   if (date < today) return { error: "La fecha del plan no puede ser anterior a hoy." };

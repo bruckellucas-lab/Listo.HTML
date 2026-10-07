@@ -16,9 +16,9 @@
 var http = require("./_lib/http");
 var auth = require("./_lib/admin-auth");
 var store = require("./_lib/providers-store");
+var validDate = require("./_lib/calendar").validDate;
 
 var UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-var DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 var FIELDS = "id,created_at,received_at,total_price,price_per_person,currency,includes,conditions,deposit,availability,valid_until,internal_notes";
 var MOVES_TO_QUOTED = ["inquiry_requested", "provider_contacted", "quoted"];
 
@@ -38,8 +38,6 @@ function price(v) {
   var n = parseFloat(s);
   return n < 1e12 ? { value: n } : { error: true };
 }
-
-function validDate(d) { return DATE_RE.test(d) && !isNaN(Date.parse(d + "T00:00:00Z")); }
 
 function validate(b) {
   if (!UUID_RE.test(String(b.plan_inquiry_id || ""))) return { error: "Solicitud no válida." };
