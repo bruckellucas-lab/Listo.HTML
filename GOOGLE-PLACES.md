@@ -1,6 +1,6 @@
 # LISTO · Google Places → Vercel → Supabase
 
-La búsqueda de lugares la hace `api/plan-options.js`, una función que corre en los servidores de Vercel: busca en Google Places, guarda en `providers` (sin duplicar) y devuelve las 3 opciones con fotos.
+La búsqueda de lugares la hace `api/plan-options.js`, una función que corre en los servidores de Vercel: busca en Google Places, guarda en `providers` sólo el identificador del lugar (sin duplicar) y devuelve las 3 opciones con fotos.
 
 > La página de prueba `prueba-google.html` y sus funciones `api/places-search.js` y `api/place-photos.js` se eliminaron (octubre 2026): eran sólo de prueba y Vercel Hobby permite como máximo 12 funciones.
 
@@ -106,17 +106,25 @@ Tipos de columna recomendados para `providers`:
 1. Abrí tu dirección de Vercel (la web de LISTO).
 2. Escribí, por ejemplo, **cena para 6 en Palermo** y tocá **Buscar opciones**.
 3. Tienen que aparecer 3 lugares reales, con fotos y link a Maps. Tocá **Maps** en alguno para verificar que es real.
-4. En Supabase → **Table Editor** → **providers** vas a ver esas filas con `source = google` y `provider_status = discovered`. Si repetís la búsqueda, **no se duplican**.
+4. En Supabase → **Table Editor** → **providers** vas a ver esas filas con `google_place_id`, `source = google` y `provider_status = discovered` (sin nombre ni dirección: ver "Qué se guarda"). Si repetís la búsqueda, **no se duplican**.
 
 ---
 
-## Qué se guarda (y qué no)
+## Qué se guarda (y qué no) — G1B
 
-- **Se guarda:** nombre, categoría (la que informa Google), dirección, barrio (solo si Google lo informa), latitud, longitud, `google_place_id`, rating, cantidad de reseñas, sitio web, link de Maps, `source = google`, `last_verified_at` (fecha y hora de la búsqueda) y `provider_status = discovered`.
-- **No se guarda:** precios, disponibilidad ni capacidad. Tampoco se pide nada de eso a Google.
-- **No se inventan datos:** si Google no informa un dato (por ejemplo, el sitio web), queda vacío.
+Políticas de Google Maps Platform: el contenido de Google (nombre, dirección, rating, reseñas, web, link de Maps, zona, categoría, coordenadas, fotos) **no se guarda**. Lo único que se puede guardar sin límite es el `google_place_id`.
+
+- **Se guarda en `providers`:** sólo la fila mínima que necesitan los vínculos internos de LISTO: `google_place_id`, `source = google`, `provider_status = discovered` y `last_verified_at` (fecha interna de la última búsqueda en que apareció).
+- **No se guarda ni se actualiza:** nombre, categoría, dirección, barrio, latitud, longitud, rating, cantidad de reseñas, sitio web ni link de Maps. Las filas viejas que todavía los tienen se limpian en G1B-2 (SQL aparte, todavía sin ejecutar).
+- **Elegir una opción:** cada opción trae un **comprobante firmado** (`option_token`, con `PHOTO_SIGNING_SECRET` y una clave derivada sólo para esto, vence en 24 h). `/api/plan-selection` lo verifica, asegura la fila mínima y guarda la elección **sin copiar el nombre** (`provider_name` queda vacío hasta G1B-2).
+- **Cuándo se piden los datos a Google (en el momento, sin guardar):**
+  - **Propuesta (/propuesta/CÓDIGO):** 1 *Place Details* por apertura, con nombre, dirección, categoría, link de Maps y fotos (el mismo pedido que antes traía sólo la foto).
+  - **Emails internos:** 1 *Place Details* por email (nombre, dirección y link de Maps).
+  - **/admin:** sólo al abrir el **detalle** de una solicitud o de un proveedor (1 pedido). Las **listas no piden nada a Google**: muestran el `google_place_id` y un link a Maps.
+- **Si Google falla:** se muestra "Datos del lugar no disponibles en este momento." y un link a Google Maps armado con el `google_place_id`. Nunca se inventa un dato.
+- **No se guardan:** precios, disponibilidad ni capacidad. Tampoco se piden a Google.
 - **Lugares cerrados:** los cerrados definitivamente no se guardan.
-- **Si el lugar ya existía:** se actualizan sus datos, pero **no se toca** `provider_status`. Si vos lo cambiaste a mano, por ejemplo a "verified", se respeta. Tampoco se borra un dato que ya tenías si Google esta vez no lo trae.
+- **`provider_status`:** si ya existía (por ejemplo, "verified" puesto a mano), se respeta.
 
 ## Si aparece un error
 
@@ -143,7 +151,7 @@ Tipos de columna recomendados para `providers`:
    - Nadie puede cambiarle el tamaño ni usarlo para otra foto.
 3. **Cuando el navegador muestra la foto**, `/api/place-photo` le pide a Google la imagen (*Place Photos New*, con la clave en el servidor) y redirige a la URL temporal de Google. Esa URL **no contiene la clave**.
 4. **Nada de esto se guarda en Supabase.** Solo queda el `google_place_id`. Las fotos se resuelven en el momento, porque las referencias y las URLs de Google pueden vencer y Google no permite guardarlas.
-5. **Propuesta para el usuario:** `/api/proposal` toma el `google_place_id` guardado, le pide a Google **solo el campo `photos`** y devuelve **1 foto** firmada, con su autor.
+5. **Propuesta para el usuario:** `/api/proposal` toma el `google_place_id` guardado y le pide a Google, en **un solo** *Place Details*, nombre, dirección, categoría, link de Maps y fotos; devuelve los datos del lugar y **1 foto** firmada, con su autor.
 
 ## Atribuciones (lo que pide Google)
 
@@ -160,7 +168,7 @@ Fuentes: Google Maps Platform Terms §3.2.2 y políticas de Places API (atribuci
 - `/api/plan-options` y `/api/place-photo` responden `Cache-Control: no-store` (los nombres de foto no se pueden cachear).
 - La propuesta pide la foto a Google en cada apertura (sin caché en el servidor).
 - El navegador guarda sólo el pedido y los ids (`google_place_id`); las opciones con datos de Google quedan sólo en memoria y, al volver a la página, se piden de nuevo.
-- Pendiente (G1B y siguientes): `providers` y `plan_selections.provider_name` todavía guardan datos de Google; se corrige después de pasar las lecturas a tiempo real.
+- G1B-1: `providers` y `plan_selections.provider_name` ya no reciben datos de Google nuevos (ver "Qué se guarda"). Pendiente G1B-2: limpiar las filas viejas (SQL a revisar antes de ejecutar).
 
 ## Si no hay fotos
 
@@ -172,7 +180,10 @@ Se muestra un **placeholder de LISTO** (fondo madera oscuro con "LISTO · Sin fo
 |---|---|---|
 | Buscar (con referencias de fotos) | 1 *Text Search* (igual que antes) | sin cambio |
 | Mostrar 1 foto | 1 *Place Details Photos* | ~USD 7 cada 1.000, con **1.000 gratis por mes** |
-| Abrir una propuesta (/propuesta/CÓDIGO) | 1 *Place Details* (solo `photos`) + 1 por cada foto que se vea | según la tabla de precios de Google |
+| Abrir una propuesta (/propuesta/CÓDIGO) | 1 *Place Details* (nombre, dirección, categoría, link de Maps y `photos`) + 1 por cada foto que se vea | según la tabla de precios de Google (más campos pueden cambiar la categoría de precio) |
+| Email interno (Quiero avanzar / respuesta a propuesta) | 1 *Place Details* (nombre, dirección, link de Maps) | según la tabla de precios de Google |
+| Abrir el detalle en /admin | 1 *Place Details* (incluye rating y web) | según la tabla de precios de Google |
+| Listas de /admin | ninguna | sin costo de Google |
 
 Medidas para no gastar de más:
 
@@ -206,6 +217,6 @@ La web usa `/api/plan-options?category=…&zone=…`, una función pública que 
   - excluye lugares cerrados (definitiva o temporalmente) y repetidos;
   - prioriza los que están en la zona pedida;
   - después, los que tienen rating y al menos 20 reseñas.
-- **Providers:** cada búsqueda guarda y actualiza los lugares en `providers`, sin duplicar.
+- **Providers:** cada búsqueda guarda sólo la fila mínima (`google_place_id` + datos de LISTO), sin duplicar.
 - **Costo:** cada búsqueda nueva es 1 *Text Search*. Sin caché (políticas de Google): cada búsqueda llama a Google. Cada visitante puede hacer como máximo unas 30 búsquedas cada 10 minutos.
 - **"Elegir esta opción"** por ahora queda registrado solo en el navegador del usuario. Para guardarlo en Supabase hace falta una tabla nueva, pendiente de aprobación.

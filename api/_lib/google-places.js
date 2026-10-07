@@ -7,7 +7,8 @@
 
 var SEARCH_URL = "https://places.googleapis.com/v1/places:searchText";
 
-// Pedimos únicamente los campos que vamos a guardar (menos campos = menos costo).
+// Pedimos únicamente los campos que vamos a mostrar (menos campos = menos costo).
+// Se usan sólo para armar la respuesta: no se guardan en Supabase (G1B).
 // No pedimos precios, horarios, reseñas ni nada de disponibilidad o capacidad.
 var FIELD_MASK = [
   "places.id",
@@ -78,7 +79,9 @@ function numberOrNull(v) {
   return typeof v === "number" && isFinite(v) ? v : null;
 }
 
-// Convierte un lugar de Google en una fila de la tabla "providers".
+// Convierte un lugar de Google en una fila para elegir y mostrar las opciones.
+// Vive SÓLO en memoria durante la búsqueda: a Supabase va únicamente la fila mínima
+// (providers-store.minimalRow).
 function toProviderRow(place, nowIso) {
   if (!place || !place.id) return null;
   var name = place.displayName && place.displayName.text;

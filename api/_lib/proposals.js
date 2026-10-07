@@ -2,9 +2,10 @@
    LISTO — Propuestas para el usuario (tabla plan_proposals)
    - Código público de 12 caracteres, aleatorio y seguro: no se
      deriva de ningún ID interno.
-   - Lo que ve el usuario sale de lo que YA está en Supabase
-     (proveedor, pedido, cotización). Google sólo se usa para la
-     foto, con caché corta en el servidor.
+   - Pedido y cotización salen de Supabase. Los datos del LUGAR
+     (nombre, dirección, categoría, link de Maps y foto) se piden a
+     Google al abrir la propuesta (G1B): en Supabase sólo está el
+     google_place_id.
    - Nunca se exponen IDs internos, notas internas ni datos personales.
    ========================================================= */
 "use strict";
@@ -43,9 +44,8 @@ var PROPOSAL_SELECT = [
   "first_viewed_at", "last_viewed_at", "view_count", "responded_at", "user_comment",
   "provider_quotes!plan_proposals_provider_quote_id_fkey(id,total_price,price_per_person,currency,includes,conditions,deposit,availability,valid_until)",
   "plan_inquiries!plan_proposals_plan_inquiry_id_fkey(id,event_date,approximate_time," +
-    "plan_selections(provider_google_place_id,provider_name," +
-    "event_requests(event_type,guests,zone)," +
-    "providers(name,category,address,zone,maps_url)))"
+    "plan_selections(provider_google_place_id," +
+    "event_requests(event_type,guests,zone)))"
 ].join(",");
 
 function api(cfg, path) { return store.normalizeUrl(cfg.url) + "/rest/v1/" + path; }
@@ -59,24 +59,33 @@ function loadByCode(cfg, code, fetchImpl) {
 function https(u) { return typeof u === "string" && /^https:\/\//.test(u) ? u : null; }
 function num(v) { return v === null || v === undefined || v === "" ? null : Number(v); }
 
+// Datos del lugar pedidos a Google en el momento (place-details.js). Si Google no respondió,
+// sólo el link a Maps y un aviso honesto: nunca un dato inventado.
+function placeOf(live) {
+  if (!live) return null;
+  return {
+    name: live.name || null,
+    category: live.category || null,
+    address: live.address || null,
+    maps_url: https(live.maps_url),
+    unavailable: !live.ok,
+    message: live.ok ? null : (live.message || null)
+  };
+}
+
 // Lo ÚNICO que se le muestra al usuario. Sin IDs, notas internas ni datos personales.
-function toPublic(row, today) {
+// live = datos del lugar en tiempo real (sólo al abrir; en las respuestas a un POST va null
+// y la página conserva los que ya tenía).
+function toPublic(row, today, live) {
   var q = row.provider_quotes || {};
   var inq = row.plan_inquiries || {};
   var sel = inq.plan_selections || {};
   var req = sel.event_requests || {};
-  var prov = sel.providers || {};
   var expired = isExpired(q.valid_until, today);
   return {
     status: row.status,
     responded_at: row.responded_at || null,
-    place: {
-      name: prov.name || sel.provider_name || null,
-      category: prov.category || null,
-      address: prov.address || null,
-      zone: prov.zone || null,
-      maps_url: https(prov.maps_url)
-    },
+    place: placeOf(live),
     plan: {
       type: req.event_type || null,
       date: inq.event_date || null,
@@ -104,5 +113,5 @@ function toPublic(row, today) {
 module.exports = {
   CODE_RE: CODE_RE, STATUSES: STATUSES,
   newCode: newCode, todayAR: todayAR, isExpired: isExpired,
-  loadByCode: loadByCode, toPublic: toPublic, api: api
+  loadByCode: loadByCode, toPublic: toPublic, placeOf: placeOf, api: api
 };

@@ -256,7 +256,9 @@
       document.title = "LISTO / " + (place.name || "Tu propuesta");
 
       $("place-name").textContent = place.name || "Tu propuesta";
-      $("place-sub").textContent = [place.category, place.zone].filter(Boolean).join(" · ");
+      // Si Google no respondió: aviso honesto (nunca un dato inventado) y, abajo, el link a Maps.
+      $("place-sub").textContent = place.unavailable ? (place.message || "Datos del lugar no disponibles en este momento.")
+        : [place.category, place.zone].filter(Boolean).join(" · ");
       // Nombre, categoría, zona, dirección y link del lugar vienen de Google Maps.
       $("place-attr").hidden = !(place.name || place.category || place.zone || place.address || place.maps_url);
 
@@ -377,7 +379,8 @@
       }).then(function (r) {
         busy = false;
         if (r.body && r.body.proposal) {
-          var merged = Object.assign({}, data, r.body.proposal, { photo: data && data.photo });
+          // La respuesta no trae el lugar (no se vuelve a llamar a Google): se conservan lugar y foto.
+          var merged = Object.assign({}, data, r.body.proposal, { photo: data && data.photo, place: data && data.place });
           if (merged.status === "proposal_replaced") return render(merged);
           data = merged;
           renderActions(merged);

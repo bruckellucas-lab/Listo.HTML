@@ -1,7 +1,10 @@
 /* =========================================================
    LISTO — Función serverless de Vercel (PANEL INTERNO)
    Ruta: /api/admin-providers
-   GET    → proveedores guardados (tabla providers) con sus atributos alimentarios
+   GET    → proveedores guardados (tabla providers) con sus atributos alimentarios.
+            Sólo google_place_id + datos de LISTO: la lista NO pide nada a Google.
+   GET ?place_id=ChIJ… → datos de UN lugar pedidos a Google en el momento (detalle).
+            No se guardan (G1B · políticas de Google Maps Platform).
    POST   { provider_google_place_id, attribute, status, source_type, source_url,
             certifier, kosher_category, verification_notes, verified_at,
             review_after, evidence_valid_until }
@@ -17,12 +20,13 @@ var http = require("./_lib/http");
 var auth = require("./_lib/admin-auth");
 var store = require("./_lib/providers-store");
 var dietary = require("./_lib/dietary");
+var placeDetails = require("./_lib/place-details");
 
 var LIMIT = 1000;
-var PROVIDER_FIELDS = "google_place_id,name,category,address,zone,rating,review_count,maps_url,website,provider_status";
+// Sólo lo propio de LISTO: nada de contenido de Google (G1B).
+var PROVIDER_FIELDS = "google_place_id,provider_status,last_verified_at";
+var ORDER = "order=last_verified_at.desc.nullslast,google_place_id.asc";
 var MISSING = ["PGRST200", "PGRST201", "PGRST204", "PGRST205", "42703", "42P01"];
-
-function https(u) { return typeof u === "string" && /^https:\/\//.test(u) ? u : null; }
 
 function explain(err) {
   if (err.code === "PGRST205" || err.code === "42P01") return "Falta la tabla provider_dietary_attributes en Supabase.";
@@ -35,15 +39,9 @@ function explain(err) {
 function toProvider(row, today) {
   return {
     google_place_id: row.google_place_id,
-    name: row.name || null,
-    category: row.category || null,
-    address: row.address || null,
-    zone: row.zone || null,
-    rating: typeof row.rating === "number" ? row.rating : null,
-    review_count: typeof row.review_count === "number" ? row.review_count : null,
-    maps_url: https(row.maps_url),
-    website: https(row.website),
     provider_status: row.provider_status || null,
+    last_verified_at: row.last_verified_at || null,
+    maps_url: placeDetails.mapsLinkFor(row.google_place_id),
     attributes: (Array.isArray(row.provider_dietary_attributes) ? row.provider_dietary_attributes : [])
       .map(function (a) { return dietary.withEffective(a, today); })
   };
@@ -67,19 +65,27 @@ module.exports = async function handler(req, res) {
   };
   var today = dietary.todayAR();
 
+  // Detalle de UN lugar: se pide a Google en el momento (no se guarda). Si Google falla, aviso + link a Maps.
+  if (req.method === "GET" && http.queryOf(req).place_id !== undefined) {
+    var wanted = String(http.queryOf(req).place_id || "");
+    if (!placeDetails.PLACE_ID_RE.test(wanted)) return http.sendJson(res, 400, { ok: false, error: "Lugar no válido." });
+    var place = await placeDetails.fetchPlace(wanted, "admin");
+    return http.sendJson(res, 200, { ok: true, place: place });
+  }
+
   if (req.method === "GET") {
     try {
       var rows, ready = true;
       try {
         rows = await call("providers?select=" + encodeURIComponent(PROVIDER_FIELDS +
           ",provider_dietary_attributes!provider_dietary_provider_fkey(" + dietary.FIELDS + ")") +
-          "&order=name.asc&limit=" + LIMIT, "GET", "listar proveedores");
+          "&" + ORDER + "&limit=" + LIMIT, "GET", "listar proveedores");
       } catch (err) {
         // Si la tabla de atributos no estuviera, igual se ven los proveedores.
         if (MISSING.indexOf(err.code) === -1) throw err;
         console.error("[admin-providers] sin atributos:", err.code);
         ready = false;
-        rows = await call("providers?select=" + PROVIDER_FIELDS + "&order=name.asc&limit=" + LIMIT, "GET", "listar proveedores");
+        rows = await call("providers?select=" + PROVIDER_FIELDS + "&" + ORDER + "&limit=" + LIMIT, "GET", "listar proveedores");
       }
       var providers = (rows || []).map(function (r) { return toProvider(r, today); });
       return http.sendJson(res, 200, {

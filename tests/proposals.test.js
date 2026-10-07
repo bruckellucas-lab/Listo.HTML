@@ -13,9 +13,8 @@ function row(status, quote) {
     plan_inquiry_id: "22222222-2222-2222-2222-222222222222", user_comment: "nota", responded_at: null,
     provider_quotes: Object.assign({ id: "q", total_price: "150000", price_per_person: null, currency: "ARS", availability: "yes", valid_until: null }, quote || {}),
     plan_inquiries: { id: "i", event_date: "2026-11-01", approximate_time: "21:00", contact_email: "x@y.z",
-      plan_selections: { provider_google_place_id: "ChIJxxxxxxxxxx", provider_name: "Lugar",
-        event_requests: { event_type: "cena", guests: 6, zone: "Palermo" },
-        providers: { name: "Lugar Real", category: "restaurant", address: "Calle 1", zone: "Palermo", maps_url: "http://inseguro" } } }
+      plan_selections: { provider_google_place_id: "ChIJxxxxxxxxxx",
+        event_requests: { event_type: "cena", guests: 6, zone: "Palermo" } } }
   };
 }
 
@@ -56,8 +55,11 @@ test("can_accept: sólo enviada, vigente y con disponibilidad distinta de 'no'",
   assert.equal(proposals.toPublic(row("proposal_sent"), TODAY).can_decline, true);
 });
 
+// Datos del lugar en tiempo real (place-details.fetchPlace); en Supabase sólo está el place_id.
+var LIVE = { ok: true, google_place_id: "ChIJxxxxxxxxxx", name: "Lugar Real", category: "Restaurante", address: "Calle 1", maps_url: "http://inseguro" };
+
 test("toPublic: sin IDs internos, notas ni datos personales; links sólo https", function () {
-  var p = proposals.toPublic(row("proposal_sent"), TODAY);
+  var p = proposals.toPublic(row("proposal_sent"), TODAY, LIVE);
   var json = JSON.stringify(p);
   ["11111111-", "22222222-", "AbCdEf123456", "x@y.z", "ChIJ", "nota"].forEach(function (s) {
     assert.equal(json.indexOf(s), -1, "no debe aparecer " + s);

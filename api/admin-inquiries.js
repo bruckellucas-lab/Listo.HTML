@@ -5,6 +5,10 @@
            plan_inquiries + plan_selections + event_requests + providers
    PATCH → { id, status } cambia el estado (y updated_at = ahora)
 
+   Datos del lugar (G1B): la lista NO pide nada a Google (sería un pedido
+   por fila). Sólo trae el google_place_id y un link a Maps; el nombre y
+   demás datos se piden al abrir el detalle (GET /api/admin-providers?place_id=…).
+
    Sólo responde con el pase de /admin (cookie). La clave secreta de
    Supabase queda en Vercel: el navegador nunca la recibe.
    No manda emails ni WhatsApp al cambiar estados.
@@ -17,6 +21,7 @@ var store = require("./_lib/providers-store");
 var inquiries = require("./_lib/inquiries");
 var notify = require("./_lib/notify");
 var bookings = require("./_lib/bookings");
+var placeDetails = require("./_lib/place-details");
 
 var UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 var LIMIT = 500;
@@ -26,9 +31,8 @@ var QUOTE_FIELDS = "id,created_at,received_at,total_price,price_per_person,curre
 var SELECT_BASE = [
   "id", "created_at", "updated_at", "status", "notification_status", "notified_at",
   "contact_name", "contact_phone", "contact_email", "event_date", "approximate_time", "notes", "plan_selection_id",
-  "plan_selections(id,created_at,status,event_request_id,provider_google_place_id,provider_name," +
-    "event_requests(id,created_at,event_type,guests,zone,budget,needs,original_prompt,dietary_requirements)," +
-    "providers(name,category,address,zone,rating,review_count,maps_url,website))"
+  "plan_selections(id,created_at,status,event_request_id,provider_google_place_id," +
+    "event_requests(id,created_at,event_type,guests,zone,budget,needs,original_prompt,dietary_requirements))"
 ].join(",");
 // Con cotizaciones: suma contacto con el proveedor y cotizaciones (requiere el SQL del Paso 8).
 // Los vínculos van con nombre explícito para que Supabase no se confunda con plan_proposals.
@@ -45,13 +49,11 @@ function cfg() {
   return { url: http.env("SUPABASE_URL"), key: http.env("SUPABASE_SECRET_KEY") };
 }
 
-function https(u) { return typeof u === "string" && /^https:\/\//.test(u) ? u : null; }
-
 // Aplana la respuesta de Supabase en lo que necesita el panel.
 function toItem(row) {
   var sel = row.plan_selections || {};
   var req = sel.event_requests || {};
-  var prov = sel.providers || {};
+  var placeId = sel.provider_google_place_id || null;
   var wa = notify.whatsappNumber(row.contact_phone);
   return {
     id: row.id,
@@ -69,12 +71,8 @@ function toItem(row) {
       // null = nunca tocó "¿Alguna restricción?"; [] = la tocó y quedó sin restricciones activas.
       dietary: Array.isArray(req.dietary_requirements) ? req.dietary_requirements : null
     },
-    provider: {
-      name: prov.name || sel.provider_name || null, category: prov.category || null, address: prov.address || null,
-      zone: prov.zone || null, rating: typeof prov.rating === "number" ? prov.rating : null,
-      review_count: typeof prov.review_count === "number" ? prov.review_count : null,
-      maps_url: https(prov.maps_url), website: https(prov.website)
-    },
+    // Sólo el identificador y un link a Maps: el resto se pide a Google al abrir el detalle.
+    provider: { google_place_id: placeId, maps_url: placeDetails.mapsLinkFor(placeId) },
     event_request_id: sel.event_request_id || null,
     plan_selection_id: row.plan_selection_id,
     selection_status: sel.status || null,

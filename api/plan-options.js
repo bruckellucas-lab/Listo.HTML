@@ -5,7 +5,9 @@
    La usa la web principal para mostrar 3 lugares reales.
    - Sólo acepta categorías de una lista cerrada (no búsquedas libres).
    - Llama a Google Places (New) desde el servidor: la clave nunca sale de acá.
-   - Guarda/actualiza los lugares en "providers" sin duplicar (google_place_id).
+   - Guarda en "providers" SÓLO la fila mínima (google_place_id + datos de LISTO),
+     sin duplicar. Nombre, dirección, rating, etc. no se guardan (G1B).
+   - Cada opción lleva un comprobante firmado (option_token) para poder elegirla.
    - Devuelve fotos con links firmados (no guarda URLs temporales).
    - Nunca inventa datos: si Google no informa algo, queda vacío.
    ========================================================= */
@@ -15,6 +17,7 @@ var http = require("./_lib/http");
 var places = require("./_lib/google-places");
 var store = require("./_lib/providers-store");
 var photos = require("./_lib/photos");
+var optionToken = require("./_lib/option-token");
 var plan = require("./_lib/plan");
 var rateLimit = require("./_lib/rate-limit");
 
@@ -57,7 +60,7 @@ module.exports = async function handler(req, res) {
     if (p && p.id && !placeById[p.id]) { placeById[p.id] = p; statusById[p.id] = p.businessStatus; }
   });
 
-  // 2) Guardar/actualizar en providers (si falla, igual mostramos las opciones).
+  // 2) Fila mínima en providers (sólo google_place_id y datos de LISTO; si falla, igual mostramos las opciones).
   var saved = false;
   var supaUrl = http.env("SUPABASE_URL"), supaKey = http.env("SUPABASE_SECRET_KEY");
   if (supaUrl && supaKey && !/^sb_publishable_/.test(supaKey) && converted.rows.length) {
@@ -84,7 +87,9 @@ module.exports = async function handler(req, res) {
       review_count: row.review_count,
       website: row.website,
       maps_url: row.maps_url,
-      photo: photo
+      photo: photo,
+      // Comprobante para "Elegir esta opción" (sin secreto no hay comprobante: se valida contra providers).
+      option_token: secret ? optionToken.sign(secret, row.google_place_id) : null
     };
   });
 

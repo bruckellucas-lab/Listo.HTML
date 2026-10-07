@@ -246,11 +246,12 @@
       </div>
 
       <div class="toolbar">
-        <input class="search" id="search" type="search" placeholder="Buscar por nombre, teléfono o proveedor" autocomplete="off" aria-label="Buscar">
+        <input class="search" id="search" type="search" placeholder="Buscar por nombre o teléfono" autocomplete="off" aria-label="Buscar">
         <div class="chips" id="chips" role="group" aria-label="Filtrar por estado"></div>
         <p class="label sorted">Más recientes primero</p>
       </div>
 
+      <p class="muted p-note">Los datos del lugar se consultan al abrir el detalle por cumplimiento de Google Maps.</p>
       <div class="metrics" id="metrics" hidden></div>
       <p class="banner" id="schema-banner" hidden>Falta correr en Supabase el SQL de cotizaciones (SUPABASE.md, Paso 8). Mientras tanto, contacto y cotizaciones no se pueden guardar.</p>
       <div id="state" class="state" hidden></div>
@@ -264,12 +265,10 @@
         <p><span class="label">Proveedores guardados</span><br><span class="muted" id="p-verified-count"></span></p>
       </div>
       <p class="muted p-note">Google ayuda a descubrir lugares, pero no verifica restricciones. "Verificado" sólo con evidencia: certificador, web oficial, documento o confirmación del proveedor.</p>
+      <p class="muted p-note">Los datos del lugar se consultan al abrir el detalle por cumplimiento de Google Maps. Por eso la lista muestra el identificador del lugar (google_place_id) y no tiene búsqueda por nombre ni filtros de zona o categoría.</p>
 
       <div class="toolbar">
-        <input class="search" id="p-search" type="search" placeholder="Buscar proveedor por nombre" autocomplete="off" aria-label="Buscar proveedor">
         <div class="p-filters">
-          <label><span class="label muted">Zona</span><select id="p-zone"><option value="">Todas</option></select></label>
-          <label><span class="label muted">Categoría</span><select id="p-category"><option value="">Todas</option></select></label>
           <label><span class="label muted">Atributo</span><select id="p-attr"><option value="">Todos</option></select></label>
           <label><span class="label muted">Estado</span><select id="p-status">
             <option value="">Todos</option>
@@ -460,7 +459,7 @@
       if (filter !== "all" && viewStatus(it) !== filter) return false;
       if (!query) return true;
       var q = norm(query), qd = query.replace(/\D/g, "");
-      var hay = norm([it.contact.name, it.contact.email, it.provider.name].join(" "));
+      var hay = norm([it.contact.name, it.contact.email].join(" "));
       if (hay.indexOf(q) !== -1) return true;
       return qd.length >= 3 && String(it.contact.phone || "").replace(/\D/g, "").indexOf(qd) !== -1;
     }
@@ -538,9 +537,10 @@
         info.appendChild(el("h2", "name", it.contact.name || "Sin nombre"));
         info.appendChild(el("p", "contact", [it.contact.phone, it.contact.email].filter(Boolean).join(" · ")));
         info.appendChild(el("p", "plan", planLine(it)));
+        // Sin pedidos a Google por fila: sólo el identificador del lugar (el nombre se ve en el detalle).
         var prov = el("p", "prov");
-        prov.appendChild(document.createTextNode("→ "));
-        prov.appendChild(el("b", "", it.provider.name || "Proveedor sin nombre"));
+        prov.appendChild(document.createTextNode("→ Lugar: "));
+        prov.appendChild(el("span", "mono", it.provider.google_place_id || "sin lugar"));
         info.appendChild(prov);
         var act = activeBooking(it);
         if (it.quotes && it.quotes.length && !act) info.appendChild(el("p", "card-quote", "Cotización: " + quotePrice(it.quotes[0]) + " · " + AVAIL[it.quotes[0].availability]));
@@ -549,14 +549,12 @@
         var lastProp = currentProposal(it);
         if (lastProp) info.appendChild(el("p", "card-proposal " + lastProp.status, "Propuesta: " + (PROPOSAL_LABELS[lastProp.status] || lastProp.status) +
           (lastProp.status === "proposal_sent" ? " · " + opensText(lastProp) : "")));
-        info.appendChild(gmapsNote());
         card.appendChild(info);
 
         var actions = el("div", "item-actions");
         var links = el("div", "links");
         if (it.contact.whatsapp_url) links.appendChild(linkBtn(it.contact.whatsapp_url, "WhatsApp"));
         if (it.provider.maps_url) links.appendChild(linkBtn(it.provider.maps_url, "Maps"));
-        if (it.provider.website) links.appendChild(linkBtn(it.provider.website, "Web"));
         actions.appendChild(links);
         actions.appendChild(statusSelect(it));
         var more = el("button", "btn btn-sm", "Ver detalle");
@@ -609,11 +607,52 @@
     var schemaReady = function () { return $("schema-banner").hidden; };
     var proposalsReady = true;
 
-    // Nombre, categoría, zona, dirección, rating, web y link del lugar vienen de Google Maps.
+    // Nombre, categoría, dirección, rating, web y link del lugar vienen de Google Maps.
     function gmapsNote() {
       var p = el("p", "gmaps-note", "Datos del lugar: ");
       p.appendChild(el("span", "gmaps-attr", "Google Maps"));
       return p;
+    }
+
+    // Datos de UN lugar, pedidos a Google al abrir el detalle (no se guardan en ningún lado).
+    // Mientras el detalle siga abierto se reutiliza la última respuesta (evita repetir el pedido
+    // cada vez que el detalle se redibuja); al cerrarlo se descarta.
+    var liveOpen = null;
+    function livePlace(placeId, onName) {
+      var box = el("div", "live-place");
+      if (!placeId) { box.appendChild(el("p", "muted", "Sin lugar vinculado.")); return box; }
+      box.appendChild(el("p", "label muted", "Consultando Google Maps…"));
+      var cached = liveOpen && liveOpen.id === placeId ? liveOpen.promise : null;
+      var promise = cached || api("GET", "/api/admin-providers?place_id=" + encodeURIComponent(placeId)).then(function (data) { return data.place || {}; });
+      liveOpen = { id: placeId, promise: promise };
+      promise.then(function (pl) {
+        box.innerHTML = "";
+        var acts = el("div", "d-actions");
+        if (pl.maps_url) acts.appendChild(linkBtn(pl.maps_url, "Google Maps"));
+        if (pl.ok && pl.website) acts.appendChild(linkBtn(pl.website, "Website"));
+        box.appendChild(acts);
+        if (!pl.ok) {
+          box.appendChild(el("p", "muted", pl.message || "Datos del lugar no disponibles en este momento."));
+          box.appendChild(section("", [["google_place_id", placeId, "mono"]]));
+          return;
+        }
+        var rating = typeof pl.rating === "number" ? "★ " + pl.rating + (typeof pl.review_count === "number" ? " (" + pl.review_count + " reseñas)" : "") : null;
+        var closed = pl.business_status === "CLOSED_PERMANENTLY" ? "Cerrado definitivamente" : pl.business_status === "CLOSED_TEMPORARILY" ? "Cerrado temporalmente" : null;
+        var rows = [["Nombre", pl.name], ["Categoría", pl.category], ["Dirección", pl.address], ["Rating", rating],
+          ["Website", pl.website ? linkBtn(pl.website, "Abrir") : "No figura en Google Maps"]];
+        if (closed) rows.push(["Estado en Google", closed]);
+        rows.push(["google_place_id", placeId, "mono"]);
+        box.appendChild(section("", rows));
+        box.appendChild(gmapsNote());
+        if (onName && pl.name) onName(pl.name);
+      }).catch(function (err) {
+        if (liveOpen && liveOpen.promise === promise) liveOpen = null;
+        if (err.message === "__session__") return;
+        box.innerHTML = "";
+        box.appendChild(el("p", "muted", "Datos del lugar no disponibles en este momento."));
+        box.appendChild(section("", [["google_place_id", placeId, "mono"]]));
+      });
+      return box;
     }
 
     function section(title, rows) {
@@ -1283,14 +1322,7 @@
 
       // PROVEEDOR
       var s2 = block("Proveedor");
-      var pacts = el("div", "d-actions");
-      if (pr.maps_url) pacts.appendChild(linkBtn(pr.maps_url, "Google Maps"));
-      if (pr.website) pacts.appendChild(linkBtn(pr.website, "Website"));
-      s2.appendChild(pacts);
-      var rating = typeof pr.rating === "number" ? "★ " + pr.rating + (typeof pr.review_count === "number" ? " (" + pr.review_count + " reseñas)" : "") : null;
-      s2.appendChild(section("", [["Nombre", pr.name], ["Categoría", pr.category], ["Dirección", pr.address], ["Zona", pr.zone], ["Rating", rating],
-        ["Website", pr.website ? linkBtn(pr.website, "Abrir") : "No figura en nuestros datos"]]));
-      s2.appendChild(gmapsNote());
+      s2.appendChild(livePlace(pr.google_place_id));
       s2.appendChild(contactState(it));
       b.appendChild(s2);
 
@@ -1398,6 +1430,7 @@
       if (!d.open) { if (d.showModal) d.showModal(); else d.setAttribute("open", ""); }
     }
     $("d-close").addEventListener("click", function () { $("detail").close(); });
+    $("detail").addEventListener("close", function () { liveOpen = null; });
     $("detail").addEventListener("click", function (e) { if (e.target === $("detail")) $("detail").close(); });
 
     /* ---------- Proveedores y atributos alimentarios ----------
@@ -1456,7 +1489,7 @@
         var banner = $("p-banner");
         banner.textContent = data.dietary_ready === false ? "No pudimos leer la tabla provider_dietary_attributes: se muestran los proveedores sin atributos." : "";
         banner.hidden = !banner.textContent;
-        if (data.count >= data.limit) { banner.textContent = (banner.textContent ? banner.textContent + " " : "") + "Se muestran los primeros " + data.limit + " proveedores (orden alfabético)."; banner.hidden = false; }
+        if (data.count >= data.limit) { banner.textContent = (banner.textContent ? banner.textContent + " " : "") + "Se muestran los primeros " + data.limit + " proveedores (los vistos más recientemente primero)."; banner.hidden = false; }
         fillProviderFilters();
         setPState(null);
         renderProviders();
@@ -1482,22 +1515,12 @@
       values.forEach(function (v) { var o = el("option", "", labels ? labels[v] : v); o.value = v; sel.appendChild(o); });
       sel.value = values.indexOf(keep) !== -1 ? keep : "";
     }
-    function uniqueSorted(list) {
-      var seen = {};
-      return list.filter(function (v) { if (!v || seen[v]) return false; seen[v] = true; return true; }).sort(function (a, b) { return a.localeCompare(b, "es"); });
-    }
     function fillProviderFilters() {
-      fillSelect($("p-zone"), uniqueSorted(providers.map(function (p) { return p.zone; })));
-      fillSelect($("p-category"), uniqueSorted(providers.map(function (p) { return p.category; })));
       fillSelect($("p-attr"), ATTR_ORDER, ATTR_LABELS);
     }
 
     function providerMatches(p) {
-      var q = norm($("p-search").value.trim());
-      if (q && norm(p.name).indexOf(q) === -1) return false;
-      var zone = $("p-zone").value, cat = $("p-category").value, code = $("p-attr").value, st = $("p-status").value;
-      if (zone && p.zone !== zone) return false;
-      if (cat && p.category !== cat) return false;
+      var code = $("p-attr").value, st = $("p-status").value;
       var list = p.attributes || [];
       if (st === "none") return !list.length;
       if (code && st) return st === "unknown" ? stateOf(attrOf(p, code)) === "unknown" : stateOf(attrOf(p, code)) === st;
@@ -1529,11 +1552,10 @@
         head.appendChild(el("span", "label muted", PROVIDER_STATUS[p.provider_status] || p.provider_status || "Sin estado"));
         card.appendChild(head);
         var info = el("div");
-        info.appendChild(el("h2", "name", p.name || "Sin nombre"));
-        info.appendChild(el("p", "p-meta", [p.category, p.zone].filter(Boolean).join(" · ") || "Sin categoría ni zona"));
-        if (p.address) info.appendChild(el("p", "p-meta", p.address));
-        info.appendChild(el("p", "p-meta", typeof p.rating === "number"
-          ? "★ " + p.rating + (typeof p.review_count === "number" ? " · " + p.review_count + " reseñas" : "") : "Sin rating"));
+        // Sin pedidos a Google por fila: identificador + link a Maps (el nombre se ve en el detalle).
+        info.appendChild(el("h2", "name", "Lugar"));
+        info.appendChild(el("p", "p-meta mono", p.google_place_id));
+        info.appendChild(el("p", "p-meta", p.last_verified_at ? "Visto en una búsqueda: " + fmtDateTime(p.last_verified_at) : "Sin fecha de búsqueda"));
         var badges = el("div", "p-attrs");
         ATTR_ORDER.forEach(function (code) {
           var a = attrOf(p, code);
@@ -1543,12 +1565,10 @@
         });
         if (!badges.children.length) badges.appendChild(el("span", "muted", "Sin atributos cargados"));
         info.appendChild(badges);
-        info.appendChild(gmapsNote());
         card.appendChild(info);
         var actions = el("div", "item-actions");
         var links = el("div", "links");
         if (p.maps_url) links.appendChild(linkBtn(p.maps_url, "Maps"));
-        if (p.website) links.appendChild(linkBtn(p.website, "Web"));
         actions.appendChild(links);
         var more = el("button", "btn btn-sm", "Ver detalle");
         more.type = "button";
@@ -1559,9 +1579,7 @@
       });
     }
 
-    var pSearchTimer;
-    $("p-search").addEventListener("input", function () { clearTimeout(pSearchTimer); pSearchTimer = setTimeout(renderProviders, 120); });
-    ["p-zone", "p-category", "p-attr", "p-status"].forEach(function (id) { $(id).addEventListener("change", renderProviders); });
+    ["p-attr", "p-status"].forEach(function (id) { $(id).addEventListener("change", renderProviders); });
     $all("#p-quick .chip").forEach(function (b) {
       b.addEventListener("click", function () {
         var parts = b.getAttribute("data-quick").split("|");
@@ -1623,7 +1641,7 @@
       if (a) {
         var del = el("button", "btn btn-ghost btn-sm", "Eliminar"); del.type = "button";
         del.addEventListener("click", function () {
-          if (!window.confirm("¿Eliminar el atributo “" + ATTR_LABELS[code] + "” de " + (p.name || "este proveedor") + "? Se borra la verificación cargada y no se puede deshacer.")) return;
+          if (!window.confirm("¿Eliminar el atributo “" + ATTR_LABELS[code] + "” de " + "este proveedor" + "? Se borra la verificación cargada y no se puede deshacer.")) return;
           del.disabled = true;
           api("DELETE", "/api/admin-providers", { provider_google_place_id: p.google_place_id, attribute: code }).then(function () {
             p.attributes = (p.attributes || []).filter(function (x) { return x.attribute !== code; });
@@ -1756,20 +1774,15 @@
       var b = $("d-body");
       b.innerHTML = "";
       b.appendChild(el("span", "label muted", PROVIDER_STATUS[p.provider_status] || p.provider_status || "Sin estado"));
-      b.appendChild(el("h2", "d-title", p.name || "Sin nombre"));
+      var title = el("h2", "d-title", "Lugar");
+      b.appendChild(title);
       var s1 = block("Datos");
-      var acts = el("div", "d-actions");
-      if (p.maps_url) acts.appendChild(linkBtn(p.maps_url, "Google Maps"));
-      if (p.website) acts.appendChild(linkBtn(p.website, "Website"));
-      s1.appendChild(acts);
+      // Nombre y demás datos: pedidos a Google ahora (no se guardan).
+      s1.appendChild(livePlace(p.google_place_id, function (name) { title.textContent = name; }));
       s1.appendChild(section("", [
-        ["Categoría", p.category], ["Zona", p.zone], ["Dirección", p.address],
-        ["Rating", typeof p.rating === "number" ? "★ " + p.rating : null],
-        ["Reseñas", typeof p.review_count === "number" ? String(p.review_count) : null],
-        ["Estado", PROVIDER_STATUS[p.provider_status] || p.provider_status],
-        ["google_place_id", p.google_place_id, "mono"]
+        ["Estado en LISTO", PROVIDER_STATUS[p.provider_status] || p.provider_status],
+        ["Visto en una búsqueda", p.last_verified_at ? fmtDateTime(p.last_verified_at) : null]
       ]));
-      s1.appendChild(gmapsNote());
       b.appendChild(s1);
       var s2 = block("Restricciones y atributos");
       s2.appendChild(el("p", "muted", "Google, reseñas o el nombre del lugar no verifican. “Verificado” sólo con evidencia confiable y fecha."));

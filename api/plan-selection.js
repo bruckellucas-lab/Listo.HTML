@@ -1,10 +1,11 @@
 /* =========================================================
    LISTO — Función serverless de Vercel
    Ruta: POST /api/plan-selection
-   Cuerpo: { "event_request_id": "<uuid>", "google_place_id": "ChIJ..." }
+   Cuerpo: { "event_request_id": "<uuid>", "google_place_id": "ChIJ...", "option_token": "..." }
 
    Registra "Elegir esta opción" en plan_selections (status 'interested').
    No reserva ni cobra nada. La clave secreta de Supabase queda en Vercel.
+   option_token = comprobante firmado que entregó /api/plan-options.
    ========================================================= */
 "use strict";
 
@@ -34,6 +35,7 @@ module.exports = async function handler(req, res) {
   var body = await readBody(req);
   var requestId = body && String(body.event_request_id || "");
   var placeId = body && String(body.google_place_id || "");
+  var token = body && typeof body.option_token === "string" ? body.option_token.slice(0, 100) : "";
   if (!selections.UUID_RE.test(requestId) || !photos.PLACE_ID_RE.test(placeId)) {
     return http.sendJson(res, 400, { ok: false, error: "No pudimos identificar tu pedido o el lugar elegido." });
   }
@@ -44,16 +46,16 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    var out = await selections.saveSelection({ url: url, key: key }, requestId, placeId);
+    var out = await selections.saveSelection({ url: url, key: key }, requestId, placeId, undefined, { token: token });
     var s = out.selection || {};
     return http.sendJson(res, 200, {
       ok: true,
       changed: out.changed,
       duplicate: out.duplicate,
-      selection: { provider_name: s.provider_name, status: s.status, created_at: s.created_at }
+      selection: { status: s.status, created_at: s.created_at }
     });
   } catch (err) {
-    console.error("[plan-selection]", err.step || "", err.status || "", err.code || "", err.message);
+    console.error("[plan-selection]", err.step || "", err.status || "", err.code || "", err.reason || "", err.message);
     var e = selections.explain(err);
     return http.sendJson(res, e.status, { ok: false, error: e.message });
   }

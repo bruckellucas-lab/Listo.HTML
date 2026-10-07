@@ -9,10 +9,14 @@
      plan, fecha, horario, personas, zona y lugar). No replica el email del
      usuario, sus comentarios, el pedido original, restricciones
      alimentarias ni IDs internos: todo eso queda en Supabase / panel.
+   - G1B: nombre, dirección y link de Maps del lugar se piden a Google JUSTO
+     al enviar (place-details.js) y no se guardan. Si Google falla, el email
+     sale igual, sin nombre inventado, con un aviso y el link a Maps.
    ========================================================= */
 "use strict";
 
 var store = require("./providers-store");
+var placeDetails = require("./place-details");
 
 var RESEND_URL = "https://api.resend.com/emails";
 var NOTIFY_TO = "listoeventoss@gmail.com";
@@ -81,13 +85,13 @@ function buildEmail(ctx) {
     ["Horario", c.approximate_time],
     ["Personas", r.guests],
     ["Zona", r.zone],
-    ["Proveedor elegido", p.name || ctx.providerName],
+    ["Proveedor elegido", p.name || (p.unavailable ? placeDetails.UNAVAILABLE : null)],
     ["Google Maps", p.maps_url],
     ["Recibido", ctx.receivedAt]
   ].filter(function (row) { return row[1] !== null && row[1] !== undefined && row[1] !== ""; });
 
   var subject = (ctx.updated ? "Solicitud actualizada · " : "Nueva solicitud · ") +
-    (r.event_type || "Plan") + (r.guests ? " para " + r.guests : "") + " · " + (p.name || ctx.providerName || "LISTO");
+    (r.event_type || "Plan") + (r.guests ? " para " + r.guests : "") + " · " + (p.name || "LISTO");
 
   var html = '<div style="font-family:Arial,Helvetica,sans-serif;max-width:640px;margin:0 auto;color:#141210">' +
     '<p style="font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#5E4431;margin:0 0 8px">LISTO · Quiero avanzar</p>' +
@@ -111,7 +115,7 @@ function buildEmail(ctx) {
   return { subject: subject, html: html, text: text, waLink: waLink };
 }
 
-// Busca el contexto (pedido + lugar) con la clave secreta, para el email.
+// Busca el contexto para el email: el pedido en Supabase y el lugar en Google (en el momento, sin guardar).
 function loadContext(cfg, eventRequestId, placeId, fetchImpl) {
   var doFetch = fetchImpl || fetch;
   var get = function (path, step) {
@@ -119,8 +123,15 @@ function loadContext(cfg, eventRequestId, placeId, fetchImpl) {
   };
   return Promise.all([
     get("event_requests?select=event_type,guests,zone&id=eq." + encodeURIComponent(eventRequestId), "leer pedido"),
-    get("providers?select=name,maps_url&google_place_id=eq." + encodeURIComponent(placeId), "leer proveedor")
-  ]).then(function (res) { return { request: res[0] || {}, provider: res[1] || {} }; });
+    livePlace(placeId, fetchImpl)
+  ]).then(function (res) { return { request: res[0] || {}, provider: res[1] }; });
+}
+
+// Lugar en tiempo real para un email. Nunca falla: si Google no responde, aviso + link a Maps.
+function livePlace(placeId, fetchImpl) {
+  return placeDetails.fetchPlace(placeId, "email", fetchImpl ? { fetch: fetchImpl } : undefined).then(function (live) {
+    return { name: live.name, address: live.address, maps_url: live.maps_url, unavailable: !live.ok };
+  });
 }
 
 function sendEmail(apiKey, email, fetchImpl) {
@@ -170,11 +181,11 @@ function notifyInquiry(cfg, info, fetchImpl) {
     ? Promise.reject(new Error("Falta RESEND_API_KEY en Vercel"))
     : loadContext(cfg, info.eventRequestId, info.placeId, fetchImpl).catch(function (err) {
         console.error("[notify] no se pudo leer el contexto:", err.step || "", err.status || "", err.code || "");
-        return { request: {}, provider: {} };   // igual avisamos con lo que hay
+        return livePlace(info.placeId, fetchImpl).then(function (provider) { return { request: {}, provider: provider }; });   // igual avisamos con lo que hay
       }).then(function (ctx) {
         return sendEmail(apiKey, buildEmail({
           request: ctx.request, provider: ctx.provider, contact: info.contact,
-          providerName: info.providerName, updated: info.updated, receivedAt: nowAR()
+          updated: info.updated, receivedAt: nowAR()
         }), fetchImpl);
       });
 
@@ -199,7 +210,7 @@ function amountText(n, cur) {
 function buildProposalEmail(ctx) {
   var c = ctx.contact || {}, q = ctx.quote || {}, r = ctx.request || {}, p = ctx.provider || {};
   var accepted = ctx.action === "accept";
-  var providerName = p.name || ctx.providerName || "Proveedor";
+  var providerName = p.name || "Lugar elegido";
   var wa = whatsappNumber(c.contact_phone);
   var waLink = wa ? "https://wa.me/" + wa : "";
   var price = [q.total_price !== null && q.total_price !== undefined ? amountText(q.total_price, q.currency) + " total" : "",
@@ -210,8 +221,9 @@ function buildProposalEmail(ctx) {
     ["Comentario del usuario", ctx.comment],
     ["Contacto", c.contact_name],
     ["WhatsApp", c.contact_phone],
-    ["Proveedor", providerName],
+    ["Proveedor", p.name || (p.unavailable ? placeDetails.UNAVAILABLE : null)],
     ["Dirección", p.address],
+    ["Google Maps", p.maps_url],
     ["Plan", r.event_type],
     ["Fecha", dateAR(c.event_date)],
     ["Horario", c.approximate_time],
@@ -236,8 +248,10 @@ function buildProposalEmail(ctx) {
     (waLink ? '<p style="margin:0 0 22px"><a href="' + esc(waLink) + '" style="display:inline-block;background:#141210;color:#EFE8DC;text-decoration:none;padding:14px 22px;font-weight:bold;letter-spacing:2px;font-size:13px">ABRIR WHATSAPP</a></p>' : '') +
     '<table cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;font-size:14px">' +
     rows.map(function (row) {
+      var val = esc(row[1]);
+      if (row[0] === "Google Maps" && /^https:\/\//.test(row[1])) val = '<a href="' + esc(row[1]) + '">Abrir en Google Maps</a>';
       return '<tr><td style="padding:8px 12px 8px 0;border-bottom:1px solid #E2D9CB;color:#8C857A;white-space:nowrap;vertical-align:top">' + esc(row[0]) +
-        '</td><td style="padding:8px 0;border-bottom:1px solid #E2D9CB;vertical-align:top">' + esc(row[1]) + '</td></tr>';
+        '</td><td style="padding:8px 0;border-bottom:1px solid #E2D9CB;vertical-align:top">' + val + '</td></tr>';
     }).join("") + '</table>' + GMAPS_HTML + admin + '</div>';
 
   var text = subject + "\n" + lead + "\n\n" +
@@ -252,7 +266,7 @@ function notifyProposalResponse(cfg, info, fetchImpl) {
   if (!apiKey) { console.error("[notify] respuesta de propuesta sin email: falta RESEND_API_KEY"); return Promise.resolve(false); }
   var doFetch = fetchImpl || fetch;
   var path = "plan_inquiries?select=contact_name,contact_phone,event_date,approximate_time," +
-    "plan_selections(provider_name,event_requests(event_type,guests,zone),providers(name,address))&id=eq." + encodeURIComponent(info.planInquiryId);
+    "plan_selections(provider_google_place_id,event_requests(event_type,guests,zone))&id=eq." + encodeURIComponent(info.planInquiryId);
   return store.request(doFetch, api(cfg, path), { method: "GET", headers: store.headersFor(cfg.key) }, "leer contexto propuesta")
     .then(first, function (err) {
       console.error("[notify] no se pudo leer el contexto de la propuesta:", err.status || "", err.code || "");
@@ -261,10 +275,13 @@ function notifyProposalResponse(cfg, info, fetchImpl) {
     .then(function (inq) {
       inq = inq || {};
       var sel = inq.plan_selections || {};
-      return sendEmail(apiKey, buildProposalEmail({
-        action: info.action, comment: info.comment, quote: info.quote, adminUrl: info.adminUrl,
-        contact: inq, request: sel.event_requests || {}, provider: sel.providers || {}, providerName: sel.provider_name
-      }), doFetch);
+      // Lugar en tiempo real (Google), sólo para este email.
+      return livePlace(sel.provider_google_place_id, fetchImpl).then(function (provider) {
+        return sendEmail(apiKey, buildProposalEmail({
+          action: info.action, comment: info.comment, quote: info.quote, adminUrl: info.adminUrl,
+          contact: inq, request: sel.event_requests || {}, provider: provider
+        }), doFetch);
+      });
     })
     .then(function () { return true; }, function (err) {
       console.error("[notify] el email de respuesta no se envió:", err && err.name === "AbortError" ? "tiempo de espera agotado" : (err && err.message));

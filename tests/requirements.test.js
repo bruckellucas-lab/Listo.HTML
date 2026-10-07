@@ -67,7 +67,7 @@ function supabase(requestRow, extra) {
       if (typeof requestRow === "function") return requestRow();
       return h.response(200, requestRow ? [requestRow] : []);
     } },
-    { match: /\/rest\/v1\/providers\?select=google_place_id,name/, reply: function () { return h.response(200, [{ google_place_id: PLACE, name: "Lugar Real" }]); } },
+    { match: /\/rest\/v1\/providers\?select=google_place_id&/, reply: function () { return h.response(200, [{ google_place_id: PLACE }]); } },
     { match: /\/rest\/v1\/plan_selections\?select=/, reply: function () { return h.response(200, extra.selections || []); } },
     { match: /\/rest\/v1\/plan_selections$/, reply: function (c) { return h.response(201, [Object.assign({ id: "sel-1", status: "interested", created_at: "2026-10-07T12:00:00Z" }, JSON.parse(c.body))]); } },
     { match: /\/rest\/v1\/plan_inquiries\?select=id/, reply: function () { return h.response(200, []); } },

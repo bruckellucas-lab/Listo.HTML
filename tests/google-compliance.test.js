@@ -185,9 +185,10 @@ test("atribución \"Google Maps\" en home, propuesta, /admin y emails", function
   assert.match(prop, /gm\.href = p\.photo\.source;/);
   var admin = read("admin/index.html");
   assert.match(admin, /function gmapsNote\(\)/);
-  assert.ok(admin.split("gmapsNote()").length - 1 >= 5, "lista y detalle de solicitudes y de proveedores");
+  // G1B: las listas ya no muestran datos de Google (sólo place_id + link a Maps); el detalle sí, con atribución.
+  assert.match(admin, /function livePlace\([\s\S]*?box\.appendChild\(gmapsNote\(\)\)/, "detalle (datos en tiempo real) con atribución");
   var e1 = notify.buildEmail({ request: { event_type: "Cena" }, provider: { name: "Lugar", maps_url: "https://maps.google.com/?cid=1" }, contact: {} });
-  var e2 = notify.buildProposalEmail({ action: "accept", contact: {}, quote: {}, request: {}, provider: { name: "Lugar", address: "Calle 1" } });
+  var e2 = notify.buildProposalEmail({ action: "accept", contact: {}, quote: {}, request: {}, provider: { name: "Lugar", address: "Calle 1", maps_url: "https://maps.google.com/?cid=1" } });
   [e1, e2].forEach(function (e) {
     assert.match(e.html, /Datos del lugar: <span[^>]*>Google Maps<\/span>/);
     assert.match(e.text, /Datos del lugar: Google Maps/);

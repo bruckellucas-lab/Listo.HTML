@@ -1143,7 +1143,8 @@
     return fetch("/api/plan-selection", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ event_request_id: requestId, google_place_id: o.google_place_id })
+      // option_token: comprobante firmado de la búsqueda (sólo en memoria, nunca en localStorage).
+      body: JSON.stringify({ event_request_id: requestId, google_place_id: o.google_place_id, option_token: o.option_token || "" })
     }).then(function (r) {
       return r.json().catch(function () { return { ok: false }; }).then(function (data) {
         if (!r.ok || !data.ok) throw new Error(data.error || "");

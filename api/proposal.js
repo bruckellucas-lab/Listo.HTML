@@ -4,8 +4,11 @@
    GET  ?code=XXXXXXXXXXXX  → datos de la propuesta para /propuesta/CODE
    POST { code, action: "accept" | "decline", comment? }
 
-   - Sólo se muestra lo que ya está en Supabase. Google se usa
-     únicamente para la foto (con caché en el servidor).
+   - Pedido y cotización salen de Supabase. Los datos del lugar
+     (nombre, dirección, categoría, link de Maps y 1 foto) se piden a
+     Google en cada apertura, en UN solo pedido de Place Details, y no
+     se guardan (G1B). Si Google falla, la propuesta abre igual con un
+     aviso honesto y el link a Maps.
    - Si el que abre es el equipo de LISTO (sesión de /admin), la visita
      NO se cuenta.
    - Aceptar NO confirma la reserva: la solicitud sigue en su estado
@@ -18,6 +21,7 @@ var http = require("./_lib/http");
 var auth = require("./_lib/admin-auth");
 var store = require("./_lib/providers-store");
 var photos = require("./_lib/photos");
+var placeDetails = require("./_lib/place-details");
 var proposals = require("./_lib/proposals");
 var notify = require("./_lib/notify");
 var rateLimit = require("./_lib/rate-limit");
@@ -39,17 +43,12 @@ function count(kind, ip, add) {
   return list.length;
 }
 
-// Foto: se pide a Google en cada apertura (los nombres de foto no se pueden cachear).
-async function photoFor(placeId) {
-  var apiKey = http.env("GOOGLE_PLACES_API_KEY"), secret = photos.signingSecret();
-  if (!placeId || !photos.PLACE_ID_RE.test(placeId) || !apiKey || !secret) return null;
-  try {
-    var place = await photos.fetchPlacePhotos(apiKey, placeId);
-    return photos.photosForPlace(place, secret, { max: 1 })[0] || null;
-  } catch (err) {
-    console.error("[proposal] foto:", err.status || "", err.message);
-    return null;   // sin foto se muestra la propuesta igual
-  }
+// Lugar + foto: UN pedido a Google por apertura (nada se cachea ni se guarda).
+async function liveFor(placeId) {
+  var live = await placeDetails.fetchPlace(placeId, "proposal");
+  var secret = photos.signingSecret();
+  var photo = live.ok && secret ? photos.photosForPlace(live.raw, secret, { max: 1 })[0] || null : null;
+  return { place: live, photo: photo };   // sin foto o sin datos, la propuesta se muestra igual
 }
 
 function placeIdOf(row) {
@@ -71,10 +70,11 @@ function adminUrlOf(req) {
 }
 
 // Lo que se devuelve según el estado (si fue reemplazada, no se muestran los datos viejos).
-function publicPayload(row, photo) {
+// live = { place, photo } sólo al abrir; en las respuestas (POST) va null: no se vuelve a llamar a Google.
+function publicPayload(row, live) {
   if (row.status === "proposal_replaced") return { ok: true, proposal: { status: row.status } };
-  var out = proposals.toPublic(row);
-  out.photo = photo || null;
+  var out = proposals.toPublic(row, undefined, live ? live.place : null);
+  out.photo = live ? live.photo || null : null;
   return { ok: true, proposal: out };
 }
 
@@ -112,8 +112,8 @@ async function handleGet(req, res, cfg) {
     } catch (err) { console.error("[proposal] visita:", err.status || "", err.code || ""); }
   }
 
-  var photo = row.status === "proposal_replaced" ? null : await photoFor(placeIdOf(row));
-  var payload = publicPayload(row, photo);
+  var live = row.status === "proposal_replaced" ? null : await liveFor(placeIdOf(row));
+  var payload = publicPayload(row, live);
   if (preview) payload.preview = true;
   return http.sendJson(res, 200, payload);
 }
