@@ -11,11 +11,13 @@ process.env.SUPABASE_URL = "https://ejemplo-de-prueba.supabase.co";
 process.env.SUPABASE_SECRET_KEY = "clave-de-prueba-no-real";
 process.env.RATE_LIMIT_SECRET = "secreto-de-prueba-para-limites-1234567890";
 process.env.TURNSTILE_SECRET_KEY = "secreto-turnstile-de-prueba";
+process.env.PHOTO_SIGNING_SECRET = "secreto-de-fotos-de-prueba-0123456789abcdef";   // G1B: elegir exige comprobante firmado
 
 var requirements = require("../api/_lib/requirements");
 var notify = require("../api/_lib/notify");
 var planSelection = require("../api/plan-selection");
 var planInquiry = require("../api/plan-inquiry");
+var optionToken = require("../api/_lib/option-token");
 
 var REQ = "3f2b8c1e-9a4d-4e6f-8b2a-1c3d5e7f9a0b";
 var PLACE = "ChIJabcdefghij1234";
@@ -67,7 +69,7 @@ function supabase(requestRow, extra) {
       if (typeof requestRow === "function") return requestRow();
       return h.response(200, requestRow ? [requestRow] : []);
     } },
-    { match: /\/rest\/v1\/providers\?select=google_place_id&/, reply: function () { return h.response(200, [{ google_place_id: PLACE }]); } },
+    { match: /\/rest\/v1\/providers\?on_conflict=/, reply: function () { return h.response(201, ""); } },
     { match: /\/rest\/v1\/plan_selections\?select=/, reply: function () { return h.response(200, extra.selections || []); } },
     { match: /\/rest\/v1\/plan_selections$/, reply: function (c) { return h.response(201, [Object.assign({ id: "sel-1", status: "interested", created_at: "2026-10-07T12:00:00Z" }, JSON.parse(c.body))]); } },
     { match: /\/rest\/v1\/plan_inquiries\?select=id/, reply: function () { return h.response(200, []); } },
@@ -88,7 +90,9 @@ function quiet(fn) {
 
 async function choose(body) {
   var res = h.fakeRes();
-  await quiet(function () { return planSelection(h.fakeReq("POST", { "content-type": "application/json" }, body || { event_request_id: REQ, google_place_id: PLACE }), res); });
+  body = Object.assign({ event_request_id: REQ, google_place_id: PLACE }, body);
+  if (!("option_token" in body)) body.option_token = optionToken.sign(process.env.PHOTO_SIGNING_SECRET, body.google_place_id);
+  await quiet(function () { return planSelection(h.fakeReq("POST", { "content-type": "application/json" }, body), res); });
   return res;
 }
 

@@ -231,22 +231,63 @@ test("elegir con comprobante adulterado, de otro lugar, vencido o sin comprobant
   }
 });
 
-test("sin PHOTO_SIGNING_SECRET: elegir sigue funcionando si el lugar existe en providers", async function () {
+// Falla cerrado: sin secreto válido no se guarda NINGUNA elección, aunque el lugar exista en providers.
+async function withSecret(value, fn) {
   var saved = process.env.PHOTO_SIGNING_SECRET;
-  delete process.env.PHOTO_SIGNING_SECRET;
-  try {
-    var fetch = h.mockFetch([
-      h.rpcRule(),
-      { match: /\/rest\/v1\/event_requests\?select=id,dietary_requirements/, reply: function () { return h.response(200, [{ id: REQ, dietary_requirements: null }]); } },
-      { match: /\/rest\/v1\/providers\?select=google_place_id&/, reply: function () { return h.response(200, [{ google_place_id: PLACE }]); } },
-      { match: /\/rest\/v1\/plan_selections\?select=/, reply: function () { return h.response(200, []); } },
-      { match: /\/rest\/v1\/plan_selections$/, reply: function (c) { return h.response(201, [JSON.parse(c.body)]); } }
-    ]);
-    global.fetch = fetch;
-    var res = await choose({ event_request_id: REQ, google_place_id: PLACE });
-    assert.equal(res.statusCode, 200);
-    assert.equal(JSON.parse(fetch.calls.filter(function (c) { return /plan_selections$/.test(c.url); })[0].body).provider_name, "");
-  } finally { process.env.PHOTO_SIGNING_SECRET = saved; }
+  if (value === undefined) delete process.env.PHOTO_SIGNING_SECRET; else process.env.PHOTO_SIGNING_SECRET = value;
+  try { return await fn(); } finally { process.env.PHOTO_SIGNING_SECRET = saved; }
+}
+function failClosedWorld() {
+  var fetch = h.mockFetch([
+    h.rpcRule(),
+    { match: /\/rest\/v1\/event_requests\?select=id,dietary_requirements/, reply: function () { return h.response(200, [{ id: REQ, dietary_requirements: null }]); } },
+    { match: /\/rest\/v1\/providers/, reply: function () { return h.response(200, [{ google_place_id: PLACE }]); } },
+    { match: /\/rest\/v1\/plan_selections\?select=/, reply: function () { return h.response(200, []); } },
+    { match: /\/rest\/v1\/plan_selections$/, reply: function (c) { return h.response(201, [JSON.parse(c.body)]); } }
+  ]);
+  global.fetch = fetch;
+  return fetch;
+}
+
+test("falla cerrado: sin PHOTO_SIGNING_SECRET no se guarda la elección (aunque el lugar exista en providers)", async function () {
+  var token = optionToken.sign(SECRET, PLACE);
+  for (var body of [{ event_request_id: REQ, google_place_id: PLACE }, { event_request_id: REQ, google_place_id: PLACE, option_token: token }]) {
+    var fetch = failClosedWorld();
+    var res = await withSecret(undefined, function () { return choose(body); });
+    assert.equal(res.statusCode, 503);
+    assert.equal(res.json().error, "LISTO no puede guardar esta elección en este momento. Volvé a buscar opciones e intentá de nuevo.");
+    assert.equal(fetch.calls.filter(function (c) { return /plan_selections|providers/.test(c.url); }).length, 0, "ni siquiera consulta providers");
+  }
+});
+
+test("falla cerrado: secreto demasiado corto → no se guarda", async function () {
+  var fetch = failClosedWorld();
+  var short = "corto-" + "x".repeat(10);
+  var res = await withSecret(short, function () { return choose({ event_request_id: REQ, google_place_id: PLACE, option_token: optionToken.sign(short, PLACE) }); });
+  assert.equal(res.statusCode, 503);
+  assert.match(res.json().error, /no puede guardar esta elección/);
+  assert.equal(fetch.calls.filter(function (c) { return c.method !== "GET" && /plan_selections|providers/.test(c.url); }).length, 0);
+});
+
+test("con secreto válido: token válido acepta; faltante, inválido, de otro lugar o vencido rechaza", async function () {
+  var now = Math.floor(Date.now() / 1000);
+  var cases = [
+    ["válido", optionToken.sign(SECRET, PLACE), 200],
+    ["faltante", undefined, 409],
+    ["inválido", "123.no-es-una-firma", 409],
+    ["adulterado", (function (t) { return t.slice(0, -1) + (t.slice(-1) === "A" ? "B" : "A"); })(optionToken.sign(SECRET, PLACE)), 409],
+    ["de otro lugar", optionToken.sign(SECRET, "ChIJabcdefghij0002"), 409],
+    ["vencido", optionToken.sign(SECRET, PLACE, now - optionToken.TTL_SECONDS - 5), 409]
+  ];
+  for (var c of cases) {
+    var fetch = selectionWorld();
+    var body = { event_request_id: REQ, google_place_id: PLACE };
+    if (c[1] !== undefined) body.option_token = c[1];
+    var res = await choose(body);
+    assert.equal(res.statusCode, c[2], c[0]);
+    var saved = fetch.calls.filter(function (x) { return x.method === "POST" && /plan_selections$/.test(x.url); }).length;
+    assert.equal(saved, c[2] === 200 ? 1 : 0, c[0]);
+  }
 });
 
 test("app.js manda el comprobante y no lo guarda en localStorage", function () {
@@ -277,10 +318,10 @@ function proposalWorld(google) {
   global.fetch = fetch;
   return fetch;
 }
-async function openProposal() {
-  var res = h.fakeRes(), req = h.fakeReq("GET", {});
+async function openProposal(ip, handler) {
+  var res = h.fakeRes(), req = h.fakeReq("GET", {}, undefined, ip);
   req.query = { code: "AbCdEf123456" };
-  await quiet(function () { return proposal(req, res); });
+  await quiet(function () { return (handler || proposal)(req, res); });
   return res;
 }
 
@@ -331,6 +372,141 @@ test("propuesta: responder (POST) no llama a Google", async function () {
   assert.equal(res.statusCode, 200);
   assert.equal(res.json().proposal.place, null);
   assert.equal(googleCalls(fetch).length, 0);
+});
+
+/* ---------- Límite persistente antes de pedir datos del lugar (propuesta) ---------- */
+
+var rl = require("../api/_lib/rate-limit");
+// "Supabase" compartido: el conteo vive acá (como la tabla api_rate_limits), no en cada copia de la función.
+function sharedStore() {
+  var counts = {}, bodies = [];
+  return {
+    bodies: bodies,
+    rule: { match: /\/rest\/v1\/rpc\/listo_rate_limit_hit$/, reply: function (c) {
+      var b = JSON.parse(c.body); bodies.push(b);
+      var id = b.p_scope + "|" + b.p_key + "|" + b.p_window_seconds;
+      counts[id] = (counts[id] || 0) + 1;
+      return h.response(200, { allowed: counts[id] <= b.p_max, hits: counts[id], retry_after: 60 });
+    } }
+  };
+}
+function limitedWorld(store, google) {
+  var fetch = h.mockFetch([
+    store.rule,
+    { match: /\/rest\/v1\/plan_proposals\?select=/, reply: function () { return h.response(200, [proposalRow()]); } },
+    { match: /\/rest\/v1\/plan_proposals\?id=eq\./, reply: function () { return h.response(204, ""); } },
+    { match: /places\.googleapis\.com\/v1\/places\//, reply: google || function () { return h.response(200, gPlace(1)); } }
+  ]);
+  global.fetch = fetch;
+  return fetch;
+}
+function assertFallback(res) {
+  assert.equal(res.statusCode, 200, "la propuesta abre igual");
+  var p = res.json().proposal;
+  assert.equal(p.place.name, null);
+  assert.equal(p.place.unavailable, true);
+  assert.equal(p.place.message, "Datos del lugar no disponibles en este momento.");
+  assert.equal(p.place.maps_url, "https://www.google.com/maps/search/?api=1&query=" + PLACE + "&query_place_id=" + PLACE);
+  assert.equal(p.quote.total_price, 150000);
+}
+async function withLimits(over, fn) {
+  var saved = {};
+  Object.keys(over).forEach(function (k) { saved[k] = rl.LIMITS[k].max; rl.LIMITS[k].max = over[k]; });
+  try { return await fn(); } finally { Object.keys(saved).forEach(function (k) { rl.LIMITS[k].max = saved[k]; }); }
+}
+
+test("límite de propuesta: apertura normal → consulta el límite persistente y llama 1 vez a Google", async function () {
+  var store = sharedStore(), fetch = limitedWorld(store);
+  var res = await openProposal("10.9.0.1");
+  assert.equal(res.json().proposal.place.name, "Lugar 1");
+  assert.equal(googleCalls(fetch).length, 1);
+  // Antes de Google: por visitante + tope total, en la fila que la función de Supabase ya acepta (sin migration).
+  assert.deepEqual(store.bodies.map(function (b) { return [b.p_scope, b.p_max, b.p_window_seconds]; }),
+    [["proposal_response", rl.LIMITS.proposal_details.max, 600], ["proposal_response", rl.LIMITS.proposal_details_all.max, 3600]]);
+  var gIdx = fetch.calls.indexOf(googleCalls(fetch)[0]);
+  assert.ok(fetch.calls.findIndex(function (c) { return /rpc\/listo_rate_limit_hit/.test(c.url); }) < gIdx, "el límite se consulta ANTES de Google");
+  // Huellas distintas a las de "aceptar / pedir otra opción" (nunca se mezclan los conteos).
+  var respKey = rl.visitorKey(process.env.RATE_LIMIT_SECRET, "proposal_response", "10.9.0.1");
+  assert.ok(store.bodies.every(function (b) { return b.p_key !== respKey && /^[0-9a-f]{64}$/.test(b.p_key); }));
+});
+
+test("límite de propuesta: excedido → no llama a Google y la propuesta abre con aviso y link a Maps", async function () {
+  await withLimits({ proposal_details: 2 }, async function () {
+    var store = sharedStore(), fetch = limitedWorld(store);
+    await openProposal("10.9.0.2"); await openProposal("10.9.0.2");
+    assert.equal(googleCalls(fetch).length, 2);
+    var res = await openProposal("10.9.0.2");
+    assertFallback(res);
+    assert.equal(googleCalls(fetch).length, 2, "la tercera no llamó a Google");
+    assert.equal((await openProposal("10.9.0.3")).json().proposal.place.name, "Lugar 1", "otro visitante sigue viendo los datos");
+  });
+});
+
+test("límite de propuesta: tope total compartido entre visitantes", async function () {
+  await withLimits({ proposal_details_all: 3 }, async function () {
+    var store = sharedStore(), fetch = limitedWorld(store);
+    for (var i = 1; i <= 3; i++) await openProposal("10.9.1." + i);
+    assertFallback(await openProposal("10.9.1.9"));
+    assert.equal(googleCalls(fetch).length, 3);
+  });
+});
+
+test("límite de propuesta: si el límite persistente no está disponible → no llama a Google y abre igual", async function () {
+  for (var down of [
+    function () { return h.response(404, { code: "PGRST202", message: "Could not find the function" }); },
+    function () { return h.response(500, { message: "caído" }); },
+    function () { return Promise.reject(new Error("sin red")); }
+  ]) {
+    var fetch = limitedWorld({ rule: { match: /\/rest\/v1\/rpc\/listo_rate_limit_hit$/, reply: down } });
+    assertFallback(await openProposal("10.9.2.1"));
+    assert.equal(googleCalls(fetch).length, 0);
+  }
+  var saved = process.env.RATE_LIMIT_SECRET;
+  process.env.RATE_LIMIT_SECRET = "corto";
+  try {
+    var f2 = limitedWorld(sharedStore());
+    assertFallback(await openProposal("10.9.2.2"));
+    assert.equal(googleCalls(f2).length, 0, "sin secreto del límite tampoco se llama a Google");
+  } finally { process.env.RATE_LIMIT_SECRET = saved; }
+});
+
+test("límite de propuesta: dos copias independientes de la función comparten el conteo (Supabase)", async function () {
+  await withLimits({ proposal_details: 3 }, async function () {
+    var store = sharedStore(), fetch = limitedWorld(store);
+    var copyA = h.fresh("api/proposal.js"), copyB = h.fresh("api/proposal.js");
+    assert.notEqual(copyA, copyB);
+    await openProposal("10.9.3.1", copyA); await openProposal("10.9.3.1", copyB); await openProposal("10.9.3.1", copyA);
+    assert.equal(googleCalls(fetch).length, 3);
+    assertFallback(await openProposal("10.9.3.1", copyB));
+    assert.equal(googleCalls(fetch).length, 3, "la copia B ve el conteo de la copia A");
+  });
+});
+
+test("límite de propuesta: no afecta aceptar/rechazar (POST), ni /admin, ni emails", async function () {
+  var store = sharedStore();
+  var fetch = h.mockFetch([
+    store.rule,
+    { match: /\/rest\/v1\/plan_proposals\?select=/, reply: function () { var r = proposalRow(); r.status = "proposal_accepted"; return h.response(200, [r]); } }
+  ]);
+  global.fetch = fetch;
+  var res = h.fakeRes();
+  await quiet(function () { return proposal(h.fakeReq("POST", { "content-type": "application/json" }, { code: "AbCdEf123456", action: "accept" }), res); });
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(store.bodies.map(function (b) { return b.p_window_seconds; }), [600], "sólo el límite de respuestas de siempre");
+  assert.equal(store.bodies[0].p_max, rl.LIMITS.proposal_response.max);
+  assert.equal(googleCalls(fetch).length, 0);
+
+  var admin = h.mockFetch([{ match: /places\.googleapis\.com/, reply: function () { return h.response(200, gPlace(1)); } }]);
+  global.fetch = admin;
+  var r2 = h.fakeRes();
+  await adminProviders(adminReq("GET", { place_id: PLACE }), r2);
+  assert.equal(r2.json().place.name, "Lugar 1");
+  assert.equal(admin.calls.filter(function (c) { return /rpc/.test(c.url); }).length, 0, "/admin no usa este límite");
+
+  var mail = mailWorld(function () { return h.response(200, gPlace(1)); });
+  assert.equal(await notify.notifyInquiry(CFG, INQ, mail), true);
+  assert.match(mailOf(mail), /Lugar 1/);
+  assert.equal(mail.calls.filter(function (c) { return /rpc/.test(c.url); }).length, 0, "los emails no usan este límite");
 });
 
 /* ---------- Emails ---------- */

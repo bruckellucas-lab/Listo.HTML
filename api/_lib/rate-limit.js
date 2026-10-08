@@ -32,9 +32,18 @@ var LIMITS = {
   plan_selection:    { max: 40, windowSeconds: 600, failClosed: true },   // "Elegir esta opción"
   plan_inquiry:      { max: 8,  windowSeconds: 600, failClosed: true },   // "Quiero avanzar" (manda email)
   proposal_response: { max: 10, windowSeconds: 600, failClosed: true },   // aceptar / pedir otra opción
-  admin_login:       { max: 10, windowSeconds: 900, failClosed: false }   // ingreso a /admin
+  admin_login:       { max: 10, windowSeconds: 900, failClosed: false },  // ingreso a /admin
+  // G1B: datos del lugar (Place Details de Google) al abrir una propuesta. Si se pasa o no se
+  // puede contar, NO se llama a Google (la propuesta abre igual, con aviso y link a Maps).
+  // Sin migration nueva: se cuentan en la fila de la acción "proposal_response" (que la función
+  // de Supabase ya acepta) con una huella distinta (la huella incluye "proposal_details"), así
+  // que nunca se mezclan con los conteos de respuestas.
+  proposal_details:     { max: 20,  windowSeconds: 600,  failClosed: true, dbScope: "proposal_response" },             // por visitante
+  proposal_details_all: { max: 200, windowSeconds: 3600, failClosed: true, dbScope: "proposal_response", shared: true } // tope total, todos los visitantes
 };
-var SCOPES = Object.keys(LIMITS);
+// Acciones que conoce la función de Supabase (listo_rate_limit_hit).
+var SCOPES = Object.keys(LIMITS).map(function (k) { return LIMITS[k].dbScope || k; })
+  .filter(function (s, i, all) { return all.indexOf(s) === i; });
 
 /* ---------- Identificador privado del visitante ---------- */
 
@@ -108,7 +117,7 @@ function rpcHit(cfg, scope, key, limit, fetchImpl) {
   return store.request(doFetch, store.normalizeUrl(cfg.url) + "/rest/v1/rpc/" + RPC, {
     method: "POST",
     headers: store.headersFor(cfg.key),
-    body: JSON.stringify({ p_scope: scope, p_key: key, p_window_seconds: limit.windowSeconds, p_max: limit.max }),
+    body: JSON.stringify({ p_scope: limit.dbScope || scope, p_key: key, p_window_seconds: limit.windowSeconds, p_max: limit.max }),
     signal: controller ? controller.signal : undefined
   }, "límite de pedidos").then(function (out) {
     clearTimeout(timer);
@@ -129,7 +138,8 @@ async function check(req, scope, opts) {
   var limit = LIMITS[scope];
   if (!limit) throw new Error("Acción sin límite configurado: " + scope);
   var env = opts.env || http.env;
-  var ip = clientIp(req);
+  // "shared": un único contador para todos los visitantes (tope total).
+  var ip = limit.shared ? "todos" : clientIp(req);
   var secret = secretOf(env);
   var url = env("SUPABASE_URL"), key = env("SUPABASE_SECRET_KEY");
   var problem = !secret ? "falta RATE_LIMIT_SECRET (32 caracteres o más)"

@@ -89,6 +89,7 @@ test("/api/proposal pide la foto a Google en cada apertura (sin caché de nombre
     plan_inquiries: { event_date: "2026-11-01", plan_selections: { provider_google_place_id: "ChIJabcdefghij0001", provider_name: "Lugar 1",
       event_requests: { event_type: "Cena", guests: 4, zone: "Palermo" }, providers: { name: "Lugar 1", maps_url: "https://maps.google.com/?cid=1" } } } };
   var fetch = h.mockFetch([
+    h.rpcRule(),   // G1B-1: límite persistente antes de pedir datos del lugar
     { match: /\/rest\/v1\/plan_proposals\?select=/, reply: function () { return h.response(200, [row]); } },
     { match: /\/rest\/v1\/plan_proposals\?id=eq\./, reply: function () { return h.response(204, ""); } },
     { match: /places\.googleapis\.com\/v1\/places\/ChIJ/, reply: function () { return h.response(200, { photos: gPlace(1).photos }); } }

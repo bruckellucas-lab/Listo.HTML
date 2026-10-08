@@ -30,19 +30,15 @@ function fail(code, extra) {
   return e;
 }
 
-// La opción tiene que haber salido de una búsqueda de LISTO.
-// - Con secreto: se verifica el comprobante firmado y se asegura la fila mínima en providers.
-// - Sin secreto (configuración incompleta): como antes, el lugar tiene que existir en providers.
-function checkOption(cfg, placeId, token, doFetch, get) {
+// La opción tiene que haber salido de una búsqueda de LISTO: SIEMPRE con un comprobante
+// firmado válido. Falla cerrado: sin secreto válido en el servidor (falta o es corto), no se
+// guarda ninguna elección (nunca se acepta un lugar sólo porque exista en providers).
+function checkOption(cfg, placeId, token, doFetch) {
   var secret = photos.signingSecret();
-  if (secret) {
-    var why = optionToken.verify(secret, placeId, token);
-    if (why) return Promise.reject(fail("BAD_OPTION", { reason: why }));
-    return store.ensureProvider(cfg, placeId, doFetch);
-  }
-  return get("providers?select=google_place_id&google_place_id=eq." + encodeURIComponent(placeId), "buscar proveedor").then(function (rows) {
-    if (!first(rows)) throw fail("NO_PROVIDER");
-  });
+  if (!secret) return Promise.reject(fail("NO_SIGNING_SECRET"));
+  var why = optionToken.verify(secret, placeId, token);
+  if (why) return Promise.reject(fail("BAD_OPTION", { reason: why }));
+  return store.ensureProvider(cfg, placeId, doFetch);
 }
 
 // opts: { token } — comprobante de la opción (option_token).
@@ -57,7 +53,7 @@ function saveSelection(cfg, eventRequestId, placeId, fetchImpl, opts) {
   return requirements.assertAutomaticAllowed(cfg, eventRequestId, doFetch)
     .then(function () {
       // 2) La opción tiene que ser una opción real de LISTO (comprobante firmado).
-      return checkOption(cfg, placeId, token, doFetch, get);
+      return checkOption(cfg, placeId, token, doFetch);
     })
     .then(function () {
       // 3) ¿Ya hay una elección activa para este pedido?
@@ -98,8 +94,8 @@ function explain(err) {
   var r = requirements.explain(err);
   if (r) return r;
   if (err.code === "NO_REQUEST") return { status: 404, message: "Todavía no terminamos de guardar tu pedido. Esperá un segundo y probá de nuevo." };
+  if (err.code === "NO_SIGNING_SECRET") return { status: 503, message: "LISTO no puede guardar esta elección en este momento. Volvé a buscar opciones e intentá de nuevo." };
   if (err.code === "BAD_OPTION") return { status: 409, message: "Esta opción ya no es válida. Volvé a buscar opciones y elegila de nuevo." };
-  if (err.code === "NO_PROVIDER") return { status: 404, message: "No encontramos ese lugar en LISTO. Volvé a buscar opciones y probá de nuevo." };
   if (err.code === "23505") return { status: 409, message: "Ya estamos guardando tu elección. Esperá un segundo." };
   if (err.code === "PGRST205" || err.code === "42P01") return { status: 503, message: "Falta crear la tabla plan_selections en Supabase." };
   if (err.code === "23503") return { status: 404, message: "No pudimos vincular tu elección con el pedido o el lugar." };

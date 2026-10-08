@@ -43,6 +43,21 @@ function count(kind, ip, add) {
   return list.length;
 }
 
+// ¿Se puede pedir a Google en esta apertura? Límite persistente (Supabase, compartido entre
+// todas las copias de la función): por visitante y un tope total. Si se pasa o no se puede
+// contar, no se llama a Google.
+async function mayAskGoogle(req) {
+  try {
+    var mine = await rateLimit.check(req, "proposal_details");
+    if (!mine.allowed) return false;
+    var all = await rateLimit.check(req, "proposal_details_all");
+    return all.allowed;
+  } catch (err) {
+    console.error("[proposal] límite de datos del lugar:", err && err.message);
+    return false;
+  }
+}
+
 // Lugar + foto: UN pedido a Google por apertura (nada se cachea ni se guarda).
 async function liveFor(placeId) {
   var live = await placeDetails.fetchPlace(placeId, "proposal");
@@ -112,7 +127,11 @@ async function handleGet(req, res, cfg) {
     } catch (err) { console.error("[proposal] visita:", err.status || "", err.code || ""); }
   }
 
-  var live = row.status === "proposal_replaced" ? null : await liveFor(placeIdOf(row));
+  var live = null;
+  if (row.status !== "proposal_replaced") {
+    // Sin permiso del límite: aviso honesto + link a Maps, sin llamar a Google.
+    live = await mayAskGoogle(req) ? await liveFor(placeIdOf(row)) : { place: placeDetails.unavailable(placeIdOf(row)), photo: null };
+  }
   var payload = publicPayload(row, live);
   if (preview) payload.preview = true;
   return http.sendJson(res, 200, payload);
