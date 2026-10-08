@@ -552,21 +552,100 @@ test("email 'Quiero avanzar' con Google caído: sale igual, sin nombre inventado
   assert.match(mail, /· LISTO/, "asunto sin nombre inventado");
 });
 
-test("email de respuesta a propuesta: Google OK y Google caído", async function () {
-  var ok = mailWorld(function () { return h.response(200, gPlace(1)); });
-  assert.equal(await notify.notifyProposalResponse(CFG, { planInquiryId: "22222222-2222-4222-8222-222222222222", action: "accept", quote: {} }, ok), true);
-  var m1 = mailOf(ok);
-  assert.match(m1, /Propuesta aceptada · Lugar 1/);
-  assert.match(m1, /Calle 1, Palermo/);
-  var read1 = decodeURIComponent(ok.calls.filter(function (c) { return /plan_inquiries\?select=/.test(c.url); })[0].url);
-  assert.doesNotMatch(read1, /providers\(|provider_name/);
+test("email de respuesta a propuesta: sin Google, con 'Lugar elegido' y link a Maps del place_id", async function () {
+  for (var action of ["accept", "decline"]) {
+    var fetch = mailWorld(function () { return h.response(200, gPlace(1)); });
+    assert.equal(await notify.notifyProposalResponse(CFG, { planInquiryId: "22222222-2222-4222-8222-222222222222", action: action, quote: {} }, fetch), true);
+    var m = mailOf(fetch);
+    assert.match(m, action === "accept" ? /Propuesta aceptada · Lugar elegido/ : /Pidió otra opción · Lugar elegido/);
+    assert.match(m, /https:\/\/www\.google\.com\/maps\/search\/\?api=1&amp;query=ChIJabcdefghij0001&amp;query_place_id=ChIJabcdefghij0001/);
+    assert.doesNotMatch(m, /Lugar 1|Calle 1|no disponibles/, "ni datos de Google ni aviso de falla");
+    assert.equal(googleCalls(fetch).length, 0, "no llama a Google");
+    var read1 = decodeURIComponent(fetch.calls.filter(function (c) { return /plan_inquiries\?select=/.test(c.url); })[0].url);
+    assert.doesNotMatch(read1, /providers\(|provider_name/);
+  }
+});
 
-  var down = mailWorld(function () { return h.response(503, {}); });
-  assert.equal(await quiet(function () { return notify.notifyProposalResponse(CFG, { planInquiryId: "22222222-2222-4222-8222-222222222222", action: "decline", quote: {} }, down); }), true);
-  var m2 = mailOf(down);
-  assert.match(m2, /Pidió otra opción · Lugar elegido/);
-  assert.match(m2, /Datos del lugar no disponibles en este momento/);
-  assert.match(m2, /query_place_id=ChIJabcdefghij0001/);
+// Recorrido completo de aceptar / rechazar: guarda, responde 200, manda email y hace 0 consultas a Google.
+function answerWorld(initial) {
+  var state = { status: initial || "proposal_sent", patches: [] };
+  var fetch = h.mockFetch([
+    h.rpcRule(),
+    { match: /\/rest\/v1\/plan_proposals\?select=/, reply: function () { var r = proposalRow(); r.status = state.status; return h.response(200, [r]); } },
+    { match: /\/rest\/v1\/plan_proposals\?id=eq\./, reply: function (c) {
+      var b = JSON.parse(c.body); state.patches.push(b);
+      if (state.status !== "proposal_sent") return h.response(200, []);
+      state.status = b.status; return h.response(200, [{ id: "p", status: b.status }]);
+    } },
+    { match: /\/rest\/v1\/plan_inquiries\?select=/, reply: function () {
+      return h.response(200, [{ contact_name: "Ana", contact_phone: "11 5555 1234", event_date: "2026-11-20", approximate_time: "21:30",
+        plan_selections: { provider_google_place_id: PLACE, event_requests: { event_type: "Cena", guests: 6, zone: "Palermo" } } }]);
+    } },
+    { match: /places\.googleapis\.com/, reply: function () { return h.response(200, gPlace(1)); } },
+    { match: /api\.resend\.com/, reply: function () { return h.response(200, { id: "x" }); } }
+  ]);
+  global.fetch = fetch;
+  fetch.state = state;
+  return fetch;
+}
+async function answer(action) {
+  var res = h.fakeRes();
+  await quiet(function () { return proposal(h.fakeReq("POST", { "content-type": "application/json", host: "listohtml.vercel.app" }, { code: "AbCdEf123456", action: action, comment: action === "decline" ? "Otra zona" : "" }), res); });
+  return res;
+}
+function mails(fetch) { return fetch.calls.filter(function (c) { return /api\.resend\.com/.test(c.url); }); }
+
+test("aceptar (primera vez, con Resend): guarda, 200, manda email y 0 llamadas a Google", async function () {
+  assert.ok(process.env.RESEND_API_KEY, "Resend configurado");
+  var fetch = answerWorld();
+  var res = await answer("accept");
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.json().proposal.status, "proposal_accepted");
+  assert.equal(fetch.state.patches.length, 1);
+  assert.equal(fetch.state.patches[0].status, "proposal_accepted");
+  assert.equal(mails(fetch).length, 1);
+  assert.match(JSON.parse(mails(fetch)[0].body).subject, /^Propuesta aceptada · Lugar elegido$/);
+  assert.equal(googleCalls(fetch).length, 0);
+});
+
+test("rechazar (primera vez, con Resend): guarda, 200, manda email y 0 llamadas a Google", async function () {
+  var fetch = answerWorld();
+  var res = await answer("decline");
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.json().proposal.status, "proposal_declined");
+  assert.equal(fetch.state.patches[0].status, "proposal_declined");
+  assert.equal(fetch.state.patches[0].user_comment, "Otra zona");
+  assert.equal(mails(fetch).length, 1);
+  var m = JSON.parse(mails(fetch)[0].body);
+  assert.match(m.subject, /^Pidió otra opción · Lugar elegido$/);
+  assert.match(m.html, /Otra zona/);
+  assert.equal(googleCalls(fetch).length, 0);
+});
+
+test("doble toque / propuesta ya respondida: 0 llamadas a Google y sin email repetido", async function () {
+  var fetch = answerWorld();
+  assert.equal((await answer("accept")).statusCode, 200);
+  var again = await answer("accept");
+  assert.equal(again.statusCode, 200, "misma respuesta → se confirma");
+  var other = await answer("decline");
+  assert.equal(other.statusCode, 409, "ya respondida: no admite otra respuesta");
+  assert.equal(mails(fetch).length, 1);
+  assert.equal(googleCalls(fetch).length, 0);
+
+  var answered = answerWorld("proposal_declined");
+  assert.equal((await answer("decline")).statusCode, 200);
+  assert.equal(answered.state.patches.length, 0);
+  assert.equal(googleCalls(answered).length, 0);
+});
+
+test("después de responder, abrir la propuesta (GET) sigue trayendo los datos del lugar", async function () {
+  var fetch = answerWorld();
+  await answer("accept");
+  var res = await openProposal("10.9.4.1");
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.json().proposal.status, "proposal_accepted");
+  assert.equal(res.json().proposal.place.name, "Lugar 1");
+  assert.equal(googleCalls(fetch).length, 1, "sólo el GET llama a Google");
 });
 
 /* ---------- /admin ---------- */

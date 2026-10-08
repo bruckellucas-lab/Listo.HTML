@@ -9,9 +9,13 @@
      plan, fecha, horario, personas, zona y lugar). No replica el email del
      usuario, sus comentarios, el pedido original, restricciones
      alimentarias ni IDs internos: todo eso queda en Supabase / panel.
-   - G1B: nombre, dirección y link de Maps del lugar se piden a Google JUSTO
-     al enviar (place-details.js) y no se guardan. Si Google falla, el email
-     sale igual, sin nombre inventado, con un aviso y el link a Maps.
+   - G1B: en el email de "Quiero avanzar", nombre, dirección y link de Maps
+     del lugar se piden a Google JUSTO al enviar (place-details.js) y no se
+     guardan. Si Google falla, sale igual, sin nombre inventado, con un aviso
+     y el link a Maps.
+   - El email de respuesta a una propuesta (aceptar / pedir otra opción) NO
+     llama a Google: lleva "Lugar elegido" y el link a Maps armado con el
+     google_place_id (el nombre se ve en /admin).
    ========================================================= */
 "use strict";
 
@@ -221,7 +225,7 @@ function buildProposalEmail(ctx) {
     ["Comentario del usuario", ctx.comment],
     ["Contacto", c.contact_name],
     ["WhatsApp", c.contact_phone],
-    ["Proveedor", p.name || (p.unavailable ? placeDetails.UNAVAILABLE : null)],
+    ["Proveedor", p.name || (p.unavailable ? placeDetails.UNAVAILABLE : providerName)],
     ["Dirección", p.address],
     ["Google Maps", p.maps_url],
     ["Plan", r.event_type],
@@ -275,13 +279,13 @@ function notifyProposalResponse(cfg, info, fetchImpl) {
     .then(function (inq) {
       inq = inq || {};
       var sel = inq.plan_selections || {};
-      // Lugar en tiempo real (Google), sólo para este email.
-      return livePlace(sel.provider_google_place_id, fetchImpl).then(function (provider) {
-        return sendEmail(apiKey, buildProposalEmail({
-          action: info.action, comment: info.comment, quote: info.quote, adminUrl: info.adminUrl,
-          contact: inq, request: sel.event_requests || {}, provider: provider
-        }), doFetch);
-      });
+      // Sin Google: aceptar / pedir otra opción nunca consulta Place Details.
+      // Sólo el link a Maps armado con el google_place_id; el nombre se ve en /admin.
+      var provider = { name: null, address: null, maps_url: placeDetails.mapsLinkFor(sel.provider_google_place_id), unavailable: false };
+      return sendEmail(apiKey, buildProposalEmail({
+        action: info.action, comment: info.comment, quote: info.quote, adminUrl: info.adminUrl,
+        contact: inq, request: sel.event_requests || {}, provider: provider
+      }), doFetch);
     })
     .then(function () { return true; }, function (err) {
       console.error("[notify] el email de respuesta no se envió:", err && err.name === "AbortError" ? "tiempo de espera agotado" : (err && err.message));
