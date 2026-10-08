@@ -22,6 +22,7 @@ var inquiries = require("./_lib/inquiries");
 var notify = require("./_lib/notify");
 var bookings = require("./_lib/bookings");
 var placeDetails = require("./_lib/place-details");
+var commercial = require("./_lib/commercial-state");
 
 var UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 var LIMIT = 500;
@@ -195,18 +196,8 @@ module.exports = async function handler(req, res) {
       var channel = String(body.channel || "");
       if (CHANNELS.indexOf(channel) === -1) return http.sendJson(res, 400, { ok: false, error: "Elegí por dónde contactaste al proveedor." });
       try {
-        var current = await store.request(fetch, base + "plan_inquiries?select=id,status&id=eq." + encodeURIComponent(id),
-          { method: "GET", headers: store.headersFor(c.key) }, "leer solicitud");
-        if (!current || !current[0]) return http.sendJson(res, 404, { ok: false, error: "No encontramos esa solicitud." });
-        var now = new Date().toISOString();
-        var patch = { provider_contacted_at: now, provider_contact_channel: channel, updated_at: now };
-        // Sólo avanza desde "Nueva": nunca retrocede una solicitud ya cotizada, confirmada o cerrada.
-        if (current[0].status === "inquiry_requested") patch.status = "provider_contacted";
-        var done = await store.request(fetch, base + "plan_inquiries?id=eq." + encodeURIComponent(id) +
-          "&select=id,status,updated_at,provider_contacted_at,provider_contact_channel", {
-          method: "PATCH", headers: store.headersFor(c.key, { "Prefer": "return=representation" }), body: JSON.stringify(patch)
-        }, "marcar contactado");
-        return http.sendJson(res, 200, { ok: true, item: done[0] });
+        var contact = await commercial.run(c, "contact", id, body.expected_status, { channel: channel });
+        return http.sendJson(res, contact[0], contact[1]);
       } catch (err) {
         console.error("[admin] marcar contactado:", err.status || "", err.code || "", err.message);
         return http.sendJson(res, 502, { ok: false, error: explain(err) });
@@ -215,50 +206,12 @@ module.exports = async function handler(req, res) {
 
     if (inquiries.STATUSES.indexOf(status) === -1) return http.sendJson(res, 400, { ok: false, error: "Estado no válido." });
 
-    // Reserva y estado nunca se contradicen:
-    // - Confirmado sólo con una reserva registrada (se llega con CONFIRMAR RESERVA).
-    // - Con una reserva activa, sólo Confirmado, Completado o Cancelado (que también cancela la reserva).
-    var active = null, bookingCancelled = null;
     try {
-      active = await bookings.activeFor(c, id);
-    } catch (errB) {
-      if (!bookings.missingTable(errB)) {
-        console.error("[admin] leer reserva:", errB.code || "");
-        return http.sendJson(res, 502, { ok: false, error: explain(errB) });
-      }
-      if (status === "confirmed") return http.sendJson(res, 409, { ok: false, error: "Para confirmar, corré primero el SQL de reservas (SUPABASE.md, Paso 10) y usá CONFIRMAR RESERVA." });
-    }
-    if (status === "confirmed" && !active) {
-      return http.sendJson(res, 409, { ok: false, error: "Confirmado se marca con CONFIRMAR RESERVA (en el detalle), cargando el monto y la comisión." });
-    }
-    if (active && ["confirmed", "completed", "cancelled"].indexOf(status) === -1) {
-      return http.sendJson(res, 409, { ok: false, error: "Esta solicitud tiene una reserva confirmada. Para volver atrás, primero cancelá la reserva." });
-    }
-    if (active && status === "cancelled") {
-      try {
-        var cancelled = await bookings.cancelActive(c, id);
-        if (cancelled.error) return http.sendJson(res, cancelled.status || 409, { ok: false, error: cancelled.error });
-        bookingCancelled = cancelled.booking;
-      } catch (errC) {
-        console.error("[admin] cancelar reserva:", errC.code || "");
-        return http.sendJson(res, 502, { ok: false, error: explain(errC) });
-      }
-    }
-    try {
-      var updated = await store.request(fetch, base + "plan_inquiries?id=eq." + encodeURIComponent(id) + "&select=id,status,updated_at", {
-        method: "PATCH",
-        headers: store.headersFor(c.key, { "Prefer": "return=representation" }),
-        body: JSON.stringify({ status: status, updated_at: new Date().toISOString() })
-      }, "cambiar estado");
-      var row = Array.isArray(updated) ? updated[0] : null;
-      if (!row) return http.sendJson(res, 404, { ok: false, error: "No encontramos esa solicitud." });
-      return http.sendJson(res, 200, { ok: true, item: row, booking: bookingCancelled });
+      var changed = await commercial.run(c, "transition", id, body.expected_status, { status: status });
+      return http.sendJson(res, changed[0], changed[1]);
     } catch (err) {
       console.error("[admin] cambiar estado:", err.status || "", err.code || "", err.message);
-      var msg = err.code === "23505"
-        ? "Ya hay otra solicitud abierta para esa misma elección. Cerrá (Cancelado/Completado) una antes de reabrir la otra."
-        : explain(err);
-      return http.sendJson(res, err.code === "23505" ? 409 : 502, { ok: false, error: msg });
+      return http.sendJson(res, 502, { ok: false, error: explain(err) });
     }
   }
 

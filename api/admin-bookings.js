@@ -22,6 +22,7 @@
 var http = require("./_lib/http");
 var auth = require("./_lib/admin-auth");
 var bookings = require("./_lib/bookings");
+var commercial = require("./_lib/commercial-state");
 
 var UUID_RE = bookings.UUID_RE;
 // Desde qué estado se puede pasar a cada estado de comisión (pagada y exenta son finales).
@@ -36,75 +37,17 @@ function explain(err) {
   return "No pudimos guardar. Probá de nuevo.";
 }
 
-async function setConfirmed(cfg, inquiryId) {
-  var now = new Date().toISOString();
-  var rows = await bookings.call(cfg, "plan_inquiries?id=eq." + inquiryId + "&select=id,status,updated_at", "PATCH", "pasar a confirmado",
-    { status: "confirmed", updated_at: now }, "return=representation");
-  return rows && rows[0];
-}
-
 async function confirm(cfg, body) {
   var checked = bookings.validateConfirm(body);
   if (checked.error) return [400, { ok: false, error: checked.error, mismatch: !!checked.mismatch }];
-  var d = checked.data;
-
-  // 1) La solicitud existe y no está cerrada.
-  var inq = await bookings.call(cfg, "plan_inquiries?select=id,status,plan_selection_id,plan_selections(provider_google_place_id)&id=eq." + d.plan_inquiry_id, "GET", "leer solicitud");
-  inq = inq && inq[0];
-  if (!inq) return [404, { ok: false, error: "No encontramos esa solicitud." }];
-  if (inq.status === "cancelled" || inq.status === "completed") return [409, { ok: false, error: "La solicitud está " + (inq.status === "cancelled" ? "Cancelada" : "Completada") + ": no se puede confirmar una reserva." }];
-
-  // 2) El proveedor sale de lo que eligió el usuario (nunca del formulario).
-  var placeId = inq.plan_selections && inq.plan_selections.provider_google_place_id;
-  if (!placeId) return [409, { ok: false, error: "No encontramos el proveedor elegido para esta solicitud." }];
-  if (body.provider_google_place_id && String(body.provider_google_place_id) !== placeId) return [409, { ok: false, error: "El proveedor no coincide con el que eligió el usuario." }];
-
-  // 3) La cotización es de esta solicitud.
-  var quote = await bookings.call(cfg, "provider_quotes?select=id,plan_inquiry_id,availability&id=eq." + d.provider_quote_id + "&plan_inquiry_id=eq." + d.plan_inquiry_id, "GET", "leer cotización");
-  if (!quote || !quote[0]) return [409, { ok: false, error: "Esa cotización no es de esta solicitud." }];
-
-  // 4) Si se indica una propuesta: es de esta solicitud y usa esa cotización.
-  //    Por link, además, tiene que estar ACEPTADA por el usuario.
-  if (d.plan_proposal_id) {
-    var prop = await bookings.call(cfg, "plan_proposals?select=id,status,plan_inquiry_id,provider_quote_id&id=eq." + d.plan_proposal_id + "&plan_inquiry_id=eq." + d.plan_inquiry_id, "GET", "leer propuesta");
-    prop = prop && prop[0];
-    if (!prop) return [409, { ok: false, error: "Esa propuesta no es de esta solicitud." }];
-    if (prop.provider_quote_id !== d.provider_quote_id) return [409, { ok: false, error: "La propuesta usa otra cotización." }];
-    if (d.acceptance_source === "proposal_link" && prop.status !== "proposal_accepted") return [409, { ok: false, error: "El usuario todavía no aceptó esa propuesta desde el link. Si aceptó por otro canal, usá aceptación manual." }];
-  }
-
-  // 5) Una sola reserva confirmada por solicitud: nunca se crea otra en silencio.
-  var active = await bookings.activeFor(cfg, d.plan_inquiry_id);
-  if (active) return [409, { ok: false, error: "Ya hay una reserva confirmada para esta solicitud.", booking: active }];
-
-  d.provider_google_place_id = placeId;
-  var created;
-  try {
-    created = await bookings.call(cfg, "plan_bookings?select=" + bookings.FIELDS, "POST", "crear reserva", d, "return=representation");
-  } catch (err) {
-    if (err.code === "23505") return [409, { ok: false, error: "Ya hay una reserva confirmada para esta solicitud." }];
-    throw err;
-  }
-  var booking = created && created[0];
-
-  // 6) Recién ahora la solicitud pasa a Confirmado. Si este paso falla, la reserva ya está
-  //    guardada y el panel ofrece completarlo (sin duplicar nada).
-  try {
-    var item = await setConfirmed(cfg, d.plan_inquiry_id);
-    return [200, { ok: true, booking: booking, item: item }];
-  } catch (err) {
-    console.error("[admin-bookings] estado:", err.status || "", err.code || "");
-    return [200, { ok: true, booking: booking, status_pending: true, warning: "La reserva quedó guardada, pero no pudimos pasar la solicitud a Confirmado. Tocá “Completar estado”." }];
-  }
+  if (body.provider_google_place_id) checked.data.provider_google_place_id = String(body.provider_google_place_id);
+  return commercial.run(cfg, "confirm", checked.data.plan_inquiry_id, body.expected_status, checked.data);
 }
 
 async function syncStatus(cfg, body) {
-  var inquiryId = String(body.plan_inquiry_id || "");
-  if (!UUID_RE.test(inquiryId)) return [400, { ok: false, error: "Solicitud no válida." }];
-  var active = await bookings.activeFor(cfg, inquiryId);
-  if (!active) return [409, { ok: false, error: "Esta solicitud no tiene una reserva confirmada." }];
-  var item = await setConfirmed(cfg, inquiryId);
-  return [200, { ok: true, item: item, booking: active }];
+  var id = String(body.plan_inquiry_id || "");
+  if (!UUID_RE.test(id)) return [400, { ok: false, error: "Solicitud no válida." }];
+  return commercial.run(cfg, "sync", id, body.expected_status);
 }
 
 async function commissionAction(cfg, body) {
@@ -116,12 +59,7 @@ async function commissionAction(cfg, body) {
 
   if (action === "cancel") {
     if (b.booking_status !== "confirmed") return [409, { ok: false, error: "Esta reserva ya estaba cancelada." }];
-    var out = await bookings.cancelActive(cfg, b.plan_inquiry_id);
-    if (out.error) return [out.status || 409, { ok: false, error: out.error }];
-    var now = new Date().toISOString();
-    var inq = await bookings.call(cfg, "plan_inquiries?id=eq." + b.plan_inquiry_id + "&select=id,status,updated_at", "PATCH", "cancelar solicitud",
-      { status: "cancelled", updated_at: now }, "return=representation");
-    return [200, { ok: true, booking: out.booking, item: inq && inq[0] }];
+    return commercial.run(cfg, "cancel", b.plan_inquiry_id, body.expected_status, { booking_id: id });
   }
 
   if (!FROM[action]) return [400, { ok: false, error: "Acción no válida." }];

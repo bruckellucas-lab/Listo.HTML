@@ -494,6 +494,8 @@
         var o = el("option", "", STATUS_LABELS[k]);
         o.value = k;
         if (k === "confirmed" && !activeBooking(it)) { o.disabled = true; o.textContent = "Confirmado (usá Confirmar reserva)"; }
+        var next = { inquiry_requested: ["provider_contacted", "quoted", "confirmed", "cancelled"], provider_contacted: ["quoted", "confirmed", "cancelled"], quoted: ["confirmed", "cancelled"], confirmed: ["completed", "cancelled"], completed: [], cancelled: [] };
+        if (k !== it.status && (next[it.status] || []).indexOf(k) === -1) o.disabled = true;
         if (it.status === k) o.selected = true;
         s.appendChild(o);
       });
@@ -583,11 +585,11 @@
         return;
       }
       $all("select.status").forEach(function (s) { s.disabled = true; });
-      api("PATCH", "/api/admin-inquiries", { id: it.id, status: status }).then(function (data) {
+      api("PATCH", "/api/admin-inquiries", { id: it.id, status: status, expected_status: previous }).then(function (data) {
         it.status = data.item.status;
         it.updated_at = data.item.updated_at;
         if (data.booking) replaceBooking(it, data.booking);
-        toast("Estado: " + STATUS_LABELS[it.status] + (data.booking ? " · Reserva cancelada" : ""));
+        toast("Estado: " + STATUS_LABELS[it.status] + (data.booking && data.booking.booking_status === "cancelled" ? " · Reserva cancelada" : ""));
         render();
         if ($("detail").open) openDetail(it);
       }).catch(function (err) {
@@ -1048,7 +1050,7 @@
         if (pv.error) { err.textContent = pv.error; err.hidden = false; return; }
         var q = chosenQuote();
         var v = {
-          plan_inquiry_id: it.id, provider_quote_id: q && q.id,
+          plan_inquiry_id: it.id, expected_status: it.status, provider_quote_id: q && q.id,
           plan_proposal_id: manual ? null : accepted.id,
           acceptance_source: manual ? "manual" : "proposal_link",
           acceptance_channel: manual ? f.elements.acceptance_channel.value : null,
@@ -1085,14 +1087,14 @@
       state.appendChild(el("span", "b-status " + (act ? "yes" : shown ? "bad" : "no"), act ? "Confirmada" : shown ? "Cancelada" : "No confirmada"));
       s.appendChild(state);
 
-      if (act && ["confirmed", "completed"].indexOf(it.status) === -1) {
+      if (act && ["confirmed", "completed", "cancelled"].indexOf(it.status) === -1) {
         // La reserva se guardó pero el estado no llegó a cambiar (por ejemplo, un corte de conexión).
         var fix = el("div", "banner");
         fix.appendChild(document.createTextNode("La reserva está registrada pero la solicitud no quedó en Confirmado. "));
         var fb = el("button", "btn btn-sm", "Completar estado"); fb.type = "button";
         fb.addEventListener("click", function () {
           fb.disabled = true;
-          api("POST", "/api/admin-bookings", { action: "sync_status", plan_inquiry_id: it.id }).then(function (data) {
+          api("POST", "/api/admin-bookings", { action: "sync_status", plan_inquiry_id: it.id, expected_status: it.status }).then(function (data) {
             it.status = data.item.status; it.updated_at = data.item.updated_at;
             toast("Estado: Confirmado"); render(); openDetail(it);
           }).catch(function (e) { if (e.message !== "__session__") toast(e.message); fb.disabled = false; });
@@ -1120,14 +1122,14 @@
       if (act) {
         var crow = el("div", "d-actions");
         var cb = el("button", "btn btn-ghost btn-sm", "Cancelar reserva"); cb.type = "button";
-        if (act.commission_status === "paid") {
+        if (["paid", "waived"].indexOf(act.commission_status) !== -1) {
           cb.disabled = true;
-          s.appendChild(el("p", "muted", "No se puede cancelar: la comisión ya está pagada. Si fue un error, se corrige en Supabase."));
+          s.appendChild(el("p", "muted", "No se puede cancelar: la comisión ya está pagada o exenta. Si fue un error, se corrige en Supabase."));
         }
         cb.addEventListener("click", function () {
           if (!window.confirm("¿Cancelar la reserva? La solicitud pasa a Cancelado y la comisión pendiente queda exenta.")) return;
           cb.disabled = true;
-          api("PATCH", "/api/admin-bookings", { booking_id: act.id, action: "cancel" }).then(function (data) {
+          api("PATCH", "/api/admin-bookings", { booking_id: act.id, action: "cancel", expected_status: it.status }).then(function (data) {
             replaceBooking(it, data.booking);
             if (data.item) { it.status = data.item.status; it.updated_at = data.item.updated_at; }
             toast("Reserva cancelada · Estado: Cancelado"); load(); openDetail(it);
@@ -1357,7 +1359,7 @@
       mark.addEventListener("click", function () {
         if (mark.disabled) return;
         mark.disabled = true; mark.textContent = "Guardando…";
-        api("PATCH", "/api/admin-inquiries", { id: it.id, action: "mark_contacted", channel: chan.value }).then(function (data) {
+        api("PATCH", "/api/admin-inquiries", { id: it.id, action: "mark_contacted", channel: chan.value, expected_status: it.status }).then(function (data) {
           it.status = data.item.status; it.updated_at = data.item.updated_at;
           it.provider_contacted_at = data.item.provider_contacted_at; it.provider_contact_channel = data.item.provider_contact_channel;
           toast("Contacto registrado · Estado: " + STATUS_LABELS[it.status]);
