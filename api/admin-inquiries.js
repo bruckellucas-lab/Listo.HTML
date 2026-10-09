@@ -113,7 +113,7 @@ function explain(err) {
   if (err.code === "42703" || err.code === "PGRST204") return "Falta alguna columna en Supabase. ¿Corriste el último SQL de SUPABASE.md?";
   if (err.code === "PGRST200") return "Supabase no encuentra el vínculo entre tablas. Revisá las claves foráneas de la guía.";
   if (err.code === "23514") return "Ese estado no está permitido en Supabase. ¿Corriste el SQL del panel?";
-  return "No pudimos hablar con Supabase. Probá de nuevo.";
+  return "No pudimos confirmar el resultado con Supabase. Recargá el panel antes de repetir una acción; reenviar los mismos datos recupera la misma operación.";
 }
 
 module.exports = async function handler(req, res) {
@@ -196,7 +196,7 @@ module.exports = async function handler(req, res) {
       var channel = String(body.channel || "");
       if (CHANNELS.indexOf(channel) === -1) return http.sendJson(res, 400, { ok: false, error: "Elegí por dónde contactaste al proveedor." });
       try {
-        var contact = await commercial.run(c, "contact", id, body.expected_status, { channel: channel });
+        var contact = await commercial.run(c, "contact", id, body.expected_status, { channel: channel }, body.operation_id);
         return http.sendJson(res, contact[0], contact[1]);
       } catch (err) {
         console.error("[admin] marcar contactado:", err.status || "", err.code || "", err.message);
@@ -207,7 +207,7 @@ module.exports = async function handler(req, res) {
     if (inquiries.STATUSES.indexOf(status) === -1) return http.sendJson(res, 400, { ok: false, error: "Estado no válido." });
 
     try {
-      var changed = await commercial.run(c, "transition", id, body.expected_status, { status: status });
+      var changed = await commercial.run(c, "transition", id, body.expected_status, { status: status }, body.operation_id);
       return http.sendJson(res, changed[0], changed[1]);
     } catch (err) {
       console.error("[admin] cambiar estado:", err.status || "", err.code || "", err.message);

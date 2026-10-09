@@ -385,7 +385,7 @@
           data = merged;
           renderActions(merged);
           if (!r.res.ok) setError(r.body.error || "No pudimos guardar tu respuesta. Probá de nuevo.");
-          else if (merged.status !== "proposal_sent") $("done").scrollIntoView({ behavior: "smooth", block: "center" });
+          else if (merged.status !== "proposal_sent") { if (r.body.warning) setError(r.body.warning); $("done").scrollIntoView({ behavior: "smooth", block: "center" }); }
           return;
         }
         renderActions(data);
@@ -393,7 +393,7 @@
       }).catch(function () {
         busy = false;
         renderActions(data);
-        setError("No pudimos conectarnos. Revisá tu conexión y probá de nuevo.");
+        setError("No pudimos confirmar el resultado. Reabrí la propuesta para ver su estado antes de repetir. La misma respuesta no se duplica.");
       });
     }
 

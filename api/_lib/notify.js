@@ -164,11 +164,11 @@ function sendEmail(apiKey, email, fetchImpl) {
   }, function (err) { clearTimeout(timer); throw err; });
 }
 
-function markNotification(cfg, selectionId, sent, fetchImpl) {
+function markNotification(cfg, selectionId, sent, fetchImpl, inquiryId) {
   var doFetch = fetchImpl || fetch;
   // Misma regla de "solicitud abierta" que inquiries.js (Nueva, Contactando, Cotizado, Confirmado).
   var open = "status=in.(inquiry_requested,provider_contacted,quoted,confirmed)";
-  return store.request(doFetch, api(cfg, "plan_inquiries?" + open + "&plan_selection_id=eq." + encodeURIComponent(selectionId)), {
+  return store.request(doFetch, api(cfg, "plan_inquiries?" + (inquiryId ? "id=eq." + encodeURIComponent(inquiryId) : open + "&plan_selection_id=eq." + encodeURIComponent(selectionId))), {
     method: "PATCH",
     headers: store.headersFor(cfg.key, { "Prefer": "return=minimal" }),
     body: JSON.stringify(sent
@@ -197,7 +197,7 @@ function notifyInquiry(cfg, info, fetchImpl) {
     // El detalle sólo va a los registros de Vercel (no a Supabase).
     console.error("[notify] el email no se envió:", err && err.name === "AbortError" ? "tiempo de espera agotado" : (err && err.message));
   }).then(function () {
-    return markNotification(cfg, info.selectionId, sent, fetchImpl).catch(function (err) {
+    return markNotification(cfg, info.selectionId, sent, fetchImpl, info.inquiryId).catch(function (err) {
       console.error("[notify] no se pudo marcar notification_status:", err.step || "", err.status || "", err.code || "");
     });
   }).then(function () { return sent; });

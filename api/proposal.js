@@ -178,23 +178,25 @@ async function handlePost(req, res, cfg) {
       method: "PATCH", headers: store.headersFor(cfg.key, { "Prefer": "return=representation" }),
       body: JSON.stringify({ status: target, responded_at: now, user_comment: comment, updated_at: now })
     }, "guardar respuesta");
-    var fresh = await proposals.loadByCode(cfg, code);
+    // Sólo el perdedor necesita releer. El ganador ya tiene confirmación de escritura.
     if (!Array.isArray(updated) || !updated.length) {
+      var fresh = await proposals.loadByCode(cfg, code);
       var same = fresh && fresh.status === target;
       return http.sendJson(res, same ? 200 : 409, Object.assign(publicPayload(fresh || row, null), same ? {} : { ok: false, error: "Esta propuesta ya no admite respuestas." }));
     }
 
     // La respuesta ya está guardada. El email se intenta después y no cambia lo que ve el usuario.
+    var warning;
     try {
-      await notify.notifyProposalResponse(cfg, {
+      if (!(await notify.notifyProposalResponse(cfg, {
         planInquiryId: row.plan_inquiry_id, action: action, comment: comment, quote: quote, adminUrl: adminUrlOf(req)
-      });
-    } catch (e) { console.error("[proposal] aviso:", e && e.message); }
+      }))) warning = "Tu respuesta quedó guardada, pero no pudimos enviar el aviso interno. No hace falta responder otra vez.";
+    } catch (e) { console.error("[proposal] aviso:", e && e.message); warning = "Tu respuesta quedó guardada; el aviso interno no pudo confirmarse."; }
 
-    return http.sendJson(res, 200, publicPayload(fresh || Object.assign({}, row, { status: target, responded_at: now }), null));
+    return http.sendJson(res, 200, Object.assign(publicPayload(Object.assign({}, row, { status: target, responded_at: now }), null), { warning: warning }));
   } catch (err) {
     console.error("[proposal] responder:", err.step || "", err.status || "", err.code || "");
-    return http.sendJson(res, 502, { ok: false, error: "No pudimos guardar tu respuesta. Probá de nuevo." });
+    return http.sendJson(res, 502, { ok: false, error: "No pudimos confirmar el resultado. Puede haberse guardado: reabrí la propuesta para ver su estado. Repetir la misma respuesta no la duplica." });
   }
 }
 

@@ -22,7 +22,7 @@ global.fetch = function () { throw new Error("Las pruebas no deben llamar a inte
 var http = require("../api/_lib/http");
 var auth = require("../api/_lib/admin-auth");
 
-var FRONTEND = ["index.html", "app.js", "event-request.js", "turnstile-client.js", "styles.css", "admin/index.html", "propuesta/index.html"];
+var FRONTEND = ["recovery.js", "index.html", "app.js", "event-request.js", "turnstile-client.js", "styles.css", "admin/index.html", "propuesta/index.html"];
 var MAX_FUNCTIONS = 12;   // límite de Vercel Hobby
 
 function fakeRes() {
@@ -74,7 +74,7 @@ test("el navegador ya no escribe en Supabase ni tiene claves de Supabase", funct
     assert.doesNotMatch(s, /\/rest\/v1|supabase\.co|sb_publishable_|sb_secret_|LISTO_CONFIG|["']apikey["']/i, f);
   });
   var html = read("index.html");
-  assert.match(html, /<script src="event-request\.js"><\/script>\s*<script src="turnstile-client\.js"><\/script>\s*<script src="app\.js"><\/script>/);
+  assert.match(html, /<script src="event-request\.js"><\/script>\s*<script src="turnstile-client\.js"><\/script>\s*<script src="recovery\.js"><\/script>\s*<script src="app\.js"><\/script>/);
   assert.doesNotMatch(html, /config\.js|supabase\.js/);
   var client = read("event-request.js");
   assert.match(client, /var ENDPOINT = "\/api\/event-request";/);

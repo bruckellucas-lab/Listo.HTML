@@ -64,7 +64,7 @@ function explain(err) {
   if (err.code === "23505") return { status: 409, message: "Ya estamos guardando tu elección. Esperá un segundo." };
   if (err.code === "PGRST205" || err.code === "42P01") return { status: 503, message: "Falta crear la tabla plan_selections en Supabase." };
   if (err.code === "23503") return { status: 404, message: "No pudimos vincular tu elección con el pedido o el lugar." };
-  return { status: 502, message: "No pudimos guardar tu elección. Probá de nuevo en un momento." };
+  return { status: 502, message: "No pudimos confirmar el resultado. Puede haberse guardado: volver a elegir la misma opción recupera la operación sin duplicarla." };
 }
 
 module.exports = { UUID_RE: UUID_RE, saveSelection: saveSelection, explain: explain };

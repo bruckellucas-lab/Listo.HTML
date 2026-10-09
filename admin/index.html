@@ -307,6 +307,7 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
+  <script src="../recovery.js"></script>
   <script>
   (function () {
     "use strict";
@@ -361,17 +362,27 @@
     }
 
     // Pedidos al backend. Si la sesión venció, vuelve al ingreso.
-    function api(method, url, body) {
+    async function api(method, url, body) {
+      var recoverable = body && ((url === "/api/admin-inquiries" && method === "PATCH") ||
+        (url === "/api/admin-bookings" && (method === "POST" || body.action === "cancel")) || url === "/api/admin-proposals");
+      if (recoverable) {
+        body = Object.assign({}, body);
+        delete body.proposal_id;
+        var op = await ListoRecovery.operation(url + ":" + (body.id || body.plan_inquiry_id || body.booking_id), body);
+        body[url === "/api/admin-proposals" ? "proposal_id" : "operation_id"] = op;
+      }
       var opts = { method: method, credentials: "same-origin", headers: { "Accept": "application/json" } };
       if (body) { opts.headers["Content-Type"] = "application/json"; opts.headers["X-Listo-Admin"] = "1"; opts.body = JSON.stringify(body); }
       return fetch(url, opts).then(function (r) {
         return r.json().catch(function () { return {}; }).then(function (data) {
           if (r.status === 401 && url.indexOf("/api/admin-login") === -1) { showLogin("Tu sesión venció. Volvé a ingresar."); throw new Error("__session__"); }
+          if (recoverable && r.ok && data.ok !== true) throw new Error("La respuesta no pudo confirmarse. Puede haberse guardado: recargá el panel antes de repetir.");
           if (!r.ok || data.ok === false) { var e = new Error(data.error || "Error " + r.status); e.status = r.status; throw e; }
+          if (data.already_applied) toast("Esta operación ya estaba guardada. Se recuperó el estado actual.");
           return data;
         });
       }, function () {
-        throw new Error("No pudimos conectarnos. Revisá tu conexión y probá de nuevo.");
+        throw new Error(recoverable ? "No pudimos confirmar el resultado. Puede haberse guardado: recargá el panel antes de repetir. Reenviar los mismos datos recupera la misma operación." : "No pudimos conectarnos. Revisá tu conexión y probá de nuevo.");
       });
     }
 
@@ -1272,12 +1283,11 @@
       if (needsNew) {
         var gen = el("button", pp ? "btn btn-ghost p-gen" : "btn p-gen", pp ? "Nueva propuesta con la cotización actual" : "Generar propuesta →"); gen.type = "button";
         if (pp && pp.status === "proposal_sent") wrap.appendChild(el("p", "muted", "La propuesta enviada usa una cotización anterior. Si generás una nueva, el link anterior queda Reemplazado."));
-        var replacementId = crypto.randomUUID();
         var expectedProposalId = pp && pp.status === "proposal_sent" ? pp.id : null;
         gen.addEventListener("click", function () {
           if (gen.disabled) return;
           gen.disabled = true; gen.textContent = "Generando…";
-          api("POST", "/api/admin-proposals", { plan_inquiry_id: it.id, provider_quote_id: quotes[0].id, expected_proposal_id: expectedProposalId, proposal_id: replacementId }).then(function (data) {
+          api("POST", "/api/admin-proposals", { plan_inquiry_id: it.id, provider_quote_id: quotes[0].id, expected_proposal_id: expectedProposalId }).then(function (data) {
             var fresh = data.proposal;
             it.proposals = [fresh].concat((it.proposals || []).filter(function (x) { return x.id !== fresh.id; }).map(function (x) {
               return x.status === "proposal_sent" ? Object.assign({}, x, { status: "proposal_replaced" }) : x;

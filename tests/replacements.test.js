@@ -10,9 +10,9 @@ test("S2B-2: colisión de código reintenta RPC con mismo ID",async function(t){
 test("S2B-2: selección informa activo inesperado y no escribe directo",async function(t){var calls=[];var f=async(url,o)=>{calls.push(url);if(url.includes("event_requests?"))return h.response(200,[{id:I,dietary_requirements:null}]);if(url.includes("providers?"))return h.response(201,"");return h.response(200,{ok:false,http_status:409,error:"Cambió",current_selection:{id:Q,google_place_id:P}});};await assert.rejects(select.saveSelection({url:process.env.SUPABASE_URL,key:"fake"},I,P,f,{token:tokens.sign(process.env.PHOTO_SIGNING_SECRET,P),expectedId:null,newId:N}),err=>err.result.current_selection.id===Q);assert.equal(calls.filter(url=>/plan_selections/.test(url)).length,0);assert.match(calls.at(-1),/rpc\/listo_replace_selection$/);});
 test("S2B-2 navegador: conserva ID al reintentar y sincroniza la expectativa tras conflicto",async function(){
   var fs=require("node:fs"),vm=require("node:vm"),path=require("node:path");
-  var src=fs.readFileSync(path.join(h.ROOT,"app.js"),"utf8"),start=src.indexOf("  function postSelection("),end=src.indexOf("  function chooseOption",start);
+  var src=fs.readFileSync(path.join(h.ROOT,"app.js"),"utf8"),start=src.indexOf("  async function postSelection("),end=src.indexOf("  function chooseOption",start);
   var bodies=[],attempt=0,seq=0,saved=0;
-  var context={state:{selectionId:Q,selected:"lugar-anterior"},pendingSelection:null,newUUID:()=>"operation-"+(++seq),savePlan:()=>saved++,fetch:async function(url,opts){
+  var context={state:{selectionId:Q,selected:"lugar-anterior"},pendingSelection:null,ListoRecovery:{operation:async()=>"operation-"+(++seq)},savePlan:()=>saved++,fetch:async function(url,opts){
     bodies.push(JSON.parse(opts.body));attempt++;
     if(attempt===1)throw Error("respuesta perdida");
     if(attempt===2)return {ok:false,status:409,json:async()=>({ok:false,error:"Cambió",current_selection:{id:I,google_place_id:P}})};

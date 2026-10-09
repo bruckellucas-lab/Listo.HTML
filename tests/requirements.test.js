@@ -72,8 +72,7 @@ function supabase(requestRow, extra) {
     { match: /\/rest\/v1\/providers\?on_conflict=/, reply: function () { return h.response(201, ""); } },
     { match: /\/rest\/v1\/plan_selections\?select=/, reply: function () { return h.response(200, extra.selections || []); } },
     { match: /\/rest\/v1\/rpc\/listo_replace_selection$/, reply: function (c) { var b=JSON.parse(c.body); return h.response(200, { ok:true, selection:{id:b.p_new_id, provider_google_place_id:b.p_place_id, status:"interested"} }); } },
-    { match: /\/rest\/v1\/plan_inquiries\?select=id/, reply: function () { return h.response(200, []); } },
-    { match: /\/rest\/v1\/plan_inquiries$/, reply: function () { return h.response(201, ""); } },
+    { match: /\/rest\/v1\/rpc\/listo_save_inquiry$/, reply: function () { return h.response(200, {ok:true,selectionId:REQ,inquiryId:REQ,status:"inquiry_requested",notify:true}); } },
     { match: /challenges\.cloudflare\.com\/turnstile\/v0\/siteverify$/, reply: function () { return h.response(200, { success: true, action: "plan_inquiry", hostname: HOST, "error-codes": [] }); } }
   ];
   var fetch = h.mockFetch(rules);
@@ -81,7 +80,7 @@ function supabase(requestRow, extra) {
   return fetch;
 }
 function writes(fetch, table) {
-  return fetch.calls.filter(function (c) { return c.method !== "GET" && (new RegExp("/rest/v1/" + table + "(\\?|$)").test(c.url) || table === "plan_selections" && /rpc\/listo_replace_selection$/.test(c.url)); });
+  return fetch.calls.filter(function (c) { return c.method !== "GET" && (new RegExp("/rest/v1/" + table + "(\\?|$)").test(c.url) || table === "plan_selections" && /rpc\/listo_replace_selection$/.test(c.url) || table === "plan_inquiries" && /rpc\/listo_save_inquiry$/.test(c.url)); });
 }
 function quiet(fn) {
   var orig = console.error; console.error = function () {};
@@ -100,7 +99,7 @@ var notified;
 var realNotify = notify.notifyInquiry;
 test.after(function () { notify.notifyInquiry = realNotify; });
 function inquiryBody(extra) {
-  return Object.assign({ event_request_id: REQ, google_place_id: PLACE, name: "Ana Pérez", phone: "+54 9 11 5555-1234",
+  return Object.assign({ operation_id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd", selection_id: REQ, event_request_id: REQ, google_place_id: PLACE, name: "Ana Pérez", phone: "+54 9 11 5555-1234",
     email: "", event_date: tomorrow, approximate_time: "21:00", notes: "", website: "", turnstile_token: "token-de-prueba" }, extra || {});
 }
 async function advance(body) {

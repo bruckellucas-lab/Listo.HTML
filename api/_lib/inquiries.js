@@ -55,54 +55,35 @@ function validate(body, todayIso) {
 }
 
 function api(cfg, path) { return store.normalizeUrl(cfg.url) + "/rest/v1/" + path; }
-function first(rows) { return Array.isArray(rows) && rows.length ? rows[0] : null; }
 
-function saveInquiry(cfg, eventRequestId, placeId, data, fetchImpl) {
+async function saveInquiry(cfg, eventRequestId, placeId, data, fetchImpl, opts) {
+  opts = opts || {};
+  var uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!uuid.test(opts.operationId || "") || !uuid.test(opts.selectionId || "")) {
+    var invalid = new Error("sin recuperación"); invalid.code = "BAD_RECOVERY"; throw invalid;
+  }
   var doFetch = fetchImpl || fetch;
-  var get = function (path, step) {
-    return store.request(doFetch, api(cfg, path), { method: "GET", headers: store.headersFor(cfg.key) }, step);
-  };
-
-  // 0) El pedido guardado no puede tener requisitos obligatorios (esos se coordinan a mano).
-  // 1) Tiene que existir una elección activa de ESTE pedido para ESTE lugar.
-  return requirements.assertAutomaticAllowed(cfg, eventRequestId, doFetch).then(function () {
-    return get("plan_selections?select=id,provider_google_place_id&status=eq.interested&event_request_id=eq." +
-      encodeURIComponent(eventRequestId), "buscar elección");
-  }).then(function (rows) {
-    var sel = first(rows);
-    if (!sel) { var e = new Error("sin elección"); e.code = "NO_SELECTION"; throw e; }
-    if (sel.provider_google_place_id !== placeId) { var e2 = new Error("elección distinta"); e2.code = "OTHER_SELECTION"; throw e2; }
-
-    // 2) Una sola solicitud abierta por elección: si ya existe, se actualiza (no se duplica).
-    var path = "plan_inquiries?" + OPEN_FILTER + "&plan_selection_id=eq." + encodeURIComponent(sel.id);
-    return get(path.replace("plan_inquiries?", "plan_inquiries?select=id&"), "buscar solicitud").then(function (rows) {
-      var now = new Date().toISOString();
-      var patch = function () {
-        var body = Object.assign({}, data, { updated_at: now });
-        return store.request(doFetch, api(cfg, path), {
-          method: "PATCH", headers: store.headersFor(cfg.key, { "Prefer": "return=minimal" }), body: JSON.stringify(body)
-        }, "actualizar solicitud").then(function () { return { updated: true, selectionId: sel.id }; });
-      };
-      if (first(rows)) return patch();
-      var row = Object.assign({ plan_selection_id: sel.id, status: STATUS }, data);
-      return store.request(doFetch, api(cfg, "plan_inquiries"), {
-        method: "POST", headers: store.headersFor(cfg.key, { "Prefer": "return=minimal" }), body: JSON.stringify(row)
-      }, "guardar solicitud").then(function () { return { updated: false, selectionId: sel.id }; }, function (err) {
-        if (err.code === "23505") return patch();   // doble envío simultáneo: se actualiza la que ya entró
-        throw err;
-      });
-    });
-  });
+  await requirements.assertAutomaticAllowed(cfg, eventRequestId, doFetch);
+  var out = await store.request(doFetch, api(cfg, "rpc/listo_save_inquiry"), {
+    method: "POST", headers: store.headersFor(cfg.key),
+    body: JSON.stringify({ p_operation_id: opts.operationId, p_request_id: eventRequestId,
+      p_selection_id: opts.selectionId, p_place_id: placeId, p_data: data })
+  }, "guardar solicitud recuperable");
+  if (!out.ok) { var conflict = new Error("solicitud cambió"); conflict.code = "INQUIRY_CONFLICT"; conflict.result = out; throw conflict; }
+  return out;
 }
 
 function explain(err) {
+  if (err.code === "BAD_RECOVERY") return { status: 400, message: "Actualizá la página antes de enviar la solicitud." };
+  if (err.code === "INQUIRY_CONFLICT") return { status: err.result.http_status || 409, message: err.result.error };
+  if (["PGRST202", "42883"].indexOf(err.code) !== -1) return { status: 503, message: "LISTO necesita completar una actualización. No se modificó tu solicitud." };
   var r = requirements.explain(err);
   if (r) return r;
   if (err.code === "NO_SELECTION") return { status: 409, message: "Primero elegí una opción y después tocá “Quiero avanzar”." };
   if (err.code === "OTHER_SELECTION") return { status: 409, message: "Tu opción elegida cambió. Volvé a elegirla y probá de nuevo." };
   if (err.code === "PGRST205" || err.code === "42P01") return { status: 503, message: "Falta crear la tabla plan_inquiries en Supabase." };
   if (err.code === "PGRST204" || err.code === "42703") return { status: 503, message: "Una columna de plan_inquiries no coincide con la guía." };
-  return { status: 502, message: "No pudimos enviar tu solicitud. Probá de nuevo en un momento." };
+  return { status: 502, message: "No pudimos confirmar el resultado. Puede haberse guardado: reenviar los mismos datos recupera tu solicitud sin duplicarla." };
 }
 
 module.exports = {

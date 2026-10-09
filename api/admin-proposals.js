@@ -23,7 +23,7 @@ function explain(err) {
   if (err.code === "PGRST205" || err.code === "42P01") return "Falta crear la tabla plan_proposals. Corré el SQL de SUPABASE.md (Paso 9).";
   if (err.code === "PGRST204" || err.code === "42703") return "Falta alguna columna en Supabase. Corré el SQL de SUPABASE.md (Paso 9).";
   if (err.code === "23503") return "No encontramos esa solicitud o cotización.";
-  return "No pudimos generar la propuesta. Probá de nuevo.";
+  return "No pudimos confirmar el resultado. Puede haberse guardado: recargá el panel antes de repetir. Reenviar la misma operación no crea otra propuesta.";
 }
 
 module.exports = async function handler(req, res) {

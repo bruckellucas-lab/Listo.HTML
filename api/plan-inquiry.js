@@ -71,19 +71,20 @@ module.exports = async function handler(req, res) {
 
   try {
     var cfg = { url: url, key: key };
-    var out = await inquiries.saveInquiry(cfg, requestId, placeId, checked.data);
+    var out = await inquiries.saveInquiry(cfg, requestId, placeId, checked.data, undefined, { operationId: body.operation_id, selectionId: body.selection_id });
 
     // La solicitud ya está guardada. El aviso por email se intenta después y, pase lo que pase,
     // no cambia la respuesta al usuario (se espera para que Vercel no corte el envío a mitad).
+    var warning;
     try {
-      await notify.notifyInquiry(cfg, {
+      if (out.notify !== false && !(await notify.notifyInquiry(cfg, {
         eventRequestId: requestId, placeId: placeId, selectionId: out.selectionId,
-        contact: checked.data, updated: out.updated
-      });
-    } catch (e) { console.error("[plan-inquiry] aviso:", e && e.message); }
+        contact: checked.data, updated: out.updated, inquiryId: out.inquiryId
+      }))) warning = "Tu solicitud quedó guardada, pero no pudimos enviar el aviso interno. No hace falta enviarla otra vez.";
+    } catch (e) { console.error("[plan-inquiry] aviso:", e && e.message); warning = "Tu solicitud quedó guardada; el aviso interno no pudo confirmarse. No la repitas por este aviso."; }
 
     // Sólo confirmamos: nunca devolvemos los datos personales.
-    return http.sendJson(res, 200, { ok: true, updated: out.updated, status: inquiries.STATUS });
+    return http.sendJson(res, 200, { ok: true, updated: out.updated, status: out.status || inquiries.STATUS, already_applied: !!out.already_applied, warning: warning });
   } catch (err) {
     // Sin datos personales en el registro: sólo el paso y el código de error.
     console.error("[plan-inquiry]", err.step || "", err.status || "", err.code || "");

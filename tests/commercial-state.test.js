@@ -6,6 +6,7 @@ process.env.SUPABASE_URL = "https://local-test.invalid";
 process.env.SUPABASE_SECRET_KEY = "local-test-key";
 var ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 async function call(file, method, body) {
+  body = Object.assign({operation_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"}, body);
   var res = h.fakeRes();
   await require("../api/" + file)(h.fakeReq(method, { cookie: auth.sessionCookie().split(";")[0], "x-listo-admin": "1", "content-type": "application/json" }, body), res);
   return res;
@@ -19,7 +20,7 @@ test("S2B: estado esperado se manda a RPC; conflicto no ejecuta PATCH directo", 
   var calls=[];
   t.mock.method(global,"fetch",async function(url,opts){ calls.push(url); var d=JSON.parse(opts.body); assert.equal(d.p_expected,"inquiry_requested"); return h.response(200,{ok:false,http_status:409,error:"El estado cambió"}); });
   var r=await call("admin-inquiries.js","PATCH",{id:ID,status:"quoted",expected_status:"inquiry_requested"});
-  assert.equal(r.statusCode,409); assert.equal(calls.length,1); assert.match(calls[0],/rpc\/listo_commercial_state$/);
+  assert.equal(r.statusCode,409); assert.equal(calls.length,1); assert.match(calls[0],/rpc\/listo_recover_commercial$/);
 });
 test("S2B: falta migration falla cerrado con 503, sin fallback",async function(t){
   t.mock.method(global,"fetch",async function(){return h.response(404,{code:"PGRST202"});});

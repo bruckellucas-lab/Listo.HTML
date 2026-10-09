@@ -1144,9 +1144,11 @@
     if (on && button) button.innerHTML = "Guardando…";
   }
 
-  function postSelection(requestId, o) {
+  async function postSelection(requestId, o) {
     if (!pendingSelection || pendingSelection.requestId !== requestId || pendingSelection.placeId !== o.google_place_id) {
-      pendingSelection = { requestId: requestId, placeId: o.google_place_id, id: newUUID(), expected: state.selectionId };
+      var expected = state.selectionId;
+      var operationId = await ListoRecovery.operation("selection:" + requestId, { place: o.google_place_id, expected: expected });
+      pendingSelection = { requestId: requestId, placeId: o.google_place_id, id: operationId, expected: expected };
     }
     return fetch("/api/plan-selection", {
       method: "POST",
@@ -1320,6 +1322,7 @@
     if (problem) { advanceFail(problem[0], problem[1]); return; }
 
     var o = advanceOption;
+    var expectedSelection = state.selectionId;
     var wasSent = inquirySent(o.google_place_id);
     setSendingInquiry(true);
     var controller = "AbortController" in window ? new AbortController() : null;
@@ -1334,11 +1337,16 @@
       }, function (err) {
         if (verifier) verifier.clearNotice();                    // el aviso va una sola vez, en el formulario
         throw err;
-      }).then(function () {
+      }).then(async function () {
       if (controller) timer = setTimeout(function () { controller.abort(); }, 20000);
       if (!state.requestId) throw new Error("No pudimos vincular la solicitud con tu plan. Volvé a buscar opciones y probá de nuevo.");
+      if (!expectedSelection) throw new Error("Volvé a elegir la opción para sincronizar tu plan antes de enviar la solicitud.");
       v.event_request_id = state.requestId;
       v.google_place_id = o.google_place_id;
+      v.selection_id = expectedSelection;
+      var intent = Object.assign({}, v);
+      delete intent.turnstile_token;
+      v.operation_id = await ListoRecovery.operation("inquiry:" + state.requestId + ":" + expectedSelection, intent);
       return fetch("/api/plan-inquiry", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1350,17 +1358,19 @@
         if (!r.ok || !data.ok) throw new Error(data.error || "");
         return data;
       });
-    }).then(function () {
+    }).then(function (data) {
       state.inquiries[inquiryKey(o.google_place_id)] = true;
       savePlan();
       markSelected(state.selected);
       advanceForm.reset();
       showAdvanceView(true);
-      if (wasSent) toast("Actualizamos tus datos de contacto.");
+      if (data.warning) toast(data.warning, 10000);
+      else if (data.already_applied) toast("Tu solicitud ya estaba guardada. No la enviamos otra vez.");
+      else if (wasSent) toast("Actualizamos tus datos de contacto.");
     }).catch(function (err) {
       var aborted = err && err.name === "AbortError";
-      advanceFail(aborted ? "La conexión tardó demasiado. Probá de nuevo."
-        : friendlyError(err, "No pudimos enviar tu solicitud. Revisá tu conexión y probá de nuevo."));
+      advanceFail(aborted ? "No pudimos confirmar el resultado a tiempo. Puede haberse guardado. Reenviar los mismos datos recupera tu solicitud sin duplicarla."
+        : friendlyError(err, "No pudimos confirmar el resultado. Puede haberse guardado: reenviar los mismos datos recupera la solicitud sin duplicarla."));
     }).then(function () {
       clearTimeout(timer);
       if (v.turnstile_token) { v.turnstile_token = ""; if (verifier) verifier.reset(); }

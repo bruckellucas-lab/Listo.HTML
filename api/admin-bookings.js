@@ -34,20 +34,20 @@ function explain(err) {
   if (err.code === "23505") return "Ya hay una reserva confirmada para esta solicitud.";
   if (err.code === "23503") return "No encontramos la solicitud, la cotización o el proveedor.";
   if (err.code === "23514") return "Supabase rechazó algún dato (montos, porcentaje o fechas). Revisá el formulario.";
-  return "No pudimos guardar. Probá de nuevo.";
+  return "No pudimos confirmar el resultado. Puede haberse guardado: recargá el panel antes de repetir. Reenviar los mismos datos recupera la misma operación.";
 }
 
 async function confirm(cfg, body) {
   var checked = bookings.validateConfirm(body);
   if (checked.error) return [400, { ok: false, error: checked.error, mismatch: !!checked.mismatch }];
   if (body.provider_google_place_id) checked.data.provider_google_place_id = String(body.provider_google_place_id);
-  return commercial.run(cfg, "confirm", checked.data.plan_inquiry_id, body.expected_status, checked.data);
+  return commercial.run(cfg, "confirm", checked.data.plan_inquiry_id, body.expected_status, checked.data, body.operation_id);
 }
 
 async function syncStatus(cfg, body) {
   var id = String(body.plan_inquiry_id || "");
   if (!UUID_RE.test(id)) return [400, { ok: false, error: "Solicitud no válida." }];
-  return commercial.run(cfg, "sync", id, body.expected_status);
+  return commercial.run(cfg, "sync", id, body.expected_status, {}, body.operation_id);
 }
 
 async function commissionAction(cfg, body) {
@@ -58,8 +58,7 @@ async function commissionAction(cfg, body) {
   if (!b) return [404, { ok: false, error: "No encontramos esa reserva." }];
 
   if (action === "cancel") {
-    if (b.booking_status !== "confirmed") return [409, { ok: false, error: "Esta reserva ya estaba cancelada." }];
-    return commercial.run(cfg, "cancel", b.plan_inquiry_id, body.expected_status, { booking_id: id });
+    return commercial.run(cfg, "cancel", b.plan_inquiry_id, body.expected_status, { booking_id: id }, body.operation_id);
   }
 
   if (!FROM[action]) return [400, { ok: false, error: "Acción no válida." }];
