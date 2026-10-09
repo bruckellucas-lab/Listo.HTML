@@ -129,7 +129,7 @@ function browserFns() {
 test("localStorage guarda sólo ids y datos del pedido (nada de Google)", function () {
   var save = grab(APP, "savePlan");
   var keys = /JSON\.stringify\(\{([\s\S]*?)\}\)/.exec(save)[1].match(/\b([a-zA-Z]+):/g).map(function (k) { return k.slice(0, -1); });
-  assert.deepEqual(keys.sort(), ["data", "inquiries", "requestId", "requestSig", "selected", "selectedAt", "text"]);
+  assert.deepEqual(keys.sort(), ["data", "inquiries", "requestId", "requestSig", "selected", "selectedAt", "selectionId", "text"]);
   assert.doesNotMatch(save, /options|photo|rating|name|address/);
   var load = grab(APP, "loadPlan");
   assert.match(load, /state\.options = null;/, "al volver, las opciones se piden de nuevo");

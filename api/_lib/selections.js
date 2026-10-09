@@ -14,14 +14,9 @@ var store = require("./providers-store");
 var requirements = require("./requirements");
 var photos = require("./photos");
 var optionToken = require("./option-token");
+var replacements = require("./replacements");
 
 var UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function api(cfg, path) {
-  return store.normalizeUrl(cfg.url) + "/rest/v1/" + path;
-}
-
-function first(rows) { return Array.isArray(rows) && rows.length ? rows[0] : null; }
 
 function fail(code, extra) {
   var e = new Error(code);
@@ -41,58 +36,28 @@ function checkOption(cfg, placeId, token, doFetch) {
   return store.ensureProvider(cfg, placeId, doFetch);
 }
 
-// opts: { token } — comprobante de la opción (option_token).
+// expectedId: elección que veía el usuario; newId: ID estable para reintentar la misma operación.
 function saveSelection(cfg, eventRequestId, placeId, fetchImpl, opts) {
+  opts = opts || {};
   var doFetch = fetchImpl || fetch;
-  var token = opts && opts.token;
-  var get = function (path, step) {
-    return store.request(doFetch, api(cfg, path), { method: "GET", headers: store.headersFor(cfg.key) }, step);
-  };
-
-  // 1) El pedido tiene que existir y no tener requisitos obligatorios (esos se coordinan a mano).
   return requirements.assertAutomaticAllowed(cfg, eventRequestId, doFetch)
-    .then(function () {
-      // 2) La opción tiene que ser una opción real de LISTO (comprobante firmado).
-      return checkOption(cfg, placeId, token, doFetch);
-    })
-    .then(function () {
-      // 3) ¿Ya hay una elección activa para este pedido?
-      return get("plan_selections?select=id,provider_google_place_id,status,created_at&status=eq.interested&event_request_id=eq." +
-        encodeURIComponent(eventRequestId), "buscar elección").then(function (rows) {
-        var active = first(rows);
-        // Mismo lugar (por ejemplo, doble clic): no se duplica.
-        if (active && active.provider_google_place_id === placeId) return { selection: active, changed: false, duplicate: true };
-
-        var replace = active
-          ? store.request(doFetch, api(cfg, "plan_selections?status=eq.interested&event_request_id=eq." + encodeURIComponent(eventRequestId)), {
-              method: "PATCH",
-              headers: store.headersFor(cfg.key, { "Prefer": "return=minimal" }),
-              body: JSON.stringify({ status: "replaced", updated_at: new Date().toISOString() })
-            }, "reemplazar elección")
-          : Promise.resolve();
-
-        return replace.then(function () {
-          return store.request(doFetch, api(cfg, "plan_selections"), {
-            method: "POST",
-            headers: store.headersFor(cfg.key, { "Prefer": "return=representation" }),
-            body: JSON.stringify({
-              event_request_id: eventRequestId,
-              provider_google_place_id: placeId,
-              // Sin nombre de Google. Vacío (no inventado) mientras la columna siga siendo NOT NULL (G1B-2).
-              provider_name: "",
-              status: "interested"
-            })
-          }, "guardar elección");
-        }).then(function (created) {
-          return { selection: first(created), changed: !!active, duplicate: false };
-        });
-      });
+    .then(function () { return checkOption(cfg, placeId, opts.token, doFetch); })
+    .then(async function () {
+      if (!UUID_RE.test(opts.newId || "") || !(opts.expectedId === null || UUID_RE.test(opts.expectedId || ""))) throw fail("BAD_REPLACEMENT");
+      var out = await replacements.run(cfg, "listo_replace_selection", {
+        p_request_id: eventRequestId, p_place_id: placeId, p_expected_id: opts.expectedId, p_new_id: opts.newId
+      }, doFetch);
+      if (!out.ok) throw fail("REPLACEMENT_CONFLICT", { result: out });
+      return out;
     });
 }
 
 function explain(err) {
   var r = requirements.explain(err);
   if (r) return r;
+  if (err.code === "BAD_REPLACEMENT") return { status: 400, message: "Actualizá la página antes de elegir una opción." };
+  if (err.code === "REPLACEMENT_MISSING") return { status: 503, message: "Falta aplicar la migration S2B-2. No se reemplazó tu elección." };
+  if (err.code === "REPLACEMENT_CONFLICT") return { status: err.result.http_status || 409, message: err.result.error };
   if (err.code === "NO_REQUEST") return { status: 404, message: "Todavía no terminamos de guardar tu pedido. Esperá un segundo y probá de nuevo." };
   if (err.code === "NO_SIGNING_SECRET") return { status: 503, message: "LISTO no puede guardar esta elección en este momento. Volvé a buscar opciones e intentá de nuevo." };
   if (err.code === "BAD_OPTION") return { status: 409, message: "Esta opción ya no es válida. Volvé a buscar opciones y elegila de nuevo." };

@@ -46,17 +46,17 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    var out = await selections.saveSelection({ url: url, key: key }, requestId, placeId, undefined, { token: token });
+    var out = await selections.saveSelection({ url: url, key: key }, requestId, placeId, undefined, { token: token, expectedId: body.expected_selection_id, newId: body.selection_id });
     var s = out.selection || {};
     return http.sendJson(res, 200, {
       ok: true,
       changed: out.changed,
       duplicate: out.duplicate,
-      selection: { status: s.status, created_at: s.created_at }
+      selection: { id: s.id, status: s.status, created_at: s.created_at }
     });
   } catch (err) {
     console.error("[plan-selection]", err.step || "", err.status || "", err.code || "", err.reason || "", err.message);
     var e = selections.explain(err);
-    return http.sendJson(res, e.status, { ok: false, error: e.message });
+    return http.sendJson(res, e.status, { ok: false, error: e.message, current_selection: err.result && err.result.current_selection });
   }
 };

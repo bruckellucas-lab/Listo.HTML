@@ -189,12 +189,13 @@ function selectionWorld() {
     { match: /\/rest\/v1\/event_requests\?select=id,dietary_requirements/, reply: function () { return h.response(200, [{ id: REQ, dietary_requirements: null }]); } },
     { match: /\/rest\/v1\/providers\?on_conflict/, reply: function () { return h.response(201, ""); } },
     { match: /\/rest\/v1\/plan_selections\?select=/, reply: function () { return h.response(200, []); } },
-    { match: /\/rest\/v1\/plan_selections$/, reply: function (c) { return h.response(201, [Object.assign({ id: "sel-1", created_at: "2026-10-07T12:00:00Z" }, JSON.parse(c.body))]); } }
+    { match: /\/rest\/v1\/rpc\/listo_replace_selection$/, reply: function (c) { var b = JSON.parse(c.body); return h.response(200, { ok: true, selection: { id: b.p_new_id, provider_google_place_id: b.p_place_id, status: "interested" } }); } }
   ]);
   global.fetch = fetch;
   return fetch;
 }
 async function choose(body) {
+  body = Object.assign({ expected_selection_id: null, selection_id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd" }, body);
   var res = h.fakeRes();
   await quiet(function () { return planSelection(h.fakeReq("POST", { "content-type": "application/json" }, body), res); });
   return res;
@@ -205,10 +206,10 @@ test("elegir con comprobante válido: guarda sin copiar el nombre y asegura la f
   var res = await choose({ event_request_id: REQ, google_place_id: PLACE, option_token: optionToken.sign(SECRET, PLACE) });
   assert.equal(res.statusCode, 200, res.body);
   assert.equal(res.json().selection.provider_name, undefined, "la respuesta no devuelve nombre");
-  var sel = fetch.calls.filter(function (c) { return c.method === "POST" && /plan_selections$/.test(c.url); })[0];
+  var sel = fetch.calls.filter(function (c) { return c.method === "POST" && /rpc\/listo_replace_selection$/.test(c.url); })[0];
   var body = JSON.parse(sel.body);
-  assert.equal(body.provider_name, "", "sin nombre de Google (vacío hasta G1B-2)");
-  assert.equal(body.provider_google_place_id, PLACE);
+  assert.equal(body.provider_name, undefined, "el nombre no viaja a la RPC; SQL escribe vacío");
+  assert.equal(body.p_place_id, PLACE);
   assertNoGoogleContent(fetch);
   assert.equal(providerWrites(fetch).length, 1, "fila mínima para el vínculo (ignore-duplicates)");
   assert.equal(googleCalls(fetch).length, 0, "elegir no llama a Google");
@@ -227,7 +228,7 @@ test("elegir con comprobante adulterado, de otro lugar, vencido o sin comprobant
     var res = await choose({ event_request_id: REQ, google_place_id: PLACE, option_token: t });
     assert.equal(res.statusCode, 409, String(t));
     assert.match(res.json().error, /Volvé a buscar opciones/);
-    assert.equal(fetch.calls.filter(function (c) { return c.method !== "GET" && /plan_selections|providers/.test(c.url); }).length, 0);
+    assert.equal(fetch.calls.filter(function (c) { return c.method !== "GET" && /plan_selections|providers|rpc\/listo_replace_selection/.test(c.url); }).length, 0);
   }
 });
 
@@ -256,7 +257,7 @@ test("falla cerrado: sin PHOTO_SIGNING_SECRET no se guarda la elección (aunque 
     var res = await withSecret(undefined, function () { return choose(body); });
     assert.equal(res.statusCode, 503);
     assert.equal(res.json().error, "LISTO no puede guardar esta elección en este momento. Volvé a buscar opciones e intentá de nuevo.");
-    assert.equal(fetch.calls.filter(function (c) { return /plan_selections|providers/.test(c.url); }).length, 0, "ni siquiera consulta providers");
+    assert.equal(fetch.calls.filter(function (c) { return /plan_selections|providers|rpc\/listo_replace_selection/.test(c.url); }).length, 0, "ni siquiera consulta providers");
   }
 });
 
@@ -266,7 +267,7 @@ test("falla cerrado: secreto demasiado corto → no se guarda", async function (
   var res = await withSecret(short, function () { return choose({ event_request_id: REQ, google_place_id: PLACE, option_token: optionToken.sign(short, PLACE) }); });
   assert.equal(res.statusCode, 503);
   assert.match(res.json().error, /no puede guardar esta elección/);
-  assert.equal(fetch.calls.filter(function (c) { return c.method !== "GET" && /plan_selections|providers/.test(c.url); }).length, 0);
+  assert.equal(fetch.calls.filter(function (c) { return c.method !== "GET" && /plan_selections|providers|rpc\/listo_replace_selection/.test(c.url); }).length, 0);
 });
 
 test("con secreto válido: token válido acepta; faltante, inválido, de otro lugar o vencido rechaza", async function () {
@@ -285,7 +286,7 @@ test("con secreto válido: token válido acepta; faltante, inválido, de otro lu
     if (c[1] !== undefined) body.option_token = c[1];
     var res = await choose(body);
     assert.equal(res.statusCode, c[2], c[0]);
-    var saved = fetch.calls.filter(function (x) { return x.method === "POST" && /plan_selections$/.test(x.url); }).length;
+    var saved = fetch.calls.filter(function (x) { return x.method === "POST" && /rpc\/listo_replace_selection$/.test(x.url); }).length;
     assert.equal(saved, c[2] === 200 ? 1 : 0, c[0]);
   }
 });

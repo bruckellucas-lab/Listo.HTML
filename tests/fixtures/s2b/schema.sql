@@ -1,5 +1,13 @@
 -- Sólo para Postgres local desechable. Esquema comercial documentado.
-do $$ begin if not exists(select from pg_roles where rolname='anon') then create role anon; end if; if not exists(select from pg_roles where rolname='authenticated') then create role authenticated; end if; if not exists(select from pg_roles where rolname='service_role') then create role service_role; end if; end $$;
+-- Las suites usan bases distintas pero los roles son compartidos por el contenedor.
+do $$ declare role_name text; begin
+  foreach role_name in array array['anon','authenticated','service_role'] loop
+    begin
+      execute format('create role %I', role_name);
+    exception when duplicate_object or unique_violation then null;
+    end;
+  end loop;
+end $$;
 create table public.event_requests(id uuid primary key);
 create table public.providers(google_place_id text primary key);
 create table if not exists public.plan_selections (

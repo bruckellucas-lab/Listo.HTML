@@ -71,7 +71,7 @@ function supabase(requestRow, extra) {
     } },
     { match: /\/rest\/v1\/providers\?on_conflict=/, reply: function () { return h.response(201, ""); } },
     { match: /\/rest\/v1\/plan_selections\?select=/, reply: function () { return h.response(200, extra.selections || []); } },
-    { match: /\/rest\/v1\/plan_selections$/, reply: function (c) { return h.response(201, [Object.assign({ id: "sel-1", status: "interested", created_at: "2026-10-07T12:00:00Z" }, JSON.parse(c.body))]); } },
+    { match: /\/rest\/v1\/rpc\/listo_replace_selection$/, reply: function (c) { var b=JSON.parse(c.body); return h.response(200, { ok:true, selection:{id:b.p_new_id, provider_google_place_id:b.p_place_id, status:"interested"} }); } },
     { match: /\/rest\/v1\/plan_inquiries\?select=id/, reply: function () { return h.response(200, []); } },
     { match: /\/rest\/v1\/plan_inquiries$/, reply: function () { return h.response(201, ""); } },
     { match: /challenges\.cloudflare\.com\/turnstile\/v0\/siteverify$/, reply: function () { return h.response(200, { success: true, action: "plan_inquiry", hostname: HOST, "error-codes": [] }); } }
@@ -81,7 +81,7 @@ function supabase(requestRow, extra) {
   return fetch;
 }
 function writes(fetch, table) {
-  return fetch.calls.filter(function (c) { return c.method !== "GET" && new RegExp("/rest/v1/" + table + "(\\?|$)").test(c.url); });
+  return fetch.calls.filter(function (c) { return c.method !== "GET" && (new RegExp("/rest/v1/" + table + "(\\?|$)").test(c.url) || table === "plan_selections" && /rpc\/listo_replace_selection$/.test(c.url)); });
 }
 function quiet(fn) {
   var orig = console.error; console.error = function () {};
@@ -90,7 +90,7 @@ function quiet(fn) {
 
 async function choose(body) {
   var res = h.fakeRes();
-  body = Object.assign({ event_request_id: REQ, google_place_id: PLACE }, body);
+  body = Object.assign({ event_request_id: REQ, google_place_id: PLACE, expected_selection_id: null, selection_id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd" }, body);
   if (!("option_token" in body)) body.option_token = optionToken.sign(process.env.PHOTO_SIGNING_SECRET, body.google_place_id);
   await quiet(function () { return planSelection(h.fakeReq("POST", { "content-type": "application/json" }, body), res); });
   return res;

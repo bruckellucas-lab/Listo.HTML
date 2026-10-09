@@ -184,6 +184,7 @@
     text: "",
     data: null,
     requestId: null,      // id (UUID) del event_request guardado en Supabase
+    selectionId: null,    // id interno de la elección activa (control de concurrencia)
     selected: null,       // google_place_id de la opción elegida
     selectedAt: null,
     inquiries: {},        // "pedido|lugar" → true si ya se envió "Quiero avanzar" (sin datos personales)
@@ -200,7 +201,7 @@
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
         text: state.text, data: state.data,
         requestId: state.requestId, requestSig: state.requestId ? lastSaved : "",
-        selected: state.selected, selectedAt: state.selectedAt,
+        selected: state.selected, selectedAt: state.selectedAt, selectionId: state.selectionId,
         inquiries: state.inquiries
       }));
     } catch (e) { /* sin almacenamiento: no pasa nada */ }
@@ -244,6 +245,7 @@
       if (state.requestId && typeof saved.requestSig === "string") lastSaved = saved.requestSig;
       state.selected = typeof saved.selected === "string" ? saved.selected : null;
       state.selectedAt = saved.selectedAt || null;
+      state.selectionId = typeof saved.selectionId === "string" ? saved.selectionId : null;
       state.inquiries = saved.inquiries && typeof saved.inquiries === "object" ? saved.inquiries : {};
       // Las opciones (contenido de Google) nunca se reutilizan desde el almacenamiento.
       state.options = null;
@@ -690,6 +692,8 @@
     if (saving || signature === lastSaved) return;   // mismo pedido: se reutiliza el id ya guardado
     saving = true;
     state.requestId = null;
+    state.selectionId = null;
+    pendingSelection = null;
     state.selected = null;
     var id = newUUID();
     var withId = {};
@@ -1132,6 +1136,7 @@
   /* ---------- Elegir una opción (se guarda en plan_selections) ---------- */
 
   var choosing = false;
+  var pendingSelection = null;
 
   function setChoosing(on, button) {
     choosing = on;
@@ -1140,14 +1145,27 @@
   }
 
   function postSelection(requestId, o) {
+    if (!pendingSelection || pendingSelection.requestId !== requestId || pendingSelection.placeId !== o.google_place_id) {
+      pendingSelection = { requestId: requestId, placeId: o.google_place_id, id: newUUID(), expected: state.selectionId };
+    }
     return fetch("/api/plan-selection", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       // option_token: comprobante firmado de la búsqueda (sólo en memoria, nunca en localStorage).
-      body: JSON.stringify({ event_request_id: requestId, google_place_id: o.google_place_id, option_token: o.option_token || "" })
+      body: JSON.stringify({ event_request_id: requestId, google_place_id: o.google_place_id, option_token: o.option_token || "", expected_selection_id: pendingSelection.expected, selection_id: pendingSelection.id })
     }).then(function (r) {
       return r.json().catch(function () { return { ok: false }; }).then(function (data) {
-        if (!r.ok || !data.ok) throw new Error(data.error || "");
+        if (!r.ok || !data.ok) {
+          if (r.status === 409 && Object.prototype.hasOwnProperty.call(data, "current_selection")) {
+            state.selectionId = data.current_selection ? data.current_selection.id : null;
+            state.selected = data.current_selection ? data.current_selection.google_place_id : null;
+            pendingSelection = null;
+            savePlan();
+          }
+          throw new Error(data.error || "");
+        }
+        state.selectionId = data.selection.id;
+        pendingSelection = null;
         return data;
       });
     });
@@ -1176,7 +1194,7 @@
         ". No reservamos ni cobramos nada: " + PRICE_NOTE.toLowerCase() + ".", 6000);
     }).catch(function (err) {
       setChoosing(false);
-      markSelected(previous);                                // vuelve a como estaba
+      markSelected(state.selected);                          // conserva la elección vigente
       toast(friendlyError(err, "No pudimos guardar tu elección. Revisá tu conexión y probá de nuevo."), 8000);
     });
   }

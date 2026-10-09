@@ -1272,10 +1272,12 @@
       if (needsNew) {
         var gen = el("button", pp ? "btn btn-ghost p-gen" : "btn p-gen", pp ? "Nueva propuesta con la cotización actual" : "Generar propuesta →"); gen.type = "button";
         if (pp && pp.status === "proposal_sent") wrap.appendChild(el("p", "muted", "La propuesta enviada usa una cotización anterior. Si generás una nueva, el link anterior queda Reemplazado."));
+        var replacementId = crypto.randomUUID();
+        var expectedProposalId = pp && pp.status === "proposal_sent" ? pp.id : null;
         gen.addEventListener("click", function () {
           if (gen.disabled) return;
           gen.disabled = true; gen.textContent = "Generando…";
-          api("POST", "/api/admin-proposals", { plan_inquiry_id: it.id, provider_quote_id: quotes[0].id }).then(function (data) {
+          api("POST", "/api/admin-proposals", { plan_inquiry_id: it.id, provider_quote_id: quotes[0].id, expected_proposal_id: expectedProposalId, proposal_id: replacementId }).then(function (data) {
             var fresh = data.proposal;
             it.proposals = [fresh].concat((it.proposals || []).filter(function (x) { return x.id !== fresh.id; }).map(function (x) {
               return x.status === "proposal_sent" ? Object.assign({}, x, { status: "proposal_replaced" }) : x;
