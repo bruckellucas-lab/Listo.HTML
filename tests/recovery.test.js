@@ -87,3 +87,24 @@ test("S2B-3 selección: perder respuesta y recargar conserva operación original
   await assert.rejects(context(true).postSelection(ID,option));var next=context(false);await next.postSelection(ID,option);
   assert.equal(bodies[0].selection_id,bodies[1].selection_id);assert.equal(next.state.selectionId,bodies[0].selection_id);assert.doesNotMatch(JSON.stringify(storage),/en memoria|ChIJ/);
 });
+test("S2B-3 panel: nueva propuesta tras rechazo usa otro ID; retry no duplica",async function(){
+  var src=fs.readFileSync(h.ROOT+"/admin/index.html","utf8"),start=src.indexOf("    async function api("),end=src.indexOf("    /* ---------- Ingreso",start),storage={},rows=new Map(),bodies=[];
+  var ctx={ListoRecovery:client(storage),toast:()=>{},showLogin:()=>{},fetch:async(url,opts)=>{
+    var body=JSON.parse(opts.body);bodies.push(body);
+    assert.equal(Object.hasOwn(body,"last_proposal_id"),false,"el contexto de recuperación no va al backend");
+    var existing=rows.get(body.proposal_id);
+    if(existing&&existing.status!=="proposal_sent")return {ok:false,status:409,json:async()=>({ok:false,error:"La propuesta de esta operación ya cambió"})};
+    var row=existing||{id:body.proposal_id,status:"proposal_sent"};rows.set(row.id,row);
+    return {ok:true,status:200,json:async()=>({ok:true,proposal:row,created:!existing})};
+  }};
+  vm.createContext(ctx);vm.runInContext(src.slice(start,end),ctx);
+  var body={plan_inquiry_id:ID,provider_quote_id:OP,expected_proposal_id:null};
+  var first=await ctx.api("POST","/api/admin-proposals",body,null);
+  rows.get(first.proposal.id).status="proposal_declined";
+  var second=await ctx.api("POST","/api/admin-proposals",body,first.proposal.id);
+  assert.equal(second.created,true);assert.notEqual(second.proposal.id,first.proposal.id);
+  var retry=await ctx.api("POST","/api/admin-proposals",body,first.proposal.id);
+  assert.equal(retry.created,false);assert.equal(retry.proposal.id,second.proposal.id);
+  assert.equal(rows.size,2);assert.equal([...rows.values()].filter(r=>r.status==="proposal_sent").length,1);
+  assert.equal(bodies[1].proposal_id,bodies[2].proposal_id);
+});

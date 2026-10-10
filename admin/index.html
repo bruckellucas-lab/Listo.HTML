@@ -362,13 +362,15 @@
     }
 
     // Pedidos al backend. Si la sesión venció, vuelve al ingreso.
-    async function api(method, url, body) {
+    async function api(method, url, body, lastProposalId) {
       var recoverable = body && ((url === "/api/admin-inquiries" && method === "PATCH") ||
         (url === "/api/admin-bookings" && (method === "POST" || body.action === "cancel")) || url === "/api/admin-proposals");
       if (recoverable) {
         body = Object.assign({}, body);
         delete body.proposal_id;
-        var op = await ListoRecovery.operation(url + ":" + (body.id || body.plan_inquiry_id || body.booking_id), body);
+        // Sólo para la intención local: distingue una nueva generación de un retry.
+        var intent = url === "/api/admin-proposals" ? Object.assign({}, body, { last_proposal_id: lastProposalId || null }) : body;
+        var op = await ListoRecovery.operation(url + ":" + (body.id || body.plan_inquiry_id || body.booking_id), intent);
         body[url === "/api/admin-proposals" ? "proposal_id" : "operation_id"] = op;
       }
       var opts = { method: method, credentials: "same-origin", headers: { "Accept": "application/json" } };
@@ -1284,10 +1286,11 @@
         var gen = el("button", pp ? "btn btn-ghost p-gen" : "btn p-gen", pp ? "Nueva propuesta con la cotización actual" : "Generar propuesta →"); gen.type = "button";
         if (pp && pp.status === "proposal_sent") wrap.appendChild(el("p", "muted", "La propuesta enviada usa una cotización anterior. Si generás una nueva, el link anterior queda Reemplazado."));
         var expectedProposalId = pp && pp.status === "proposal_sent" ? pp.id : null;
+        var lastProposalId = (it.proposals || []).length ? it.proposals[0].id : null;
         gen.addEventListener("click", function () {
           if (gen.disabled) return;
           gen.disabled = true; gen.textContent = "Generando…";
-          api("POST", "/api/admin-proposals", { plan_inquiry_id: it.id, provider_quote_id: quotes[0].id, expected_proposal_id: expectedProposalId }).then(function (data) {
+          api("POST", "/api/admin-proposals", { plan_inquiry_id: it.id, provider_quote_id: quotes[0].id, expected_proposal_id: expectedProposalId }, lastProposalId).then(function (data) {
             var fresh = data.proposal;
             it.proposals = [fresh].concat((it.proposals || []).filter(function (x) { return x.id !== fresh.id; }).map(function (x) {
               return x.status === "proposal_sent" ? Object.assign({}, x, { status: "proposal_replaced" }) : x;
