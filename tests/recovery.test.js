@@ -1,5 +1,6 @@
 "use strict";
 var test = require("node:test"), assert = require("node:assert/strict"), fs = require("node:fs"), vm = require("node:vm"), crypto = require("node:crypto");
+var cost = require("../api/_lib/cost-guard");
 var h = require("./helpers"), auth = require("../api/_lib/admin-auth"), commercial = require("../api/_lib/commercial-state"), inquiries = require("../api/_lib/inquiries"), notify = require("../api/_lib/notify"), proposals = require("../api/_lib/proposals"), rate = require("../api/_lib/rate-limit"), turnstile = require("../api/_lib/turnstile");
 var ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", OP = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 process.env.SUPABASE_URL = "https://test.invalid"; process.env.SUPABASE_SECRET_KEY = "fake"; process.env.ADMIN_PASSWORD = "local-recovery-password-123456";
@@ -40,6 +41,7 @@ test("S2B-3 cancelar ya aplicada llega a RPC de recuperación, sin rechazar ante
   assert.equal(res.statusCode,200);assert.equal(res.json().already_applied,true);assert.equal(calls.length,2);
 });
 test("S2B-3 inquiry guardada + email fallido: éxito con warning; replay no envía email",async function(t){
+  t.mock.method(cost,"allow",async()=>({allowed:true}));
   t.mock.method(rate,"guard",async()=>true);t.mock.method(turnstile,"verify",async()=>({ok:true}));
   var replay=false,emails=0;
   t.mock.method(inquiries,"saveInquiry",async()=>({selectionId:ID,inquiryId:ID,status:"provider_contacted",updated:false,notify:!replay,already_applied:replay}));
@@ -50,6 +52,7 @@ test("S2B-3 inquiry guardada + email fallido: éxito con warning; replay no env�
   replay=true;var second=await call("plan-inquiry.js","POST",body);assert.equal(second.statusCode,200);assert.equal(second.json().already_applied,true);assert.equal(emails,1);
 });
 test("S2B-3 respuesta pública guardada: no relee; email fallido/throw es warning, replay no repite",async function(t){
+  t.mock.method(cost,"allow",async()=>({allowed:true}));
   t.mock.method(rate,"guard",async()=>true);t.mock.method(console,"error",()=>{});
   for(var action of ["accept","decline"]){
     var row={id:ID,plan_inquiry_id:ID,status:"proposal_sent",provider_quotes:{availability:"yes",currency:"ARS",total_price:1000},plan_inquiries:{plan_selections:{provider_google_place_id:"ChIJabcdefghij0001"}}},reads=0,emails=0,writes=0;

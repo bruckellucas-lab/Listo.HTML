@@ -21,6 +21,7 @@ var inquiries = require("./_lib/inquiries");
 var notify = require("./_lib/notify");
 var rateLimit = require("./_lib/rate-limit");
 var turnstile = require("./_lib/turnstile");
+var cost = require("./_lib/cost-guard");
 
 
 // Fecha de hoy en Argentina (para no rechazar "hoy" por diferencia horaria).
@@ -68,10 +69,14 @@ module.exports = async function handler(req, res) {
     // no cambia la respuesta al usuario (se espera para que Vercel no corte el envío a mitad).
     var warning;
     try {
-      if (out.notify !== false && !(await notify.notifyInquiry(cfg, {
-        eventRequestId: requestId, placeId: placeId, selectionId: out.selectionId,
-        contact: checked.data, updated: out.updated, inquiryId: out.inquiryId
-      }))) warning = "Tu solicitud quedó guardada, pero no pudimos enviar el aviso interno. No hace falta enviarla otra vez.";
+      if (out.notify !== false) {
+        var permitted = (await cost.allow(req, ["email_all", "email_day"])).allowed;
+        var sent = permitted ? await notify.notifyInquiry(cfg, {
+          eventRequestId: requestId, placeId: placeId, selectionId: out.selectionId,
+          contact: checked.data, updated: out.updated, inquiryId: out.inquiryId
+        }) : await notify.deferInquiry(cfg, out.inquiryId);
+        if (!sent) warning = "Tu solicitud quedó guardada, pero no pudimos enviar el aviso interno. No hace falta enviarla otra vez.";
+      }
     } catch (e) { log.error("[plan-inquiry] aviso:", e); warning = "Tu solicitud quedó guardada; el aviso interno no pudo confirmarse. No la repitas por este aviso."; }
 
     // Sólo confirmamos: nunca devolvemos los datos personales.

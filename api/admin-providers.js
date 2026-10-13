@@ -22,6 +22,7 @@ var auth = require("./_lib/admin-auth");
 var store = require("./_lib/providers-store");
 var dietary = require("./_lib/dietary");
 var placeDetails = require("./_lib/place-details");
+var cost = require("./_lib/cost-guard");
 
 var LIMIT = 1000;
 // Sólo lo propio de LISTO: nada de contenido de Google (G1B).
@@ -70,7 +71,8 @@ module.exports = async function handler(req, res) {
   if (req.method === "GET" && http.queryOf(req).place_id !== undefined) {
     var wanted = String(http.queryOf(req).place_id || "");
     if (!placeDetails.PLACE_ID_RE.test(wanted)) return http.sendJson(res, 400, { ok: false, error: "Lugar no válido." });
-    var place = await placeDetails.fetchPlace(wanted, "admin");
+    var allowed = await cost.allow(req, ["admin_details", "admin_details_all", "admin_details_day"]);
+    var place = allowed.allowed ? await placeDetails.fetchPlace(wanted, "admin") : placeDetails.unavailable(wanted);
     return http.sendJson(res, 200, { ok: true, place: place });
   }
 

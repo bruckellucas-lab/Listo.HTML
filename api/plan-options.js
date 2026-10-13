@@ -21,6 +21,7 @@ var photos = require("./_lib/photos");
 var optionToken = require("./_lib/option-token");
 var plan = require("./_lib/plan");
 var rateLimit = require("./_lib/rate-limit");
+var cost = require("./_lib/cost-guard");
 
 function sendError(res, status, message) {
   return http.sendJson(res, status, { ok: false, error: message });
@@ -37,9 +38,10 @@ module.exports = async function handler(req, res) {
   if (!plan.CATEGORIES[category]) return sendError(res, 400, "Tipo de lugar no válido.");
   var zone = plan.cleanZone(q.zone);
 
-  // Límite por visitante (persistente en Supabase; si Supabase no responde, en memoria:
-  // la búsqueda nunca se cae por esto).
+  // El límite por visitante conserva su fallback. Los presupuestos globales siguientes
+  // fallan cerrado: sin contador persistente no se llama a Google.
   if (!(await rateLimit.guard(req, res, "plan_options", { limitMessage: "Hiciste muchas búsquedas seguidas. Esperá unos minutos y probá de nuevo." }))) return;
+  if (!(await cost.guard(req, res, ["search_repeat", "search_all", "search_day"], { key: category + "|" + zone.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "") }))) return;
 
   var apiKey = http.env("GOOGLE_PLACES_API_KEY");
   if (!apiKey) return sendError(res, 503, "LISTO no puede buscar lugares en este momento. Probá de nuevo más tarde.");

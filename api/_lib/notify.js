@@ -296,5 +296,12 @@ function notifyProposalResponse(cfg, info, fetchImpl) {
 
 module.exports = {
   NOTIFY_TO: NOTIFY_TO, buildEmail: buildEmail, whatsappNumber: whatsappNumber, notifyInquiry: notifyInquiry,
-  buildProposalEmail: buildProposalEmail, notifyProposalResponse: notifyProposalResponse
+  buildProposalEmail: buildProposalEmail, notifyProposalResponse: notifyProposalResponse,
+  deferInquiry: function (cfg, id) {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id || "")) return Promise.resolve(false);
+    return markNotification(cfg, null, false, undefined, id).then(function () { return false; }, function (err) {
+      log.error("[notify] aviso pospuesto", err);
+      return false;
+    });
+  }
 };

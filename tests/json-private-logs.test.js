@@ -36,14 +36,14 @@ test("S2C logger: nunca serializa mensaje/stack/step/code arbitrario, payloads o
   assert.deepEqual(JSON.parse(logs[1]),{context:'[prueba]',status:502,code:'23505',kind:'timeout'});
 });
 test("S2C errores Supabase: logs y respuesta pública/admin no filtran detalles",async(t)=>{
-  var logs=[];t.mock.method(console,'error',(...args)=>logs.push(args.join(' ')));t.mock.method(rate,'guard',async()=>true);
+  var logs=[];t.mock.method(console,'error',(...args)=>logs.push(args.join(' ')));t.mock.method(rate,'guard',async()=>true);t.mock.method(require('../api/_lib/cost-guard'),'allow',async()=>({allowed:true}));
   t.mock.method(global,'fetch',async()=>h.response(500,{message:marker,code:marker,details:marker,hint:marker}));
   var a=await call('admin-inquiries','GET');assert.equal(a.statusCode,502);
   var b=await call('proposal','POST',{code:'AbCdEf123456',action:'accept'});assert.equal(b.statusCode,502);
   for(var output of [a.body,b.body,logs.join(' ')])assert.doesNotMatch(output,/Persona|correo@|549115555|key-private|token-private|stack-private/);
 });
 test("S2C Resend: fallo posterior conserva éxito y warning sin log de respuesta externa",async(t)=>{
-  var logs=[];t.mock.method(console,'error',(...args)=>logs.push(args.join(' ')));t.mock.method(rate,'guard',async()=>true);
+  var logs=[];t.mock.method(console,'error',(...args)=>logs.push(args.join(' ')));t.mock.method(rate,'guard',async()=>true);t.mock.method(require('../api/_lib/cost-guard'),'allow',async()=>({allowed:true}));
   var proposals=require('../api/_lib/proposals');t.mock.method(proposals,'loadByCode',async()=>({id:'p',plan_inquiry_id:'i',status:'proposal_sent',provider_quotes:{availability:'yes'}}));
   t.mock.method(global,'fetch',async()=>h.response(200,[{id:'p',status:'proposal_accepted'}]));
   t.mock.method(notify,'notifyProposalResponse',async()=>{logger.error('[notify]',new Error(marker));return false;});
@@ -63,7 +63,8 @@ test("S2C ningún catch vuelve a loguear errores externos directamente",()=>{
   }
 });
 test("S2C Google: error remoto o de red no llega a logs ni a la respuesta",async(t)=>{
-  var logs=[];t.mock.method(console,'error',(...args)=>logs.push(args.join(' ')));t.mock.method(rate,'guard',async()=>true);
+  t.mock.method(require('../api/_lib/cost-guard'),'guard',async()=>true);
+  var logs=[];t.mock.method(console,'error',(...args)=>logs.push(args.join(' ')));t.mock.method(rate,'guard',async()=>true);t.mock.method(require('../api/_lib/cost-guard'),'allow',async()=>({allowed:true}));
   var places=require('../api/_lib/google-places');t.mock.method(places,'searchText',async()=>{throw Object.assign(new Error(marker),{status:500});});
   var prior=process.env.GOOGLE_PLACES_API_KEY;process.env.GOOGLE_PLACES_API_KEY='local-google-test';
   try {var req=h.fakeReq('GET',{}),res=h.fakeRes();req.query={category:'restaurantes',zone:'Palermo'};await require('../api/plan-options')(req,res);assert.equal(res.statusCode,502);assert.doesNotMatch(res.body+logs.join(' '),/correo@|key-private|token-private|stack-private/);}finally{if(prior===undefined)delete process.env.GOOGLE_PLACES_API_KEY;else process.env.GOOGLE_PLACES_API_KEY=prior;}

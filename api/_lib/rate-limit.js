@@ -40,7 +40,21 @@ var LIMITS = {
   // de Supabase ya acepta) con una huella distinta (la huella incluye "proposal_details"), así
   // que nunca se mezclan con los conteos de respuestas.
   proposal_details:     { max: 20,  windowSeconds: 600,  failClosed: true, dbScope: "proposal_response" },             // por visitante
-  proposal_details_all: { max: 200, windowSeconds: 3600, failClosed: true, dbScope: "proposal_response", shared: true } // tope total, todos los visitantes
+  proposal_details_all: { max: 200, windowSeconds: 3600, failClosed: true, dbScope: "proposal_response", shared: true },
+  proposal_details_day: { max: 600, windowSeconds: 86400, failClosed: true, dbScope: "proposal_response", shared: true },
+  // S2D: scopes separados por HMAC, dentro de los scopes SQL ya permitidos.
+  search_repeat: { max: 2, windowSeconds: 10, failClosed: true, dbScope: "plan_options", keyed: true },
+  search_all: { max: 200, windowSeconds: 3600, failClosed: true, dbScope: "plan_options", shared: true },
+  search_day: { max: 1000, windowSeconds: 86400, failClosed: true, dbScope: "plan_options", shared: true },
+  photo_visitor: { max: 120, windowSeconds: 600, failClosed: true, dbScope: "plan_options" },
+  photo_signature: { max: 20, windowSeconds: 3600, failClosed: true, dbScope: "plan_options", shared: true, keyed: true },
+  photo_all: { max: 1000, windowSeconds: 3600, failClosed: true, dbScope: "plan_options", shared: true },
+  photo_day: { max: 4000, windowSeconds: 86400, failClosed: true, dbScope: "plan_options", shared: true },
+  email_all: { max: 60, windowSeconds: 3600, failClosed: true, dbScope: "plan_inquiry", shared: true },
+  email_day: { max: 200, windowSeconds: 86400, failClosed: true, dbScope: "plan_inquiry", shared: true },
+  admin_details: { max: 60, windowSeconds: 600, failClosed: true, dbScope: "plan_options" },
+  admin_details_all: { max: 120, windowSeconds: 3600, failClosed: true, dbScope: "plan_options", shared: true },
+  admin_details_day: { max: 400, windowSeconds: 86400, failClosed: true, dbScope: "plan_options", shared: true }
 };
 // Acciones que conoce la función de Supabase (listo_rate_limit_hit).
 var SCOPES = Object.keys(LIMITS).map(function (k) { return LIMITS[k].dbScope || k; })
@@ -141,6 +155,10 @@ async function check(req, scope, opts) {
   var env = opts.env || http.env;
   // "shared": un único contador para todos los visitantes (tope total).
   var ip = limit.shared ? "todos" : clientIp(req);
+  if (limit.keyed) {
+    if (typeof opts.key !== "string" || !opts.key || opts.key.length > 256) return { allowed: false, retryAfter: 0, source: "unavailable" };
+    ip += "|" + opts.key; // Sólo llega la HMAC a Supabase; no referencia de foto ni texto.
+  }
   var secret = secretOf(env);
   var url = env("SUPABASE_URL"), key = env("SUPABASE_SECRET_KEY");
   var problem = !secret ? "falta RATE_LIMIT_SECRET (32 caracteres o más)"

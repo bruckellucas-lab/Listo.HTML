@@ -110,7 +110,7 @@ test("sin PHOTO_SIGNING_SECRET: /api/place-photo rechaza de forma segura", async
   assert.equal(global.fetch.calls.length, 0);
 });
 
-test("la búsqueda sigue aunque Supabase falle (providers y límite)", async function () {
+test("si falla el límite persistente global, la búsqueda se frena antes de Google", async function () {
   process.env.PHOTO_SIGNING_SECRET = PHOTO_SECRET;
   global.fetch = h.mockFetch([
     { match: /rpc\/listo_rate_limit_hit$/, reply: function () { return h.response(500, {}); } },
@@ -118,8 +118,13 @@ test("la búsqueda sigue aunque Supabase falle (providers y límite)", async fun
     { match: /\/rest\/v1\/providers/, reply: function () { return h.response(500, { message: "caído" }); } }
   ]);
   var res = await quietly(search);
+  assert.equal(res.statusCode, 503);
+  assert.equal(global.fetch.calls.filter(function (c) { return /places:searchText$/.test(c.url); }).length, 0);
+});
+test("presupuestos disponibles: falla guardar providers, pero búsqueda muestra opciones sin guardar contenido Google", async function () {
+  global.fetch = internet({ supabaseDown: true });
+  var res = await quietly(search);
   assert.equal(res.statusCode, 200);
-  var data = res.json();
-  assert.equal(data.options.length, 3);
-  assert.equal(data.providers_saved, false);
+  assert.equal(res.json().options.length, 3);
+  assert.equal(res.json().providers_saved, false);
 });

@@ -26,6 +26,7 @@ var placeDetails = require("./_lib/place-details");
 var proposals = require("./_lib/proposals");
 var notify = require("./_lib/notify");
 var rateLimit = require("./_lib/rate-limit");
+var cost = require("./_lib/cost-guard");
 
 var WINDOW_MS = 10 * 60 * 1000;
 var MAX_VIEWS = 60;        // aperturas por IP cada 10 minutos
@@ -52,7 +53,7 @@ async function mayAskGoogle(req) {
     var mine = await rateLimit.check(req, "proposal_details");
     if (!mine.allowed) return false;
     var all = await rateLimit.check(req, "proposal_details_all");
-    return all.allowed;
+    return all.allowed && (await cost.allow(req, ["proposal_details_day"])).allowed;
   } catch (err) {
     log.error("[proposal] límite de datos del lugar:", err);
     return false;
@@ -189,7 +190,7 @@ async function handlePost(req, res, cfg) {
     // La respuesta ya está guardada. El email se intenta después y no cambia lo que ve el usuario.
     var warning;
     try {
-      if (!(await notify.notifyProposalResponse(cfg, {
+      if (!(await cost.allow(req, ["email_all", "email_day"])).allowed || !(await notify.notifyProposalResponse(cfg, {
         planInquiryId: row.plan_inquiry_id, action: action, comment: comment, quote: quote, adminUrl: adminUrlOf(req)
       }))) warning = "Tu respuesta quedó guardada, pero no pudimos enviar el aviso interno. No hace falta responder otra vez.";
     } catch (e) { log.error("[proposal] aviso:", e); warning = "Tu respuesta quedó guardada; el aviso interno no pudo confirmarse."; }

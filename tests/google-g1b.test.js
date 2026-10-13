@@ -423,7 +423,7 @@ test("límite de propuesta: apertura normal → consulta el límite persistente 
   assert.equal(googleCalls(fetch).length, 1);
   // Antes de Google: por visitante + tope total, en la fila que la función de Supabase ya acepta (sin migration).
   assert.deepEqual(store.bodies.map(function (b) { return [b.p_scope, b.p_max, b.p_window_seconds]; }),
-    [["proposal_response", rl.LIMITS.proposal_details.max, 600], ["proposal_response", rl.LIMITS.proposal_details_all.max, 3600]]);
+    [["proposal_response", rl.LIMITS.proposal_details.max, 600], ["proposal_response", rl.LIMITS.proposal_details_all.max, 3600], ["proposal_response", rl.LIMITS.proposal_details_day.max, 86400]]);
   var gIdx = fetch.calls.indexOf(googleCalls(fetch)[0]);
   assert.ok(fetch.calls.findIndex(function (c) { return /rpc\/listo_rate_limit_hit/.test(c.url); }) < gIdx, "el límite se consulta ANTES de Google");
   // Huellas distintas a las de "aceptar / pedir otra opción" (nunca se mezclan los conteos).
@@ -497,12 +497,12 @@ test("límite de propuesta: no afecta aceptar/rechazar (POST), ni /admin, ni ema
   assert.equal(store.bodies[0].p_max, rl.LIMITS.proposal_response.max);
   assert.equal(googleCalls(fetch).length, 0);
 
-  var admin = h.mockFetch([{ match: /places\.googleapis\.com/, reply: function () { return h.response(200, gPlace(1)); } }]);
+  var admin = h.mockFetch([h.rpcRule(), { match: /places\.googleapis\.com/, reply: function () { return h.response(200, gPlace(1)); } }]);
   global.fetch = admin;
   var r2 = h.fakeRes();
   await adminProviders(adminReq("GET", { place_id: PLACE }), r2);
   assert.equal(r2.json().place.name, "Lugar 1");
-  assert.equal(admin.calls.filter(function (c) { return /rpc/.test(c.url); }).length, 0, "/admin no usa este límite");
+  assert.equal(admin.calls.filter(function (c) { return /rpc/.test(c.url); }).length, 3, "/admin usa presupuestos propios, separados del GET de propuesta");
 
   var mail = mailWorld(function () { return h.response(200, gPlace(1)); });
   assert.equal(await notify.notifyInquiry(CFG, INQ, mail), true);
@@ -698,7 +698,7 @@ test("admin: lista de proveedores sin pedidos a Google ni datos de Google", asyn
 });
 
 test("admin: detalle de UN lugar pedido a Google en el momento; si falla, aviso + link a Maps", async function () {
-  var fetch = h.mockFetch([{ match: /places\.googleapis\.com\/v1\/places\/ChIJabcdefghij0001/, reply: function () { return h.response(200, gPlace(1)); } }]);
+  var fetch = h.mockFetch([h.rpcRule(), { match: /places\.googleapis\.com\/v1\/places\/ChIJabcdefghij0001/, reply: function () { return h.response(200, gPlace(1)); } }]);
   global.fetch = fetch;
   var res = h.fakeRes();
   await adminProviders(adminReq("GET", { place_id: PLACE }), res);
@@ -708,9 +708,9 @@ test("admin: detalle de UN lugar pedido a Google en el momento; si falla, aviso 
   assert.equal(pl.website, "https://lugar1.example");
   assert.equal(pl.rating, 4.5);
   assert.equal(googleCalls(fetch).length, 1);
-  assert.equal(fetch.calls.filter(function (c) { return /supabase/.test(c.url); }).length, 0, "no guarda nada");
+  assert.equal(fetch.calls.filter(function (c) { return /rest\/v1\/(?!rpc)/.test(c.url); }).length, 0, "no guarda contenido Google");
 
-  global.fetch = h.mockFetch([{ match: /places\.googleapis\.com/, reply: function () { return h.response(429, {}); } }]);
+  global.fetch = h.mockFetch([h.rpcRule(), { match: /places\.googleapis\.com/, reply: function () { return h.response(429, {}); } }]);
   res = h.fakeRes();
   await quiet(function () { return adminProviders(adminReq("GET", { place_id: PLACE }), res); });
   pl = res.json().place;

@@ -62,7 +62,7 @@ test("/api/plan-options responde Cache-Control: no-store", async function () {
 });
 
 test("/api/place-photo no cachea (redirección con no-store)", async function () {
-  global.fetch = h.mockFetch([{ match: /\/media\?/, reply: function () { return h.response(200, { photoUri: "https://lh3.googleusercontent.com/x" }); } }]);
+  global.fetch = h.mockFetch([h.rpcRule(), { match: /\/media\?/, reply: function () { return h.response(200, { photoUri: "https://lh3.googleusercontent.com/x" }); } }]);
   var link = new URL(photos.signedSrc(process.env.PHOTO_SIGNING_SECRET, PHOTO_NAME, 480), "http://x");
   var res = h.fakeRes(), req = h.fakeReq("GET", {});
   req.query = Object.fromEntries(link.searchParams);

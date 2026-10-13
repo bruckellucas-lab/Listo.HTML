@@ -13,6 +13,7 @@ var log = require("./_lib/private-log");
 
 var http = require("./_lib/http");
 var photos = require("./_lib/photos");
+var cost = require("./_lib/cost-guard");
 
 module.exports = async function handler(req, res) {
   if (req.method !== "GET" && req.method !== "HEAD") {
@@ -28,6 +29,13 @@ module.exports = async function handler(req, res) {
   }
 
   var apiKey = http.env("GOOGLE_PLACES_API_KEY");
+  if (req.headers["sec-fetch-site"] === "cross-site") return http.sendJson(res, 403, { ok: false, error: "Abrí esta foto desde LISTO." });
+  if (req.method === "HEAD") {
+    res.statusCode = 204;
+    res.setHeader("Cache-Control", "no-store");
+    return res.end(); // Validar el link no requiere una consulta facturable.
+  }
+  if (!(await cost.guard(req, res, ["photo_visitor", "photo_signature", "photo_all", "photo_day"], { key: q.sig }))) return;
   if (!apiKey) return http.sendJson(res, 503, { ok: false, error: "Falta GOOGLE_PLACES_API_KEY en Vercel." });
 
   try {
