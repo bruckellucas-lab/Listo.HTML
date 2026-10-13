@@ -27,6 +27,8 @@ var proposals = require("./_lib/proposals");
 var notify = require("./_lib/notify");
 var rateLimit = require("./_lib/rate-limit");
 var cost = require("./_lib/cost-guard");
+var crypto = require("crypto");
+var hitSecret = crypto.randomBytes(32); // Efímero: sólo para contadores locales de esta instancia.
 
 var WINDOW_MS = 10 * 60 * 1000;
 var MAX_VIEWS = 60;        // aperturas por IP cada 10 minutos
@@ -34,7 +36,8 @@ var MAX_MISSES = 8;        // códigos inexistentes por IP cada 10 minutos (cort
 var hits = { view: {}, miss: {} };   // las respuestas se limitan en Supabase (rate-limit.js)
 
 function ipOf(req) {
-  return String(req.headers["x-forwarded-for"] || (req.socket && req.socket.remoteAddress) || "?").split(",")[0].trim();
+  var ip = String(req.headers["x-forwarded-for"] || (req.socket && req.socket.remoteAddress) || "?").split(",")[0].trim();
+  return crypto.createHmac("sha256", hitSecret).update(ip).digest("hex");
 }
 function count(kind, ip, add) {
   var now = Date.now();
