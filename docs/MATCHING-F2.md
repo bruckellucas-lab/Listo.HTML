@@ -22,14 +22,17 @@ Primero se excluyen cerrados, ids inválidos/vacíos, nombres vacíos y duplicad
 como antes. Entre candidatos utilizables:
 
 1. Coincidencia clara de zona, primero.
-2. `primaryType` exacto dentro de `PROFILES[profile].primaryTypes`, primero.
+2. `primaryType` pertinente según el catálogo y las familias descritas abajo, primero.
 3. Calidad ajustada por reseñas, mayor primero.
 4. Ante igualdad, más reseñas; al final, orden original Google.
 
 El orden es por prioridades, no una suma de puntos de unidades distintas. Un lugar local
 no pertinente puede quedar antes que uno pertinente fuera de zona: se evita desplazar una
 opción local por otra distante. Esto no certifica que las opciones sean ideales ni adecuadas
-para capacidad, dieta, privacidad o servicios. El catálogo de tipos F1 se conserva intacto.
+para capacidad, dieta, privacidad o servicios. El fix de review amplía la pertinencia sin cambiar ninguna consulta F1.
+Dinner admite `restaurant`, cualquier `*_restaurant` y `steak_house`; romantic admite
+`restaurant`, cualquier `*_restaurant` y `wine_bar`. Corporate incluye `event_venue`,
+`convention_center` y `banquet_hall`. Los demás perfiles mantienen sus tipos explícitos.
 
 Si no hay perfil válido, no hay datos de tipo o ningún candidato utilizable coincide con
 los tipos del perfil, se conserva el ranking anterior (zona, umbral 20 reseñas, rating,
@@ -105,26 +108,26 @@ y los de F0/F6a son históricos, no la predicción del endpoint actualizado.
 | Métrica | F1 publicado | F2 |
 | --- | ---: | ---: |
 | Opciones mostradas | 70 | 70 |
-| Pertinencia | 87,1 % | 91,4 % |
-| Relleno | 10 | 9 |
-| Adecuadas omitidas hasta 3 slots | 8 | 7 |
-| Adecuadas omitidas, todas las devueltas | 58 | 57 |
+| Pertinencia | 87,1 % | 90,0 % |
+| Relleno | 10 | 10 |
+| Adecuadas omitidas hasta 3 slots | 8 | 8 |
+| Adecuadas omitidas, todas las devueltas | 58 | 58 |
 | Fuera de zona / sin aviso | 1 / 1 | 1 / 1 |
 | Búsquedas distintas | 20 | 20 |
-| Pares de planes con listas idénticas no vacías | 26 | 17 |
+| Pares de planes con listas idénticas no vacías | 26 | 18 |
 | Textos/claims sin fuente | 0 | 0 |
 
 No mejoran todos los escenarios:
 
-- `aniversario-palermo`: pertinencia 1→0, relleno 2→3, omisiones hasta tres 2→3.
-  El oracle sintético considera pertinente alta cocina/francés; la metadata romántica F1
-  incluye también restaurante genérico, y la fórmula baja el lugar de alta cocina con 21 reseñas.
+- `aniversario-palermo`: luego del fix vuelve al resultado F1: pertinencia 1, relleno 2
+  y omisiones hasta tres 2. Antes del fix daba pertinencia 0 y omisiones 3. Aceptar todas las
+  cocinas elimina la exclusión de francés, sin certificar que sea apropiado para un aniversario.
 - `corporativo-50-palermo`: relleno 0→1 y omisiones hasta tres 0→1.
   Un `event_venue` con 12 reseñas entra por tipo sobre otro tipo no corporativo más reseñado;
   el oracle cuenta como adecuada sólo una opción con al menos 20 reseñas y rating >=4.
 
 Son tradeoffs explícitos, no pruebas de que los restaurantes genéricos sean románticos ni
-que un salón poco reseñado sea confiable. No se cambiaron metadata/oracle para mejorar el número.
+que un salón poco reseñado sea confiable. La metadata se amplió por el caso real de review; el oracle y los fixtures no se cambiaron.
 El total mejora, pero requiere review y medición real antes de publicar.
 Las adecuadas disponibles se cuentan en cada respuesta, no en todo Google. No se hizo una
 búsqueda real ni un smoke en producción. Sigue pendiente la meta cero fuera de zona sin aviso.
@@ -141,8 +144,8 @@ búsqueda real ni un smoke en producción. Sigue pendiente la meta cero fuera de
 - Snapshot F2 y metas; queries e includedType idénticos a F1.
 - Suite completa G/S2D/S2E/F1/selección/inquiry y flujos comerciales anteriores.
 
-`npm run check`: OK, 12/12 funciones. `npm test`: 282 aprobados, 0 fallidos,
-3 omitidos de Postgres (285 total). No se ejecutó SQL ni se usaron servicios externos reales.
+`npm run check`: OK, 12/12 funciones. `npm test`: 285 aprobados, 0 fallidos,
+3 omitidos de Postgres (288 total). No se ejecutó SQL ni se usaron servicios externos reales.
 
 ## Smoke recomendado en Preview
 
@@ -154,3 +157,16 @@ búsqueda real ni un smoke en producción. Sigue pendiente la meta cero fuera de
 6. Verificar clientes viejos con `category` y rate limits actuales; restricciones obligatorias siguen coordinadas.
 
 No tocar todavía F3 razones, F4 restricciones, F5 avisos/menos de tres ni variedad por pedido.
+
+## Fix obligatorio posterior a review
+
+El caso A/B/C/D (restaurant 4,1/30; sushi 4,8/900; pizza 4,7/2000; steak 4,6/3000)
+se reprodujo con test fallando antes del cambio. Ahora el top tres es B/C/D: sushi, pizza,
+steak, todos pertinentes y ordenados por la fórmula bayesiana. Se agregaron tests de familias,
+exclusión de tipos ajenos, wine_bar romántico y banquet_hall corporativo.
+
+Contra F2 inicial: pertinencia 91,4 %→90,0 %, relleno 9→10 y omisiones hasta tres 7→8.
+Son cifras sintéticas; la corrección semántica amplía cocinas legítimas y el oracle de algunos
+escenarios no considera todas ellas pertinentes. Se versiona el snapshot completo sin maquillar
+esa diferencia. Contra F1 se mantiene la mejora de pertinencia y no empeoran las metas agregadas
+restantes. No hay cambios en consultas, zona, fórmula, fallback, endpoints, UX ni persistencia.

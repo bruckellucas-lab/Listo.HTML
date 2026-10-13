@@ -72,7 +72,7 @@ var PROFILES = Object.create(null);
   ["dinner", "Cena", "restaurantes", ["restaurant", "italian_restaurant", "fine_dining_restaurant"]],
   ["grill", "Parrilla", "parrillas", ["steak_house", "barbecue_restaurant"]],
   ["vegan", "Preferencia veggie", "restaurantes veganos", ["vegan_restaurant", "vegetarian_restaurant"]],
-  ["romantic", "Cena romántica", "restaurantes para cena romantica", ["restaurant", "fine_dining_restaurant"]],
+  ["romantic", "Cena romántica", "restaurantes para cena romantica", ["restaurant", "fine_dining_restaurant", "wine_bar"]],
   ["cafe_brunch", "Café / brunch", "cafes y brunch", ["cafe", "brunch_restaurant"]],
   ["bars", "Bar", "bares", ["bar", "pub", "cocktail_bar"]],
   ["after_office", "After office", "bares para after office", ["bar", "pub", "cocktail_bar"]],
@@ -80,7 +80,7 @@ var PROFILES = Object.create(null);
   ["baby_shower", "Baby shower", "lugares para baby shower", ["cafe", "brunch_restaurant", "event_venue"]],
   ["multi_service", "Evento con varias necesidades", "salones para eventos", ["event_venue", "banquet_hall"]],
   ["venues", "Salón", "salones para eventos", ["event_venue", "banquet_hall", "wedding_venue"]],
-  ["corporate", "Evento corporativo", "salones para eventos corporativos", ["event_venue", "convention_center"]]
+  ["corporate", "Evento corporativo", "salones para eventos corporativos", ["event_venue", "convention_center", "banquet_hall"]]
 ].forEach(function (p) {
   PROFILES[p[0]] = Object.freeze({ id: p[0], label: p[1], textQuery: p[2], primaryTypes: Object.freeze(p[3]) });
 });
@@ -142,6 +142,14 @@ function qualityScore(row) {
   return (v * r + QUALITY_WEIGHT * QUALITY_PRIOR) / (v + QUALITY_WEIGHT);
 }
 
+// Familias abiertas de tipos de Google, sólo dentro de perfiles cerrados.
+function pertinentType(profile, type) {
+  if (!profile || typeof type !== "string") return false;
+  if ((profile.id === "dinner" || profile.id === "romantic") && /_restaurant$/.test(type)) return true;
+  if (profile.id === "dinner" && type === "steak_house") return true;
+  return profile.primaryTypes.indexOf(type) !== -1;
+}
+
 function hasGoodRating(row) {
   return typeof row.rating === "number" && typeof row.review_count === "number" && row.review_count >= MIN_REVIEWS;
 }
@@ -163,7 +171,7 @@ function pickOptions(rows, zone, statusById, max, ranking) {
     seenName[nameKey] = true;
     var place = ranking.placesById && Object.prototype.hasOwnProperty.call(ranking.placesById, row.google_place_id)
       ? ranking.placesById[row.google_place_id] : null;
-    var relevant = !!(profile && place && profile.primaryTypes.indexOf(place.primaryType) !== -1);
+    var relevant = !!(place && pertinentType(profile, place.primaryType));
     var inZone = zoneMatches(row, zone);
     candidates.push({ row: row, tier: (inZone ? 0 : 2) + (hasGoodRating(row) ? 0 : 1),
       inZone: inZone, relevant: relevant, quality: qualityScore(row), order: i });

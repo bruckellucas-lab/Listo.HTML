@@ -771,10 +771,10 @@
     "summary": {
       "scenarios": 29,
       "shown": 70,
-      "pertinentRate": 0.914,
-      "padding": 9,
-      "adequateMissedAll": 57,
-      "adequateMissedSlots": 7,
+      "pertinentRate": 0.9,
+      "padding": 10,
+      "adequateMissedAll": 58,
+      "adequateMissedSlots": 8,
       "outside": 1,
       "outsideUnwarned": 1,
       "scenariosFewerThan3Adequate": 10,
@@ -783,7 +783,7 @@
       "identicalAcrossUsers": 27,
       "emptyScenarios": 2,
       "planPairs": 406,
-      "identicalNonemptyPlanPairs": 17,
+      "identicalNonemptyPlanPairs": 18,
       "reasons": 0,
       "groundedReasonRate": null,
       "unsupportedReasons": 0,
@@ -805,7 +805,7 @@
         "shownIds": [
           "SYNRP001xxxxxxxxxx",
           "SYNBP006xxxxxxxxxx",
-          "SYNSP005xxxxxxxxxx"
+          "SYNRP002xxxxxxxxxx"
         ],
         "available": 13,
         "shown": 3,
@@ -831,14 +831,14 @@
         "shownIds": [
           "SYNRP001xxxxxxxxxx",
           "SYNBP006xxxxxxxxxx",
-          "SYNSP005xxxxxxxxxx"
+          "SYNRP002xxxxxxxxxx"
         ],
         "available": 5,
         "shown": 3,
-        "pertinent": 0,
-        "padding": 3,
-        "missedAll": 5,
-        "missedSlots": 3,
+        "pertinent": 1,
+        "padding": 2,
+        "missedAll": 4,
+        "missedSlots": 2,
         "outside": 0,
         "outsideUnwarned": 0,
         "fewerThan3Available": false,
@@ -909,14 +909,14 @@
         "shownIds": [
           "SYNRP001xxxxxxxxxx",
           "SYNBP006xxxxxxxxxx",
-          "SYNSP005xxxxxxxxxx"
+          "SYNRP002xxxxxxxxxx"
         ],
         "available": 6,
         "shown": 3,
-        "pertinent": 3,
-        "padding": 0,
-        "missedAll": 3,
-        "missedSlots": 0,
+        "pertinent": 2,
+        "padding": 1,
+        "missedAll": 4,
+        "missedSlots": 1,
         "outside": 0,
         "outsideUnwarned": 0,
         "fewerThan3Available": false,
@@ -935,14 +935,14 @@
         "shownIds": [
           "SYNRP001xxxxxxxxxx",
           "SYNBP006xxxxxxxxxx",
-          "SYNSP005xxxxxxxxxx"
+          "SYNRP002xxxxxxxxxx"
         ],
         "available": 5,
         "shown": 3,
-        "pertinent": 3,
-        "padding": 0,
-        "missedAll": 2,
-        "missedSlots": 0,
+        "pertinent": 2,
+        "padding": 1,
+        "missedAll": 3,
+        "missedSlots": 1,
         "outside": 0,
         "outsideUnwarned": 0,
         "fewerThan3Available": false,
@@ -1140,8 +1140,8 @@
         "profile": "venues",
         "shownIds": [
           "SYNSP001xxxxxxxxxx",
-          "SYNSP008xxxxxxxxxx",
-          "SYNSP003xxxxxxxxxx"
+          "SYNSP002xxxxxxxxxx",
+          "SYNSP008xxxxxxxxxx"
         ],
         "available": 4,
         "shown": 3,
@@ -1267,8 +1267,8 @@
         "includedType": null,
         "profile": "dinner",
         "shownIds": [
-          "SYNRN001xxxxxxxxxx",
-          "SYNRN002xxxxxxxxxx"
+          "SYNRN002xxxxxxxxxx",
+          "SYNRN001xxxxxxxxxx"
         ],
         "available": 2,
         "shown": 2,

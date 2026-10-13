@@ -115,3 +115,22 @@ test("F2 snapshot reproducible compara F1 publicado con igual consulta/mundo, si
   var queries = list => list.map(r => [r.id, r.query, r.includedType]);
   assert.deepEqual(queries(baseline.before.results), queries(baseline.after.results));
 });
+test("F2 fix cena A/B/C/D: sushi, pizza y steak superan restaurant débil", () => {
+  var rows = [row("A",4.1,30), row("B",4.8,900), row("C",4.7,2000), row("D",4.6,3000)];
+  assert.deepEqual(ids(rows, ranking({A:"restaurant", B:"sushi_restaurant", C:"pizza_restaurant", D:"steak_house"}, "dinner")), ["B", "C", "D"]);
+});
+test("F2 fix dinner/romantic admiten familias restaurant sin admitir tipos ajenos", () => {
+  for (var profile of ["dinner", "romantic"]) {
+    for (var type of ["sushi_restaurant", "pizza_restaurant", "french_restaurant", "new_cuisine_restaurant"]) {
+      assert.deepEqual(ids([row("flojo",4.1,30), row("bueno",4.8,900)], ranking({flojo:"restaurant", bueno:type},profile)), ["bueno", "flojo"]);
+    }
+    assert.deepEqual(ids([row("ajeno",5,2000), row("resto",4.1,30)], ranking({ajeno:"restaurant_supply_store", resto:"restaurant"},profile)), ["resto", "ajeno"]);
+  }
+  assert.deepEqual(ids([row("sushi",4.8,900), row("steak",4.1,30)], ranking({sushi:"sushi_restaurant", steak:"steak_house"},"grill")), ["steak", "sushi"]);
+  assert.deepEqual(ids([row("steak",4.8,900), row("resto",4.1,30)], ranking({steak:"steak_house", resto:"restaurant"},"dinner")), ["steak", "resto"]);
+  assert.deepEqual(ids([row("vino",4.8,900), row("resto",4.1,30)], ranking({vino:"wine_bar", resto:"restaurant"},"romantic")), ["vino", "resto"]);
+});
+test("F2 fix corporate reconoce banquet_hall junto a event_venue y convention_center", () => {
+  var rows = [row("event",4.1,30), row("banquet",4.8,900), row("convention",4.7,2000)];
+  assert.deepEqual(ids(rows, ranking({event:"event_venue", banquet:"banquet_hall", convention:"convention_center"},"corporate")), ["banquet", "convention", "event"]);
+});
