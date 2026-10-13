@@ -1,6 +1,6 @@
 /* =========================================================
    LISTO — Lógica simple para elegir 3 lugares reales
-   (sin scoring complejo, a propósito).
+   Ranking interno: zona, pertinencia y confianza de las reseñas.
    ========================================================= */
 "use strict";
 
@@ -66,7 +66,7 @@ function buildQuery(category, zone) {
   return label + " en " + zone + suffix;
 }
 
-// F1: consultas y tipos cerrados. Los tipos quedan como metadata; no cambian el ranking.
+// Consultas cerradas F1; F2 usa primaryTypes únicamente para ranking en memoria.
 var PROFILES = Object.create(null);
 [
   ["dinner", "Cena", "restaurantes", ["restaurant", "italian_restaurant", "fine_dining_restaurant"]],
@@ -106,21 +106,51 @@ function buildProfileQuery(id, zone) {
     (BA_ZONES.indexOf(safeZone) !== -1 && safeZone !== "caba" && safeZone !== "capital federal" ? ", Buenos Aires" : "");
 }
 
+// Comparar componentes completos, no palabras dentro de calles o nombres de negocios.
+var ZONE_CHILDREN = {
+  palermo: ["palermo viejo", "palermo soho", "palermo hollywood", "palermo chico", "las canitas"],
+  belgrano: ["belgrano r", "belgrano c"]
+};
+function zoneIdentity(value) {
+  var n = norm(value), safe = profileZone(value);
+  if (safe !== null) n = safe;
+  return n === "caba" ? "capital federal" : n;
+}
+function clearZoneMatch(candidate, wanted) {
+  if (candidate === wanted) return true;
+  if (wanted === "capital federal") return CABA_BARRIOS.indexOf(candidate) !== -1 ||
+    ["palermo viejo", "palermo soho", "palermo hollywood", "palermo chico", "las canitas", "barrio norte", "once", "abasto", "belgrano r", "belgrano c"].indexOf(candidate) !== -1;
+  return Object.prototype.hasOwnProperty.call(ZONE_CHILDREN, wanted) && ZONE_CHILDREN[wanted].indexOf(candidate) !== -1;
+}
 function zoneMatches(row, zone) {
-  var z = norm(zone);
+  var z = zoneIdentity(zone);
   if (!z) return false;
-  var rz = norm(row.zone);
-  if (rz && (rz === z || rz.indexOf(z) !== -1 || z.indexOf(rz) !== -1)) return true;
-  return norm(row.address).indexOf(z) !== -1;
+  var rz = zoneIdentity(row.zone);
+  // Un barrio estructurado informado por Google tiene precedencia sobre la dirección textual.
+  if (rz) return clearZoneMatch(rz, z);
+  return String(row.address || "").split(",").slice(1).some(function (segment) {
+    var component = segment.trim().replace(/^(?:[a-z]?\d{4}[a-z]{0,3})\s+/i, "");
+    return clearZoneMatch(zoneIdentity(component), z);
+  });
+}
+
+// Prior fijo conservador; no se infiere del usuario ni se almacena contenido Google.
+var QUALITY_PRIOR = 4.0, QUALITY_WEIGHT = 50;
+function qualityScore(row) {
+  var r = row.rating, v = row.review_count;
+  if (!Number.isFinite(r) || r < 0 || r > 5 || !Number.isSafeInteger(v) || v <= 0) return null;
+  return (v * r + QUALITY_WEIGHT * QUALITY_PRIOR) / (v + QUALITY_WEIGHT);
 }
 
 function hasGoodRating(row) {
   return typeof row.rating === "number" && typeof row.review_count === "number" && row.review_count >= MIN_REVIEWS;
 }
 
-// Ordena: 1) coincide con la zona, 2) tiene rating y reseñas suficientes, 3) rating, 4) reseñas.
+// Con perfil pertinente: zona clara, primaryType y calidad ajustada. Sin él, orden anterior.
 // Excluye cerrados (definitiva o temporalmente) y duplicados (mismo lugar o mismo nombre).
-function pickOptions(rows, zone, statusById, max) {
+function pickOptions(rows, zone, statusById, max, ranking) {
+  ranking = ranking || {};
+  var profile = typeof ranking.profile === "string" ? PROFILES[ranking.profile] : null;
   max = max || 3;
   var seenId = {}, seenName = {};
   var candidates = [];
@@ -131,9 +161,27 @@ function pickOptions(rows, zone, statusById, max) {
     if (!row.google_place_id || seenId[row.google_place_id] || !nameKey || seenName[nameKey]) return;
     seenId[row.google_place_id] = true;
     seenName[nameKey] = true;
-    candidates.push({ row: row, tier: (zoneMatches(row, zone) ? 0 : 2) + (hasGoodRating(row) ? 0 : 1), order: i });
+    var place = ranking.placesById && Object.prototype.hasOwnProperty.call(ranking.placesById, row.google_place_id)
+      ? ranking.placesById[row.google_place_id] : null;
+    var relevant = !!(profile && place && profile.primaryTypes.indexOf(place.primaryType) !== -1);
+    var inZone = zoneMatches(row, zone);
+    candidates.push({ row: row, tier: (inZone ? 0 : 2) + (hasGoodRating(row) ? 0 : 1),
+      inZone: inZone, relevant: relevant, quality: qualityScore(row), order: i });
   });
+  // Sin perfil/tipos pertinentes entre candidatos utilizables: compatibilidad anterior.
+  var useScoring = !!profile && candidates.some(function (c) { return c.relevant; });
   candidates.sort(function (a, b) {
+    if (useScoring) {
+      if (a.inZone !== b.inZone) return a.inZone ? -1 : 1;
+      if (a.relevant !== b.relevant) return a.relevant ? -1 : 1;
+      if (a.quality !== b.quality) {
+        if (a.quality === null) return 1;
+        if (b.quality === null) return -1;
+        return b.quality - a.quality;
+      }
+      var reviews = (b.row.review_count || 0) - (a.row.review_count || 0);
+      return reviews || a.order - b.order;
+    }
     if (a.tier !== b.tier) return a.tier - b.tier;
     var ra = typeof a.row.rating === "number" ? a.row.rating : -1;
     var rb = typeof b.row.rating === "number" ? b.row.rating : -1;
@@ -161,5 +209,6 @@ module.exports = {
   buildQuery: buildQuery,
   pickOptions: pickOptions,
   shortAddress: shortAddress,
+  qualityScore: qualityScore,
   zoneMatches: zoneMatches
 };

@@ -87,7 +87,7 @@ module.exports = async function handler(req, res) {
   // 3) Elegir 3 y armar lo que ve el usuario (sólo datos informados por Google).
   // Sin PHOTO_SIGNING_SECRET las opciones salen igual, sin foto (placeholder de LISTO).
   var secret = photos.signingSecret();
-  var options = plan.pickOptions(converted.rows, zone, statusById, 3).map(function (row) {
+  var options = plan.pickOptions(converted.rows, zone, statusById, 3, { profile: profile, placesById: placeById }).map(function (row) {
     var photo = secret ? photos.photosForPlace(placeById[row.google_place_id], secret, { max: 1 })[0] || null : null;
     return {
       google_place_id: row.google_place_id,

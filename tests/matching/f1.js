@@ -23,12 +23,13 @@ function syntheticSearch(request) {
     return JSON.parse(serialized);
   });
 }
-function adapter(s) {
+// Sin picker inyectado, mantiene el modo legacy para el snapshot histórico F1.
+function adapter(s, picker) {
   var profile = chooseProfile(s), zone = plan.profileZone(s.zone);
   var query = zone === null ? "" : plan.buildProfileQuery(profile, zone);
   return {request: {textQuery: query}, costKey: profile + "|" + (zone || ""), pick: function (found) {
     var status = {}; found.forEach(function (p) { status[p.id] = p.businessStatus; });
-    return plan.pickOptions(places.toProviderRows(found, "2026-10-07T12:00:00.000Z").rows, zone, status, 3)
+    return (picker || plan.pickOptions)(places.toProviderRows(found, "2026-10-07T12:00:00.000Z").rows, zone, status, 3)
       .map(function (p) { return {id: p.google_place_id, text: "Precio y disponibilidad a confirmar", reasons: [], claims: []}; });
   }};
 }
@@ -38,5 +39,5 @@ function report() {
   after.targets.omissionsNotWorse = after.summary.adequateMissedSlots <= before.summary.adequateMissedSlots;
   return {synthetic: true, before: before, after: after};
 }
-module.exports = {chooseProfile: chooseProfile, adapter: adapter, report: report};
+module.exports = {chooseProfile: chooseProfile, adapter: adapter, scenarios: scenarios, syntheticSearch: syntheticSearch, report: report};
 if (require.main === module) console.log(JSON.stringify(report(), null, 2));
