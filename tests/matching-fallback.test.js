@@ -135,3 +135,40 @@ test("F5 snapshot mantiene queries/mundo y marca todas las opciones externas sin
   assert.ok(baseline.after.summary.averageShown<baseline.averageShownBefore);
   for(var key of ["prohibitedTexts","unverifiedClaims","unsupportedReasons"])assert.equal(baseline.after.summary[key],0);
 });
+test("Z1 sub-barrios aceptan padre Google sin aviso ni vaciar cliente viejo", async t => {
+  for (var [wanted,parent] of [["Palermo Soho","Palermo"],["Palermo Hollywood","Palermo"],["Palermo Viejo","Palermo"],["Palermo Chico","Palermo"],["Las Cañitas","Palermo"],["Belgrano R","Belgrano"],["Belgrano C","Belgrano"]]) {
+    var fetch=network([fixture(1,{addressComponents:[{longText:parent,types:["neighborhood"]}]})]);t.mock.method(global,"fetch",fetch);
+    for(var query of [{profile:"dinner",zone:wanted},{category:"restaurantes",zone:wanted}]) {
+      var res=await call("plan-options.js","GET",null,query);assert.equal(res.statusCode,200);
+      assert.equal(res.json().options.length,1,JSON.stringify(query));
+      assert.equal(res.json().options[0].outside_zone,false,wanted);
+      assert.equal(res.json().options[0].zone_notice,"");
+    }
+  }
+  assert.equal(plan.zoneMatches({zone:"Palermo Hollywood"},"Palermo Soho"),false,"no inferir coincidencia entre hermanos");
+  assert.equal(plan.zoneMatches({zone:"Belgrano"},"Palermo Soho"),false);
+});
+test("Z2 restaurant genérico no desaparece en grill/vegan/brunch/baby; tipos específicos conservan prioridad F2", () => {
+  for(var [profile,specific] of [["grill","steak_house"],["vegan","vegan_restaurant"],["cafe_brunch","cafe"],["baby_shower","event_venue"]]) {
+    var generic=[fixture(1,{rating:4.8,userRatingCount:2000}),fixture(2,{rating:4.7,userRatingCount:3000}),fixture(3,{rating:4.6,userRatingCount:2500})];
+    assert.equal(pick(generic,profile).length,3,profile);
+    var found=generic.concat(fixture(4,{primaryType:specific,rating:4.5,userRatingCount:100}),fixture(5,{primaryType:"hospital",rating:5,userRatingCount:5000}));
+    var out=pick(found,profile);assert.equal(out.length,3);assert.equal(out[0].google_place_id,fixture(4).id,profile);
+    assert.ok(!out.some(r=>r.google_place_id===fixture(5).id));
+    assert.equal(pick([fixture(1,{primaryType:"sushi_restaurant"}),fixture(2,{primaryType:"hotel"})],profile).length,0,"no ampliar a todas las cocinas/hoteles");
+    assert.equal(pick([fixture(1,{userRatingCount:19})],profile).length,0,"umbral sigue igual");
+  }
+});
+test("Z2 endpoint grill conserva restaurantes genéricos fuertes; N3 singular y cero sin zona", async t => {
+  var fetch=network([fixture(1,{rating:4.8,userRatingCount:2000}),fixture(2,{rating:4.7,userRatingCount:3000}),fixture(3,{rating:4.6,userRatingCount:2500})]);t.mock.method(global,"fetch",fetch);
+  var res=await call("plan-options.js","GET",null,{profile:"grill",zone:"Palermo"});
+  assert.equal(res.statusCode,200);assert.equal(res.json().options.length,3);
+  assert.equal(fetch.calls.filter(c=>/places:searchText$/.test(c.url)).length,1);
+  res.json().options.forEach(o=>assert.equal(optionToken.verify(process.env.PHOTO_SIGNING_SECRET,o.google_place_id,o.option_token),""));
+  fetch=network([]);t.mock.method(global,"fetch",fetch);
+  var empty=await call("plan-options.js","GET",null,{profile:"dinner",zone:""});
+  assert.equal(empty.json().options.length,0);assert.equal(empty.json().fallback.manual_coordination,true);
+  assert.doesNotMatch(empty.json().fallback.message,/en esa zona/);
+  assert.doesNotMatch(renderer([]).html,/en esa zona/);
+  assert.equal(plan.optionsFeedback([{outside_zone:false}]).message,"Encontramos 1 opción que encaja con tu pedido.");
+});

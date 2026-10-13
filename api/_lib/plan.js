@@ -120,7 +120,8 @@ function clearZoneMatch(candidate, wanted) {
   if (candidate === wanted) return true;
   if (wanted === "capital federal") return CABA_BARRIOS.indexOf(candidate) !== -1 ||
     ["palermo viejo", "palermo soho", "palermo hollywood", "palermo chico", "las canitas", "barrio norte", "once", "abasto", "belgrano r", "belgrano c"].indexOf(candidate) !== -1;
-  return Object.prototype.hasOwnProperty.call(ZONE_CHILDREN, wanted) && ZONE_CHILDREN[wanted].indexOf(candidate) !== -1;
+  return (Object.prototype.hasOwnProperty.call(ZONE_CHILDREN, wanted) && ZONE_CHILDREN[wanted].indexOf(candidate) !== -1) ||
+    (Object.prototype.hasOwnProperty.call(ZONE_CHILDREN, candidate) && ZONE_CHILDREN[candidate].indexOf(wanted) !== -1);
 }
 function zoneMatches(row, zone) {
   var z = zoneIdentity(zone);
@@ -203,6 +204,12 @@ function pickOptions(rows, zone, statusById, max, ranking) {
 
 // F5 filtra antes de limitar a tres, para no perder adecuadas más abajo en la respuesta.
 var LEGACY_PROFILES = Object.assign(Object.create(null), { restaurantes: "dinner", bares: "bars", salones: "venues" });
+// Sólo admisión F5: el restaurant genérico de estas consultas no prueba especialidad.
+// No ampliar pertinentType: F2 mantiene prioridad de los tipos específicos.
+function adequateType(profile, type) {
+  return pertinentType(profile, type) || !!(profile && type === "restaurant" &&
+    ["grill", "vegan", "cafe_brunch", "baby_shower"].indexOf(profile.id) !== -1);
+}
 function pickAdequateOptions(rows, zone, statusById, max, ranking) {
   ranking = ranking || {};
   var profile = typeof ranking.profile === "string" ? PROFILES[ranking.profile] : null;
@@ -210,7 +217,7 @@ function pickAdequateOptions(rows, zone, statusById, max, ranking) {
   var adequate = rows.filter(function (row) {
     var place = ranking.placesById && Object.prototype.hasOwnProperty.call(ranking.placesById, row.google_place_id)
       ? ranking.placesById[row.google_place_id] : null;
-    return !!(place && pertinentType(profile, place.primaryType)) &&
+    return !!(place && adequateType(profile, place.primaryType)) &&
       (ranking.allowOutsideZone !== false || !zone || zoneMatches(row, zone)) &&
       qualityScore(row) !== null && row.rating >= 4 && row.review_count >= MIN_REVIEWS;
   });
@@ -223,8 +230,8 @@ function optionZoneNotice(row, zone) {
 function optionsFeedback(options) {
   var count = options.length, outside = options.some(function (o) { return o.outside_zone; });
   return {
-    message: count === 0 ? "No encontramos opciones suficientemente buenas en esa zona. Podemos ayudarte a coordinarlo manualmente."
-      : count === 1 ? "Encontramos 1 opción que encaja mejor con tu pedido."
+    message: count === 0 ? "No encontramos opciones suficientemente buenas. Podemos ayudarte a coordinarlo manualmente."
+      : count === 1 ? "Encontramos 1 opción que encaja con tu pedido."
       : count === 2 ? "Encontramos 2 opciones que encajan mejor con tu pedido." : "",
     manual_coordination: count < 3 || outside,
     outside_zone_message: outside ? "Algunas opciones pueden quedar fuera de la zona exacta." : ""

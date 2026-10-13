@@ -1052,8 +1052,8 @@
   function optionsFeedback(list) {
     var count = list.length, outside = list.some(function (o) { return o.outside_zone; });
     return {
-      message: count === 0 ? "No encontramos opciones suficientemente buenas en esa zona. Podemos ayudarte a coordinarlo manualmente."
-        : count === 1 ? "Encontramos 1 opción que encaja mejor con tu pedido."
+      message: count === 0 ? "No encontramos opciones suficientemente buenas. Podemos ayudarte a coordinarlo manualmente."
+        : count === 1 ? "Encontramos 1 opción que encaja con tu pedido."
         : count === 2 ? "Encontramos 2 opciones que encajan mejor con tu pedido." : "",
       manual_coordination: count < 3 || outside,
       outside_zone_message: outside ? "Algunas opciones pueden quedar fuera de la zona exacta." : ""

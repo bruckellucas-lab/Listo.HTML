@@ -34,7 +34,7 @@ test("F2 fallback anterior sin perfil, sin primaryTypes o sin coincidencias util
 test("F2 zona clara: no matches por subcadenas, calle o barrio contradictorio", () => {
   for (var zone of ["SuperPalermo", "Palermoide", "No Palermo", "Palermo Bar", "Belgrano"]) assert.equal(plan.zoneMatches(row("x", 4, 100, zone), "Palermo"), false, zone);
   for (var zone of ["Palermo", "PÁLERMO", "Palermo Soho", "Palermo Viejo", "Palermo, CABA"]) assert.equal(plan.zoneMatches(row("x", 4, 100, zone), "Palermo"), true, zone);
-  assert.equal(plan.zoneMatches(row("x", 4, 100, "Palermo"), "Palermo Soho"), false);
+  assert.equal(plan.zoneMatches(row("x", 4, 100, "Palermo"), "Palermo Soho"), true);
   assert.equal(plan.zoneMatches(row("x", 4, 100, "Belgrano R"), "Belgrano"), true);
   assert.equal(plan.zoneMatches(row("x", 4, 100, "Mataderos"), "Capital"), true);
   assert.equal(plan.zoneMatches(row("x", 4, 100, "Bernal"), "CABA"), false);

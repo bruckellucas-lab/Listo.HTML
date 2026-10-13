@@ -10,14 +10,15 @@ Se filtra toda la respuesta antes del límite de tres, para no perder candidatos
 que vengan después de candidatos descartados. Se exige:
 
 - `primaryType` de la respuesta actual pertinente al perfil cerrado, incluyendo las familias
-  restaurant del fix F2. No se infiere tipo de la etiqueta traducida ni del nombre.
+  restaurant del fix F2. Sólo para la admisión F5 de grill, vegan, cafe_brunch y baby_shower,
+  se acepta también el tipo `restaurant` genérico. No se infiere tipo de labels ni del nombre.
 - Rating numérico finito entre 4 y 5 y al menos 20 reseñas enteras positivas seguras.
   El score bayesiano F2 debe ser calculable; no se completan datos ausentes.
 - Id/nombre utilizables, sin duplicados y sin estado CLOSED_PERMANENTLY/CLOSED_TEMPORARILY.
   Se conservan las exclusiones existentes. Un estado no informado no certifica apertura.
 
 Después se aplica el orden F2: zona clara → tipo → calidad. Si sólo quedan 0, 1 o 2,
-se devuelven esos candidatos. No se agregan candidatos de otro tipo, poco reseñados o
+se devuelven esos candidatos. No se agregan tipos ajenos al filtro, candidatos poco reseñados o
 con rating bajo para completar tres. Si falta tipo/rating/reseñas, se ofrece coordinación.
 El fallback de ranking antiguo sigue disponible en `pickOptions` para callers históricos;
 no se usa para rellenar una búsqueda pública con candidatos sin pertinencia demostrable.
@@ -48,9 +49,9 @@ quedan detrás y no desplazan las locales.
 
 El endpoint agrega un objeto `fallback` con:
 
-- `message`: “Encontramos 1 opción que encaja mejor con tu pedido.” o
+- `message`: “Encontramos 1 opción que encaja con tu pedido.” o
   “Encontramos 2 opciones que encajan mejor con tu pedido.”
-- Para cero: “No encontramos opciones suficientemente buenas en esa zona. Podemos ayudarte
+- Para cero: “No encontramos opciones suficientemente buenas. Podemos ayudarte
   a coordinarlo manualmente.”
 - `outside_zone_message`: “Algunas opciones pueden quedar fuera de la zona exacta.”
 - `manual_coordination`: true con menos de tres o si se muestran alternativas externas/inciertas.
@@ -129,8 +130,8 @@ La media baja; mostrar menos aquí es intencional y no implica que no existan op
 
 ## Pruebas y límites
 
-`npm run check`: OK, 12/12 funciones. `npm test`: 293 aprobados, 0 fallidos,
-3 omitidos de Postgres (296 total). No se ejecutó SQL.
+`npm run check`: OK, 12/12 funciones. `npm test`: 296 aprobados, 0 fallidos,
+3 omitidos de Postgres (299 total). No se ejecutó SQL.
 
 Se agregan tests para 0/1/2 adecuadas, filtro antes del límite, duplicados/cerrados/faltantes,
 fuera de zona y Av. Belgrano, cliente viejo, mensajes y título, privacidad del link manual,
@@ -178,3 +179,39 @@ propuestas, emails, estados comerciales, Supabase, F3 ni la lógica de restricci
 - Fixtures/expectativas de regresión: `tests/google-compliance.test.js`, `tests/google-g1b.test.js`,
   `tests/photos.test.js`, `tests/matching-ranking.test.js`.
 - `docs/MATCHING-F5.md`.
+
+## Fix posterior a review: Z1, Z2 y copy N3
+
+Z1: se usa la relación inversa del catálogo ZONE_CHILDREN. Padre Palermo admite pedidos en
+Soho/Hollywood/Viejo/Chico/Las Cañitas; padre Belgrano admite R/C. Así la menor precisión
+Google no produce aviso externo ni vacía al cliente category. Esto no garantiza la ubicación
+exacta dentro del sub-barrio; no se cruza automáticamente entre sub-barrios hermanos.
+Las subcadenas de calles y barrios distintos continúan sin coincidir.
+
+Z2: un restaurant genérico de la respuesta de una consulta grill/vegan/cafe_brunch/baby_shower
+puede pasar el filtro F5 con las mismas señales de calidad. No se cambia pertinentType ni el
+comparador F2: cuando hay tipos específicos, quedan por encima del genérico dentro de la
+misma zona. Si sólo hay genéricos y no coincidencias específicas, F2 conserva su fallback.
+No se amplía a todos los *_restaurant en esos perfiles ni a hotel/hospital/otros tipos ajenos.
+El tipo genérico no prueba parrilla, dieta vegana, brunch o aptitud para baby shower.
+
+N3: singular sin “mejor”; mensaje cero sin “en esa zona”, tanto en API como panel.
+Se hace genérico para todos los ceros sin cambiar firma del endpoint ni sus llamadas.
+
+Los tests Z1/Z2 fallaron antes del fix y pasan después: familias completas, clientes nuevos/
+antiguos, caso genérico grill por endpoint, prioridad específica, rechazo de tipos ajenos,
+umbral intacto, una sola búsqueda y firmas válidas. Los snapshots F5 y F2/F1/F6a siguen
+reproducibles. La línea base F5 no cambia: el mundo sintético F6a filtra por familia de tipo
+según la query y no modela restaurantes genéricos devueltos a consultas parrilla/vegan ni
+las siete relaciones padre/sub-barrio. Esos casos nuevos están cubiertos por tests aparte;
+no se alteraron fixtures para forzar una mejora numérica.
+
+Riesgo residual importante: 20 reseñas sigue siendo un corte rígido, especialmente para
+salones/corporativo/baby shower; puede excluir opciones útiles o nuevas. No se flexibiliza en
+este fix. También permanecen la incertidumbre del sub-barrio y la especialidad no confirmada
+de restaurant genérico. Confirmar esto en Preview antes de publicar, sin asumir disponibilidad,
+capacidad, dieta segura o servicios. El flujo de restricciones obligatorias no cambia.
+
+Archivos del fix: api/_lib/plan.js, app.js, tests/matching-fallback.test.js,
+tests/matching-ranking.test.js (expectativa geográfica padre), docs/MATCHING-F5.md.
+No se modifican endpoints, consultas, Google requests, persistencia, costos ni fórmulas F2.
