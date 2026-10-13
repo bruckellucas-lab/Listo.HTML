@@ -3,7 +3,7 @@
    Ruta: /api/plan-options?category=restaurantes&zone=Palermo
 
    La usa la web principal para mostrar 3 lugares reales.
-   - Sólo acepta categorías de una lista cerrada (no búsquedas libres).
+   - Sólo acepta perfiles o categorías de una lista cerrada (no búsquedas libres).
    - Llama a Google Places (New) desde el servidor: la clave nunca sale de acá.
    - Guarda en "providers" SÓLO la fila mínima (google_place_id + datos de LISTO),
      sin duplicar. Nombre, dirección, rating, etc. no se guardan (G1B).
@@ -35,13 +35,19 @@ module.exports = async function handler(req, res) {
 
   var q = http.queryOf(req);
   var category = String(q.category || "");
-  if (!plan.CATEGORIES[category]) return sendError(res, 400, "Tipo de lugar no válido.");
-  var zone = plan.cleanZone(q.zone);
+  var hasProfile = Object.prototype.hasOwnProperty.call(q, "profile");
+  var profile = hasProfile && typeof q.profile === "string" ? q.profile : "";
+  if (hasProfile ? !plan.PROFILES[profile] : !plan.CATEGORIES[category]) return sendError(res, 400, "Tipo de lugar no válido.");
+  var safeZone = plan.profileZone(q.zone);
+  var zone = hasProfile ? safeZone : (safeZone === null ? null : plan.cleanZone(q.zone));
+  if (zone === null) return sendError(res, 400, "No reconocemos esa zona. Elegí un barrio o localidad reconocida.");
+  var searchKey = (hasProfile ? profile : category) + "|" + zone.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  var query = hasProfile ? plan.buildProfileQuery(profile, zone) : plan.buildQuery(category, zone);
 
   // El límite por visitante conserva su fallback. Los presupuestos globales siguientes
   // fallan cerrado: sin contador persistente no se llama a Google.
   if (!(await rateLimit.guard(req, res, "plan_options", { limitMessage: "Hiciste muchas búsquedas seguidas. Esperá unos minutos y probá de nuevo." }))) return;
-  if (!(await cost.guard(req, res, ["search_repeat", "search_all", "search_day"], { key: category + "|" + zone.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "") }))) return;
+  if (!(await cost.guard(req, res, ["search_repeat", "search_all", "search_day"], { key: searchKey }))) return;
 
   var apiKey = http.env("GOOGLE_PLACES_API_KEY");
   if (!apiKey) return sendError(res, 503, "LISTO no puede buscar lugares en este momento. Probá de nuevo más tarde.");
@@ -49,7 +55,7 @@ module.exports = async function handler(req, res) {
   // 1) Google Places: 20 resultados cuestan lo mismo que 3, y dan margen para elegir bien.
   var found;
   try {
-    found = await places.searchText(apiKey, plan.buildQuery(category, zone), places.MAX_RESULTS);
+    found = await places.searchText(apiKey, query, places.MAX_RESULTS);
   } catch (err) {
     log.error("[plan-options] Google:", err);
     return sendError(res, 502, err.status === 429
@@ -91,7 +97,7 @@ module.exports = async function handler(req, res) {
       website: row.website,
       maps_url: row.maps_url,
       photo: photo,
-      // Comprobante para "Elegir esta opción" (sin secreto no hay comprobante: se valida contra providers).
+      // Comprobante para "Elegir esta opción" (sin secreto no hay comprobante: elegir falla cerrado).
       option_token: secret ? optionToken.sign(secret, row.google_place_id) : null
     };
   });
@@ -102,5 +108,5 @@ module.exports = async function handler(req, res) {
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("X-Robots-Tag", "noindex");
-  res.end(JSON.stringify({ ok: true, category: category, zone: zone, options: options, providers_saved: saved }));
+  res.end(JSON.stringify({ ok: true, category: category, profile: hasProfile ? profile : null, zone: zone, options: options, providers_saved: saved }));
 };

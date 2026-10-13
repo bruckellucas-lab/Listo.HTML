@@ -43,7 +43,7 @@ test('F6a fixtures sólo sintéticos y no simulan certezas comerciales ni datos 
 });
 test('F6a guardianes productivos G/S2D/S2E siguen presentes sin agregar persistencia/ranking',()=>{
  var root=path.join(__dirname,'..'),src=fs.readFileSync(path.join(root,'api/plan-options.js'),'utf8'),photo=fs.readFileSync(path.join(root,'api/place-photo.js'),'utf8');
- assert.match(src,/search_repeat/);assert.match(src,/key: category \+ "\|" \+ zone/);assert.doesNotMatch(src,/original_prompt|contact_phone|user_comment/);assert.match(photo,/no-store/);
+ assert.match(src,/search_repeat/);assert.match(src,/key: searchKey/);assert.doesNotMatch(src,/original_prompt|contact_phone|user_comment/);assert.match(photo,/no-store/);
  var stored=require('../api/_lib/providers-store').STORED_FIELDS;assert.deepEqual(stored,['google_place_id','source','provider_status','last_verified_at']);
  var fns=fs.readdirSync(path.join(root,'api')).filter(n=>n.endsWith('.js'));assert.equal(fns.length,12);
  assert.ok(fs.existsSync(path.join(root,'tests/google-compliance.test.js')));assert.ok(fs.existsSync(path.join(root,'tests/cost-abuse.test.js')));assert.ok(fs.existsSync(path.join(root,'tests/privacy-memory.test.js')));

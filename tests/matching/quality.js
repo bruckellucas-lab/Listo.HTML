@@ -3,8 +3,8 @@ var plan=require('../../api/_lib/plan'),places=require('../../api/_lib/google-pl
 var NOW='2026-10-07T12:00:00.000Z';
 var priceNote=require('node:fs').readFileSync(require('node:path').join(__dirname,'../../app.js'),'utf8').match(/var PRICE_NOTE = "([^"]+)";/)[1];
 function current(s){var category=legacy.chooseCategory(s),zone=plan.cleanZone(s.zone);return {request:{textQuery:plan.buildQuery(category,zone)},costKey:category+'|'+world.norm(zone),pick:(found)=>{var status={};found.forEach(p=>status[p.id]=p.businessStatus);return plan.pickOptions(places.toProviderRows(found,NOW).rows,zone,status,3).map(p=>({id:p.google_place_id,text:priceNote,reasons:[],claims:[]}));}};}
-function run(adapter,opts){opts=opts||{};adapter=adapter||current;var results=scenarios.map(s=>{
- var a=adapter(s);if(opts.futureContract)guard.assertRequest(a.request,s.profile,s.invalidZone?'':s.zone,a.costKey);var found=world.search(a.request),byId=new Map(found.map(p=>[p.id,p]));
+function run(adapter,opts){opts=opts||{};adapter=adapter||current;var testWorld=opts.world||world;var results=(opts.scenarios||scenarios).map(s=>{
+ var a=adapter(s);if(opts.futureContract)guard.assertRequest(a.request,s.profile,s.invalidZone?'':s.zone,a.costKey);var found=testWorld.search(a.request),byId=new Map(found.map(p=>[p.id,p]));
  var seen=new Set();function pertinent(p){return s.relevant.includes(p.primaryType);}function inZone(p){return !s.zone||s.invalidZone||world.norm(world.zoneOf(p))===world.norm(s.zone);}
  function adequate(p){return pertinent(p)&&inZone(p)&&p.businessStatus==='OPERATIONAL'&&p.rating>=4&&p.userRatingCount>=20;}
  var available=found.filter(p=>{if(!adequate(p))return false;var key=world.norm(p.displayName.text);if(seen.has(key))return false;seen.add(key);return true;});

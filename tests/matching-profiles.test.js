@@ -1,0 +1,108 @@
+"use strict";
+var test = require("node:test"), assert = require("node:assert/strict");
+var h = require("./helpers"), plan = require("../api/_lib/plan"), f1 = require("./matching/f1");
+var rate = require("../api/_lib/rate-limit");
+process.env.SUPABASE_URL = "https://test.invalid";
+process.env.SUPABASE_SECRET_KEY = "fake";
+process.env.RATE_LIMIT_SECRET = "f1-local-rate-secret-1234567890123456";
+process.env.GOOGLE_PLACES_API_KEY = "fake-google";
+async function search(query, ip) {
+  var req = h.fakeReq("GET", {}, undefined, ip), res = h.fakeRes(); req.query = query;
+  await require("../api/plan-options")(req, res); return res;
+}
+function network() {
+  return h.mockFetch([h.rpcRule(), {match: /places:searchText$/, reply: () => h.response(200, {places: []})}]);
+}
+function googleCalls(fetch) { return fetch.calls.filter(c => /places:searchText$/.test(c.url)); }
+test("F1 perfiles cerrados, consultas de servidor y metadatos sin promesas", () => {
+  for (var id of Object.keys(plan.PROFILES)) {
+    assert.equal(plan.PROFILES[id].id, id);
+    assert.ok(plan.PROFILES[id].primaryTypes.length);
+    assert.equal(plan.buildProfileQuery(id, " PÁLERMO "), plan.PROFILES[id].textQuery + " en palermo, Buenos Aires");
+  }
+  for (var id of ["constructor", "toString", "__proto__", "texto libre"]) assert.equal(plan.buildProfileQuery(id, "Palermo"), "");
+  for (var zone of ["Ana Perez", "en Marzo", "ana@example.invalid", "Palermo".repeat(100)]) assert.equal(plan.profileZone(zone), null);
+  assert.equal(plan.buildProfileQuery("grill", ""), "parrillas en Buenos Aires");
+  assert.equal(plan.buildProfileQuery("grill", "Rosario"), "parrillas en rosario");
+  assert.equal(plan.buildProfileQuery("dinner", "Buenos Aires"), "restaurantes en buenos aires");
+  assert.equal(plan.profileZone(["Palermo"]), null);
+  var source = require("node:fs").readFileSync(require("node:path").join(h.ROOT, "app.js"), "utf8");
+  var zoneList = source.match(/var ZONES = (\[[\s\S]*?\]).sort/)[1];
+  JSON.parse(zoneList).forEach(zone => assert.notEqual(plan.profileZone(zone), null, zone));
+});
+test("F1 mapea tipos/necesidades a ids; sin usar prompt, contacto ni alergias", () => {
+  var examples = [["Asado", "grill"], ["Baby shower", "baby_shower"], ["Cena romántica", "romantic"], ["After office", "after_office"], ["Corporativo", "corporate"], ["Brunch", "cafe_brunch"], ["Cena vegana", "vegan"], ["Cumpleaños", "celebration"], ["Cena", "dinner"]];
+  examples.forEach(([type, profile]) => assert.equal(f1.chooseProfile({type, guests:25, needs:["comida"]}), profile));
+  assert.equal(f1.chooseProfile({type:"Fiesta", needs:["musica", "deco", "torta", "fotos"]}), "multi_service");
+  assert.equal(f1.chooseProfile({type:"Cena", original_prompt:"asado", allergy:"vegan", contact_name:"parrilla"}), "dinner");
+  assert.equal(f1.chooseProfile({type:"Cena", diet:{on:{vegan:true}}}), "vegan");
+});
+test("F1 request real a Google excluye todos los campos libres y mantiene es/AR/no-store", async t => {
+  var fetch = network(); t.mock.method(global, "fetch", fetch);
+  var res = await search({profile:"grill", zone:"Palermo", original_prompt:"Ana 1122334455 ana@example.invalid", allergies:"maní", comments:"nota privada", budget:"123456", textQuery:"secreto", includedType:"hospital"});
+  assert.equal(res.statusCode, 200); assert.equal(res.headers["cache-control"], "no-store");
+  assert.deepEqual(JSON.parse(googleCalls(fetch)[0].body), {textQuery:"parrillas en palermo, Buenos Aires", pageSize:20, languageCode:"es", regionCode:"AR"});
+  assert.doesNotMatch(JSON.stringify(fetch.calls), /Ana|1122334455|ana@example|maní|nota privada|123456|hospital/);
+});
+test("F1 categorías viejas siguen funcionando; profile presente inválido no cae al alias", async t => {
+  var fetch = network(); t.mock.method(global, "fetch", fetch);
+  for (var category of ["restaurantes", "bares", "salones"]) {
+    assert.equal((await search({category, zone:"Palermo"})).statusCode, 200);
+    assert.equal(JSON.parse(googleCalls(fetch).at(-1).body).textQuery, plan.buildQuery(category, "Palermo"));
+  }
+  var count = fetch.calls.length;
+  for (var profile of ["", "constructor", "__proto__", "inventado", ["dinner"]]) assert.equal((await search({profile, category:"restaurantes", zone:"Palermo"})).statusCode, 400);
+  for (var profile of ["dinner", undefined]) {
+    var query = {category:"restaurantes", zone:"Ana Perez"}; if (profile) query.profile = profile;
+    assert.equal((await search(query)).statusCode, 400);
+  }
+  assert.equal(fetch.calls.length, count);
+});
+test("F1 search_repeat real persiste profile|zona normalizada antes de Google; topes intactos", async t => {
+  var fetch = network(), ip = "10.70.0.1"; t.mock.method(global, "fetch", fetch);
+  for (var zone of [" PÁLERMO ", "palermo"]) assert.equal((await search({profile:"grill", zone}, ip)).statusCode, 200);
+  assert.equal((await search({profile:"grill", zone:"Palermo"}, ip)).statusCode, 429);
+  assert.equal(googleCalls(fetch).length, 2);
+  assert.equal((await search({profile:"dinner", zone:"Palermo"}, ip)).statusCode, 200);
+  var expected = rate.visitorKey(process.env.RATE_LIMIT_SECRET, "search_repeat", ip + "|grill|palermo");
+  var hits = fetch.calls.filter(c => /listo_rate_limit_hit$/.test(c.url)).map(c => JSON.parse(c.body)).filter(b => b.p_key === expected);
+  assert.equal(hits.length, 3); assert.ok(hits.every(b => b.p_max === 2 && b.p_window_seconds === 10 && b.p_scope === "plan_options"));
+  assert.ok(fetch.calls.findIndex(c => /listo_rate_limit_hit$/.test(c.url) && JSON.parse(c.body).p_key === expected) < fetch.calls.findIndex(c => /places:searchText$/.test(c.url)));
+  assert.equal(rate.LIMITS.search_all.max, 200); assert.equal(rate.LIMITS.search_day.max, 1000);
+});
+test("F1 contador persistente caído falla cerrado sin Google", async t => {
+  t.mock.method(console, "error", () => {});
+  var fetch = h.mockFetch([{match:/rpc/, reply:() => h.response(500, {code:"XX000"})}]);
+  t.mock.method(global, "fetch", fetch);
+  assert.equal((await search({profile:"grill", zone:"Palermo"})).statusCode, 503);
+  assert.equal(googleCalls(fetch).length, 0);
+});
+test("F1 línea base sintética reproducible; ranking idéntico y omisiones hasta tres no empeoran", () => {
+  var baseline = require("./fixtures/matching/baseline-f1.json");
+  assert.deepEqual(f1.report(), baseline);
+  assert.equal(baseline.after.summary.prohibitedTexts, 0);
+  assert.equal(baseline.after.summary.unverifiedClaims, 0);
+  assert.ok(baseline.after.summary.adequateMissedSlots <= baseline.before.summary.adequateMissedSlots);
+  assert.ok(baseline.after.summary.distinctSearches > baseline.before.summary.distinctSearches);
+  assert.equal(baseline.after.targets.paddingMet, true);
+  assert.equal(baseline.after.targets.zoneNoticeMet, false);
+});
+test("F1 resultado normal conserva option_token y guarda sólo ids/datos LISTO", async t => {
+  process.env.PHOTO_SIGNING_SECRET = "f1-photo-secret-12345678901234567890";
+  var id = "ChIJabcdefghij0001";
+  var fetch = h.mockFetch([h.rpcRule(),
+    {match:/places:searchText$/, reply:() => h.response(200, {places:[{id, displayName:{text:"Parrilla de prueba"}, primaryType:"steak_house", formattedAddress:"Palermo, Buenos Aires", businessStatus:"OPERATIONAL", rating:4.5, userRatingCount:100}]})},
+    {match:/\/rest\/v1\/providers/, reply:c => h.response(c.method === "GET" ? 200 : 201, c.method === "GET" ? [] : null)}
+  ]);
+  t.mock.method(global, "fetch", fetch);
+  var res = await search({profile:"grill", zone:"Palermo"});
+  assert.equal(res.statusCode, 200); assert.equal(res.json().providers_saved, true);
+  var option = res.json().options[0]; assert.equal(option.name, "Parrilla de prueba");
+  assert.equal(require("../api/_lib/option-token").verify(process.env.PHOTO_SIGNING_SECRET, id, option.option_token), "");
+  var writes = fetch.calls.filter(c => /providers/.test(c.url) && c.method === "POST");
+  assert.equal(writes.length, 1);
+  var row = JSON.parse(writes[0].body)[0];
+  assert.deepEqual(Object.keys(row).sort(), ["google_place_id", "source", "provider_status", "last_verified_at"].sort());
+  assert.equal(row.google_place_id, id);
+  assert.doesNotMatch(writes[0].body, /Parrilla de prueba|steak_house|Palermo|rating|photos/);
+});

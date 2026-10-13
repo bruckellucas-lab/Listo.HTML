@@ -747,7 +747,24 @@
   var searchButton = $("#details-form button[type=submit]");
   var PRICE_NOTE = "Precio y disponibilidad a confirmar";
 
-  // Lógica simple: tragos → bares; eventos grandes → salones; el resto → restaurantes.
+  // Sólo se transmite este id cerrado, nunca las palabras usadas para detectarlo.
+  function chooseProfile(d) {
+    var type = normalize(d.type), ids = d.needs || [];
+    if (/asado|parrilla/.test(type)) return "grill";
+    if (/baby shower/.test(type)) return "baby_shower";
+    if (/corporativo/.test(type)) return "corporate";
+    if (/after office/.test(type)) return "after_office";
+    if (/romantica|romantico|aniversario/.test(type)) return "romantic";
+    if (/brunch|cafe|merienda/.test(type)) return "cafe_brunch";
+    if (d.diet && d.diet.on && (d.diet.on.vegan || d.diet.on.vegetarian)) return "vegan";
+    if (/vegana|vegano|vegetariana|vegetariano/.test(type)) return "vegan";
+    if (ids.filter(function (id) { return ["musica", "deco", "torta", "fotos"].indexOf(id) !== -1; }).length >= 2) return "multi_service";
+    if (/cumple|fiesta/.test(type) && (d.guests || 0) < 40) return "celebration";
+    var category = chooseCategory(d);
+    return category === "bares" ? "bars" : category === "salones" ? "venues" : "dinner";
+  }
+
+  // Compatibilidad y fallback: categorías anteriores, sin cambiar su lógica.
   function chooseCategory(d) {
     var ids = d.needs || [];
     var type = normalize(d.type);
@@ -808,8 +825,8 @@
     }
     $("#loading").hidden = false;
 
-    var category = chooseCategory(d);
-    var url = "/api/plan-options?category=" + encodeURIComponent(category) + "&zone=" + encodeURIComponent(d.zone || "");
+    var profile = chooseProfile(d);
+    var url = "/api/plan-options?profile=" + encodeURIComponent(profile) + "&zone=" + encodeURIComponent(d.zone || "");
     var controller = "AbortController" in window ? new AbortController() : null;
     var timer = controller ? setTimeout(function () { controller.abort(); }, SEARCH_TIMEOUT_MS) : null;
 

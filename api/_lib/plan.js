@@ -46,6 +46,43 @@ function buildQuery(category, zone) {
   return label + " en " + zone + suffix;
 }
 
+// F1: consultas y tipos cerrados. Los tipos quedan como metadata; no cambian el ranking.
+var PROFILES = Object.create(null);
+[
+  ["dinner", "Cena", "restaurantes", ["restaurant", "italian_restaurant", "fine_dining_restaurant"]],
+  ["grill", "Parrilla", "parrillas", ["steak_house", "barbecue_restaurant"]],
+  ["vegan", "Preferencia veggie", "restaurantes veganos", ["vegan_restaurant", "vegetarian_restaurant"]],
+  ["romantic", "Cena romántica", "restaurantes para cena romantica", ["restaurant", "fine_dining_restaurant"]],
+  ["cafe_brunch", "Café / brunch", "cafes y brunch", ["cafe", "brunch_restaurant"]],
+  ["bars", "Bar", "bares", ["bar", "pub", "cocktail_bar"]],
+  ["after_office", "After office", "bares para after office", ["bar", "pub", "cocktail_bar"]],
+  ["celebration", "Celebración", "salones para celebraciones", ["event_venue", "banquet_hall", "bar"]],
+  ["baby_shower", "Baby shower", "lugares para baby shower", ["cafe", "brunch_restaurant", "event_venue"]],
+  ["multi_service", "Evento con varias necesidades", "salones para eventos", ["event_venue", "banquet_hall"]],
+  ["venues", "Salón", "salones para eventos", ["event_venue", "banquet_hall", "wedding_venue"]],
+  ["corporate", "Evento corporativo", "salones para eventos corporativos", ["event_venue", "convention_center"]]
+].forEach(function (p) {
+  PROFILES[p[0]] = Object.freeze({ id: p[0], label: p[1], textQuery: p[2], primaryTypes: Object.freeze(p[3]) });
+});
+Object.freeze(PROFILES);
+
+var SEARCH_ZONES = BA_ZONES.concat(["la plata", "rosario", "cordoba", "mendoza", "mar del plata", "bariloche", "salta", "tucuman", "buenos aires"]);
+
+function profileZone(value) {
+  if (value !== undefined && value !== null && typeof value !== "string") return null;
+  var zone = norm(value);
+  if (!zone) return "";
+  // No truncar ni interpolar texto libre. Sólo nombres del catálogo existente.
+  return SEARCH_ZONES.indexOf(zone) !== -1 ? zone : null;
+}
+
+function buildProfileQuery(id, zone) {
+  var profile = PROFILES[id], safeZone = profileZone(zone);
+  if (!profile || safeZone === null) return "";
+  return profile.textQuery + " en " + (safeZone || "Buenos Aires") +
+    (BA_ZONES.indexOf(safeZone) !== -1 && safeZone !== "caba" && safeZone !== "capital federal" ? ", Buenos Aires" : "");
+}
+
 function zoneMatches(row, zone) {
   var z = norm(zone);
   if (!z) return false;
@@ -93,6 +130,9 @@ function shortAddress(address) {
 
 module.exports = {
   CATEGORIES: CATEGORIES,
+  PROFILES: PROFILES,
+  profileZone: profileZone,
+  buildProfileQuery: buildProfileQuery,
   MIN_REVIEWS: MIN_REVIEWS,
   cleanZone: cleanZone,
   buildQuery: buildQuery,
