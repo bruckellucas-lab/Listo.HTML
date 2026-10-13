@@ -87,7 +87,8 @@ test("F2 endpoint real usa primaryType, firma opciones, no guarda score/type ni 
   t.mock.method(global, "fetch", fetch);
   var res = await endpoint({profile:"grill", zone:"Palermo"});
   assert.equal(res.statusCode, 200); assert.equal(res.headers["cache-control"], "no-store");
-  assert.deepEqual(res.json().options.map(p => p.google_place_id), [fixtures[1].id, fixtures[3].id, fixtures[2].id]);
+  assert.deepEqual(res.json().options.map(p => p.google_place_id), [fixtures[1].id, fixtures[3].id]);
+  assert.equal(res.json().fallback.manual_coordination, true);
   res.json().options.forEach(p => {
     assert.equal(require("../api/_lib/option-token").verify(process.env.PHOTO_SIGNING_SECRET, p.google_place_id, p.option_token), "");
     for (var field of ["score", "quality", "relevant", "primaryType", "reasons", "capacity", "price", "availability"]) assert.equal(Object.hasOwn(p, field), false);
@@ -99,7 +100,7 @@ test("F2 endpoint real usa primaryType, firma opciones, no guarda score/type ni 
   }
   var legacy = await endpoint({category:"restaurantes", zone:"Palermo"});
   assert.equal(legacy.statusCode, 200);
-  assert.deepEqual(legacy.json().options.map(p => p.google_place_id), [fixtures[0].id, fixtures[1].id, fixtures[3].id]);
+  assert.deepEqual(legacy.json().options.map(p => p.google_place_id), [fixtures[1].id, fixtures[3].id]);
 });
 test("F2 snapshot reproducible compara F1 publicado con igual consulta/mundo, sin nuevas certezas", () => {
   var f2 = require("./matching/f2"), baseline = require("./fixtures/matching/baseline-f2.json");

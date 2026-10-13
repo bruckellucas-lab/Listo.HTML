@@ -201,6 +201,36 @@ function pickOptions(rows, zone, statusById, max, ranking) {
   return candidates.slice(0, max).map(function (c) { return c.row; });
 }
 
+// F5 filtra antes de limitar a tres, para no perder adecuadas más abajo en la respuesta.
+var LEGACY_PROFILES = Object.assign(Object.create(null), { restaurantes: "dinner", bares: "bars", salones: "venues" });
+function pickAdequateOptions(rows, zone, statusById, max, ranking) {
+  ranking = ranking || {};
+  var profile = typeof ranking.profile === "string" ? PROFILES[ranking.profile] : null;
+  if (!profile) return [];
+  var adequate = rows.filter(function (row) {
+    var place = ranking.placesById && Object.prototype.hasOwnProperty.call(ranking.placesById, row.google_place_id)
+      ? ranking.placesById[row.google_place_id] : null;
+    return !!(place && pertinentType(profile, place.primaryType)) &&
+      (ranking.allowOutsideZone !== false || !zone || zoneMatches(row, zone)) &&
+      qualityScore(row) !== null && row.rating >= 4 && row.review_count >= MIN_REVIEWS;
+  });
+  return pickOptions(adequate, zone, statusById, max, ranking);
+}
+function optionZoneNotice(row, zone) {
+  if (!zone || zoneMatches(row, zone)) return "";
+  return row.zone && profileZone(row.zone) ? "Puede quedar fuera de la zona exacta." : "Zona a confirmar.";
+}
+function optionsFeedback(options) {
+  var count = options.length, outside = options.some(function (o) { return o.outside_zone; });
+  return {
+    message: count === 0 ? "No encontramos opciones suficientemente buenas en esa zona. Podemos ayudarte a coordinarlo manualmente."
+      : count === 1 ? "Encontramos 1 opción que encaja mejor con tu pedido."
+      : count === 2 ? "Encontramos 2 opciones que encajan mejor con tu pedido." : "",
+    manual_coordination: count < 3 || outside,
+    outside_zone_message: outside ? "Algunas opciones pueden quedar fuera de la zona exacta." : ""
+  };
+}
+
 // "Gorriti 5000, C1414 CABA, Argentina" → "Gorriti 5000"
 function shortAddress(address) {
   var first = String(address || "").split(",")[0].trim();
@@ -216,6 +246,10 @@ module.exports = {
   cleanZone: cleanZone,
   buildQuery: buildQuery,
   pickOptions: pickOptions,
+  pickAdequateOptions: pickAdequateOptions,
+  LEGACY_PROFILES: LEGACY_PROFILES,
+  optionZoneNotice: optionZoneNotice,
+  optionsFeedback: optionsFeedback,
   shortAddress: shortAddress,
   qualityScore: qualityScore,
   zoneMatches: zoneMatches

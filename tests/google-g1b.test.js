@@ -44,7 +44,7 @@ function quiet(fn) {
   return Promise.resolve().then(fn).finally(function () { console.error = orig; });
 }
 function gPlace(i) {
-  return { id: "ChIJabcdefghij000" + i, displayName: { text: "Lugar " + i }, formattedAddress: "Calle " + i + ", Palermo",
+  return { primaryType: "restaurant", id: "ChIJabcdefghij000" + i, displayName: { text: "Lugar " + i }, formattedAddress: "Calle " + i + ", Palermo",
     addressComponents: [{ types: ["neighborhood"], longText: "Palermo" }], location: { latitude: -34.5, longitude: -58.4 },
     primaryTypeDisplayName: { text: "Restaurante" }, websiteUri: "https://lugar" + i + ".example",
     rating: 4.5, userRatingCount: 100 + i, businessStatus: "OPERATIONAL", googleMapsUri: "https://maps.google.com/?cid=" + i,

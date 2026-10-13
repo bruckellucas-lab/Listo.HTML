@@ -20,7 +20,7 @@ var placePhoto = require("../api/place-photo");
 var NAME = "places/ChIJabcdefghij1234/photos/AbCdEfGhIjKlMnOp";
 
 function googlePlace(i) {
-  return { id: "ChIJabcdefghij00" + i, displayName: { text: "Lugar " + i }, formattedAddress: "Calle " + i + ", Palermo",
+  return { primaryType: "restaurant", id: "ChIJabcdefghij00" + i, displayName: { text: "Lugar " + i }, formattedAddress: "Calle " + i + ", Palermo",
     rating: 4.5, userRatingCount: 100 + i, businessStatus: "OPERATIONAL",
     photos: [{ name: "places/ChIJabcdefghij00" + i + "/photos/AbCdEfGhIjKlMnOp" + i, widthPx: 800, heightPx: 600, authorAttributions: [{ displayName: "Autor" }] }] };
 }

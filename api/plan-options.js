@@ -2,7 +2,7 @@
    LISTO — Función serverless de Vercel
    Ruta: /api/plan-options?category=restaurantes&zone=Palermo
 
-   La usa la web principal para mostrar 3 lugares reales.
+   La usa la web principal para mostrar hasta 3 lugares reales.
    - Sólo acepta perfiles o categorías de una lista cerrada (no búsquedas libres).
    - Llama a Google Places (New) desde el servidor: la clave nunca sale de acá.
    - Guarda en "providers" SÓLO la fila mínima (google_place_id + datos de LISTO),
@@ -84,12 +84,15 @@ module.exports = async function handler(req, res) {
     }
   }
 
-  // 3) Elegir 3 y armar lo que ve el usuario (sólo datos informados por Google).
+  // 3) Elegir hasta 3 adecuadas y armar lo que ve el usuario (sólo datos informados por Google).
   // Sin PHOTO_SIGNING_SECRET las opciones salen igual, sin foto (placeholder de LISTO).
   var secret = photos.signingSecret();
-  var options = plan.pickOptions(converted.rows, zone, statusById, 3, { profile: profile, placesById: placeById }).map(function (row) {
+  var options = plan.pickAdequateOptions(converted.rows, zone, statusById, 3, { profile: hasProfile ? profile : plan.LEGACY_PROFILES[category], placesById: placeById, allowOutsideZone: hasProfile }).map(function (row) {
     var photo = secret ? photos.photosForPlace(placeById[row.google_place_id], secret, { max: 1 })[0] || null : null;
+    var zoneNotice = plan.optionZoneNotice(row, zone);
     return {
+      outside_zone: !!zoneNotice,
+      zone_notice: zoneNotice,
       google_place_id: row.google_place_id,
       name: row.name,
       category: row.category,
@@ -111,5 +114,5 @@ module.exports = async function handler(req, res) {
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("X-Robots-Tag", "noindex");
-  res.end(JSON.stringify({ ok: true, category: category, profile: hasProfile ? profile : null, zone: zone, options: options, providers_saved: saved }));
+  res.end(JSON.stringify({ ok: true, category: category, profile: hasProfile ? profile : null, zone: zone, options: options, fallback: plan.optionsFeedback(options), providers_saved: saved }));
 };

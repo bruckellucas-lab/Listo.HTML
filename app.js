@@ -828,6 +828,7 @@
       setSearching(false);
       return;
     }
+    setOptionsTitle(null);
     $("#loading").hidden = false;
 
     var profile = chooseProfile(d);
@@ -989,6 +990,7 @@
 
   // Mensaje elegante dentro de LISTO (sin resultados o error). Nunca vuelve a la demo.
   function renderMessage(title, text, canRetry) {
+    setOptionsTitle(null);
     var box = $("#proposals");
     box.innerHTML =
       '<div class="proposals-message" role="status">' +
@@ -1039,16 +1041,51 @@
     '</figure>';
   }
 
+  function setOptionsTitle(count) {
+    var lines = $all("#proposals-title .line > span");
+    if (lines.length < 2) return;
+    lines[0].textContent = count === null ? "Tus opciones" : count === 0 ? "Busquemos" : count + (count === 1 ? " forma" : " formas");
+    lines[1].textContent = count === null ? "para este plan." : count === 0 ? "otra forma." : "de hacerlo.";
+  }
+
+  // Sólo mensajes cerrados derivados del resultado en memoria; no se guarda contenido Google.
+  function optionsFeedback(list) {
+    var count = list.length, outside = list.some(function (o) { return o.outside_zone; });
+    return {
+      message: count === 0 ? "No encontramos opciones suficientemente buenas en esa zona. Podemos ayudarte a coordinarlo manualmente."
+        : count === 1 ? "Encontramos 1 opción que encaja mejor con tu pedido."
+        : count === 2 ? "Encontramos 2 opciones que encajan mejor con tu pedido." : "",
+      manual_coordination: count < 3 || outside,
+      outside_zone_message: outside ? "Algunas opciones pueden quedar fuera de la zona exacta." : ""
+    };
+  }
+
+  function optionsFeedbackHTML(list) {
+    var feedback = optionsFeedback(list);
+    if (!feedback.message && !feedback.outside_zone_message) return "";
+    // El usuario inicia el contacto. No se precargan prompt, contactos ni restricciones.
+    var manualURL = "https://wa.me/" + LISTO_WHATSAPP + "?text=" + encodeURIComponent("Hola LISTO. Quiero ayuda para coordinar un plan.");
+    return '<div class="proposals-message" role="status">' +
+      (feedback.message ? '<p class="proposals-message-text">' + escapeHTML(feedback.message) + '</p>' : '') +
+      (feedback.outside_zone_message ? '<p class="proposals-message-text">' + escapeHTML(feedback.outside_zone_message) + '</p>' : '') +
+      (feedback.manual_coordination ? '<div class="proposals-message-actions">' +
+        '<a class="btn btn-dark" style="text-decoration:none" href="' + escapeHTML(manualURL) + '" target="_blank" rel="noopener noreferrer">Coordinar con LISTO <span aria-hidden="true">→</span></a>' +
+        '<button type="button" class="btn-text" data-action="details">← Ajustar el plan</button></div>' : '') +
+      '</div>';
+  }
+
   function renderOptions() {
     var box = $("#proposals");
     var list = state.options || [];
     var hard = hardRequirements();
     if (hard.length) { renderSensitive(hard); return; }
+    setOptionsTitle(list.length);
     if (!list.length) {
-      renderMessage("Todavía no.", "No encontramos una opción que encaje todavía. Probá ampliando la zona o cambiando algún detalle.", false);
+      box.innerHTML = optionsFeedbackHTML(list);
       return;
     }
-    box.innerHTML = list.map(function (o, i) {
+    var feedbackHTML = optionsFeedbackHTML(list);
+    var cardsHTML = list.map(function (o, i) {
       var num = "0" + (i + 1);
       var where = [o.zone, o.address_short].filter(Boolean).join(" — ");
       var maps = safeHttps(o.maps_url);
@@ -1060,6 +1097,7 @@
             '<div class="card-top"><span>' + num + '</span><span>' + escapeHTML(o.category || "Lugar") + '</span></div>' +
             '<h3 class="card-title">' + escapeHTML(o.name) + '</h3>' +
             '<p class="card-zone">' + escapeHTML(where || "Dirección a confirmar") + '</p>' +
+            (o.outside_zone ? '<p class="card-desc" role="note">' + escapeHTML(o.zone_notice || "Zona a confirmar.") + '</p>' : '') +
             '<p class="card-desc">' + escapeHTML(ratingText(o)) + '</p>' +
             '<p class="card-attr">Datos del lugar: ' + GMAPS + '</p>' +
             '<p class="card-price">' + PRICE_NOTE + '</p>' +
@@ -1076,6 +1114,9 @@
           '</div>' +
         '</article>';
     }).join("");
+    // El aviso no cambia el índice de las tarjetas ni su disposición existente.
+    box.innerHTML = feedbackHTML + (feedbackHTML
+      ? '<div class="proposals" style="grid-column:1/-1">' + cardsHTML + '</div>' : cardsHTML);
 
     $all("#proposals .photo img").forEach(watchImage);
     if (state.selected) markSelected(state.selected);

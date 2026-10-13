@@ -31,7 +31,7 @@ var PHOTO_NAME = "places/ChIJabcdefghij0001/photos/AbCdEfGhIjKlMnOp1";
 var PHOTO_SOURCE = "https://www.google.com/maps/place//data=!3m4!1e2!3m2!1sFOTO1";
 
 function gPlace(i) {
-  return { id: "ChIJabcdefghij000" + i, displayName: { text: "Lugar " + i }, formattedAddress: "Calle " + i + ", Palermo",
+  return { primaryType: "restaurant", id: "ChIJabcdefghij000" + i, displayName: { text: "Lugar " + i }, formattedAddress: "Calle " + i + ", Palermo",
     rating: 4.5, userRatingCount: 100 + i, businessStatus: "OPERATIONAL", googleMapsUri: "https://maps.google.com/?cid=" + i,
     photos: [{ name: "places/ChIJabcdefghij000" + i + "/photos/AbCdEfGhIjKlMnOp" + i, widthPx: 800, heightPx: 600,
       authorAttributions: [{ displayName: "Autora " + i, uri: "https://maps.google.com/maps/contrib/" + i }],
