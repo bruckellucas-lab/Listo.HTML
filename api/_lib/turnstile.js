@@ -9,6 +9,7 @@
      en los registros sólo quedan códigos técnicos de Cloudflare.
    ========================================================= */
 "use strict";
+var log = require("./private-log");
 
 var http = require("./http");
 
@@ -50,14 +51,14 @@ async function verify(req, token, opts) {
   var env = opts.env || http.env;
   var secret = env("TURNSTILE_SECRET_KEY");
   if (!secret) {
-    console.error("[turnstile] falta TURNSTILE_SECRET_KEY → solicitud frenada");
+    log.error("[turnstile] falta TURNSTILE_SECRET_KEY → solicitud frenada");
     return fail(503, "unavailable", "missing-secret");
   }
   if (typeof token !== "string" || !token || token.length > MAX_TOKEN) return fail(400, "missing", "missing-token");
 
   var hostname = requestHostname(req);
   if (!hostname) {
-    console.error("[turnstile] no se pudo leer el hostname del pedido");
+    log.error("[turnstile] no se pudo leer el hostname del pedido");
     return fail(403, "rejected", "bad-request-host");
   }
 
@@ -75,12 +76,12 @@ async function verify(req, token, opts) {
     });
     var text = await res.text();
     if (!res.ok) {
-      console.error("[turnstile] Cloudflare respondió " + res.status);
+      log.error("[turnstile] Cloudflare respondió", { status: res.status });
       return fail(503, "unavailable", "siteverify-http-" + res.status);
     }
     data = JSON.parse(text);
   } catch (err) {
-    console.error("[turnstile] Cloudflare no respondió:", err && err.name === "AbortError" ? "tiempo de espera agotado" : "error de red o respuesta inválida");
+    log.error("[turnstile] Cloudflare no respondió:", err);
     return fail(503, "unavailable", "siteverify-unreachable");
   } finally {
     clearTimeout(timer);
@@ -89,17 +90,17 @@ async function verify(req, token, opts) {
   var codes = Array.isArray(data && data["error-codes"]) ? data["error-codes"].filter(function (c) { return typeof c === "string"; }) : [];
   if (!data || data.success !== true) {
     // Sólo códigos técnicos de Cloudflare (nunca el token).
-    console.error("[turnstile] token rechazado:", codes.join(",") || "sin código");
+    log.error("[turnstile] token rechazado:");
     if (codes.some(function (c) { return CONFIG_ERRORS.indexOf(c) !== -1; })) return fail(503, "unavailable", "config");
     if (codes.indexOf("timeout-or-duplicate") !== -1) return fail(403, "expired", "timeout-or-duplicate");
     return fail(403, "rejected", "rejected");
   }
   if (data.action !== ACTION) {
-    console.error("[turnstile] acción distinta a " + ACTION);
+    log.error("[turnstile] acción incorrecta");
     return fail(403, "rejected", "action-mismatch");
   }
   if (normalizeHost(data.hostname) !== hostname) {
-    console.error("[turnstile] el hostname del token no coincide con el del pedido");
+    log.error("[turnstile] el hostname del token no coincide con el del pedido");
     return fail(403, "rejected", "hostname-mismatch");
   }
   return { ok: true };

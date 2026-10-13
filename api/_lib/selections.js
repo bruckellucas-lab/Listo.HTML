@@ -47,7 +47,7 @@ function saveSelection(cfg, eventRequestId, placeId, fetchImpl, opts) {
       var out = await replacements.run(cfg, "listo_replace_selection", {
         p_request_id: eventRequestId, p_place_id: placeId, p_expected_id: opts.expectedId, p_new_id: opts.newId
       }, doFetch);
-      if (!out.ok) throw fail("REPLACEMENT_CONFLICT", { result: out });
+      if (!out.ok) throw fail("REPLACEMENT_CONFLICT", { result: require("./rpc-error").payload(out) });
       return out;
     });
 }
@@ -57,7 +57,7 @@ function explain(err) {
   if (r) return r;
   if (err.code === "BAD_REPLACEMENT") return { status: 400, message: "Actualizá la página antes de elegir una opción." };
   if (err.code === "REPLACEMENT_MISSING") return { status: 503, message: "Falta aplicar la migration S2B-2. No se reemplazó tu elección." };
-  if (err.code === "REPLACEMENT_CONFLICT") return { status: err.result.http_status || 409, message: err.result.error };
+  if (err.code === "REPLACEMENT_CONFLICT") return { status: err.result.http_status || 409, message: require("./rpc-error")(err.result.error) };
   if (err.code === "NO_REQUEST") return { status: 404, message: "Todavía no terminamos de guardar tu pedido. Esperá un segundo y probá de nuevo." };
   if (err.code === "NO_SIGNING_SECRET") return { status: 503, message: "LISTO no puede guardar esta elección en este momento. Volvé a buscar opciones e intentá de nuevo." };
   if (err.code === "BAD_OPTION") return { status: 409, message: "Esta opción ya no es válida. Volvé a buscar opciones y elegila de nuevo." };

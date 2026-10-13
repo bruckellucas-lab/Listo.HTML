@@ -11,6 +11,7 @@
    Sólo con el pase de /admin.
    ========================================================= */
 "use strict";
+var log = require("./_lib/private-log");
 
 var http = require("./_lib/http");
 var auth = require("./_lib/admin-auth");
@@ -39,8 +40,8 @@ module.exports = async function handler(req, res) {
   if (!url || !key || /^sb_publishable_/.test(key)) return http.sendJson(res, 503, { ok: false, error: "Falta configurar Supabase en Vercel." });
 
   if (!http.requireJson(req, res)) return;
-  var body = await http.readJson(req, 2000);
-  if (!body) return http.sendJson(res, 400, { ok: false, error: "No pudimos leer el pedido." });
+  var body = await http.readJson(req, 2000, res, ["plan_inquiry_id", "provider_quote_id", "expected_proposal_id", "proposal_id"]);
+  if (!body) return;
   var inquiryId = String(body.plan_inquiry_id || ""), quoteId = String(body.provider_quote_id || "");
   if (!UUID_RE.test(inquiryId) || !UUID_RE.test(quoteId)) return http.sendJson(res, 400, { ok: false, error: "Solicitud o cotización no válida." });
 
@@ -54,6 +55,7 @@ module.exports = async function handler(req, res) {
           p_inquiry_id: inquiryId, p_quote_id: quoteId, p_expected_id: expected,
           p_new_id: newId, p_code: proposals.newCode()
         });
+        if (!out.ok) out = require("./_lib/rpc-error").payload(out);
         return http.sendJson(res, out.ok ? 200 : out.http_status || 409, out);
       } catch (err) {
         // La transacción fallida revierte el reemplazo antes de probar otro código.
@@ -63,7 +65,7 @@ module.exports = async function handler(req, res) {
     }
     return http.sendJson(res, 502, { ok: false, error: "No pudimos generar la propuesta. Probá de nuevo." });
   } catch (err) {
-    console.error("[admin-proposals]", err.step || "", err.status || "", err.code || "", err.message);
+    log.error("[admin-proposals]", err);
     return http.sendJson(res, err.code === "REPLACEMENT_MISSING" ? 503 : 502, { ok: false, error: err.code === "REPLACEMENT_MISSING" ? "Falta aplicar la migration S2B-2. No se reemplazó la propuesta." : explain(err) });
   }
 };

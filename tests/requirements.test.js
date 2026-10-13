@@ -136,7 +136,7 @@ test("elección con requisito obligatorio → 409 y no se guarda nada", async fu
 test("intento de saltar el control: lo que diga el navegador no importa", async function () {
   var fetch = supabase({ id: REQ, dietary_requirements: [{ code: "kosher", level: "hard" }] });
   var res = await choose({ event_request_id: REQ, google_place_id: PLACE, dietary_requirements: [], hard: false, override: true });
-  assert.equal(res.statusCode, 409);
+  assert.equal(res.statusCode, 400);
   assert.equal(writes(fetch, "plan_selections").length, 0);
 });
 
@@ -175,7 +175,7 @@ test("envío normal con Turnstile sigue funcionando (sin restricciones o sólo p
 test("'Quiero avanzar' con requisito obligatorio → 409, sin solicitud ni email (aunque haya una elección guardada)", async function () {
   for (var diet of [[{ code: "kosher", level: "hard" }], [{ code: "allergy", level: "hard", detail: "nueces" }], [{ code: "celiac_safe", level: "soft" }]]) {
     var fetch = supabase({ id: REQ, dietary_requirements: diet }, { selections: [{ id: "sel-1", provider_google_place_id: PLACE }] });
-    var res = await advance(inquiryBody({ dietary_requirements: [] }));
+    var res = await advance(inquiryBody());
     assert.equal(res.statusCode, 409, diet[0].code);
     assert.equal(writes(fetch, "plan_inquiries").length, 0);
     assert.equal(notified.length, 0);

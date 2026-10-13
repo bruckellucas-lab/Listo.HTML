@@ -14,6 +14,7 @@
      desde el place_id: nunca se inventa un dato.
    ========================================================= */
 "use strict";
+var log = require("./private-log");
 
 var DETAILS_BASE = "https://places.googleapis.com/v1/places/";
 var PLACE_ID_RE = /^[A-Za-z0-9_-]{10,500}$/;
@@ -96,7 +97,7 @@ function fetchPlace(placeId, use, opts) {
       return out;
     });
   }).catch(function (err) {
-    console.error("[place-details] " + use + ":", err && err.name === "AbortError" ? "tiempo de espera agotado" : (err && (err.status || err.message)));
+    log.error("[place-details] consultar lugar", err);
     return unavailable(id);
   }).then(function (out) { clearTimeout(timer); return out; });
 }

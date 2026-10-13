@@ -15,6 +15,7 @@
      "visto en una búsqueda"); no se toca nada más.
    ========================================================= */
 "use strict";
+var log = require("./private-log");
 
 var TABLE = "providers";
 
@@ -89,7 +90,7 @@ function insertMinimal(doFetch, base, key, rows, tries) {
   }, "insertar nuevos").catch(function (err) {
     var col = notNullColumn(err);
     if (!col || TEXT_PLACEHOLDER_OK.indexOf(col) === -1 || (tries || 0) >= TEXT_PLACEHOLDER_OK.length) throw err;
-    console.error("[providers] la columna " + col + " es obligatoria en Supabase: se completa vacía hasta G1B-2");
+    log.error("[providers] campo obligatorio");
     return insertMinimal(doFetch, base, key, rows.map(function (r) { var o = Object.assign({}, r); o[col] = ""; return o; }), (tries || 0) + 1);
   });
 }

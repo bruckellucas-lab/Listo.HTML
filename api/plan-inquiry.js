@@ -12,6 +12,7 @@
    Cloudflare Turnstile (anti-robots) → recién ahí se guarda y se avisa.
    ========================================================= */
 "use strict";
+var log = require("./_lib/private-log");
 
 var http = require("./_lib/http");
 var photos = require("./_lib/photos");
@@ -21,16 +22,6 @@ var notify = require("./_lib/notify");
 var rateLimit = require("./_lib/rate-limit");
 var turnstile = require("./_lib/turnstile");
 
-function readBody(req) {
-  if (req.body && typeof req.body === "object") return Promise.resolve(req.body);
-  if (typeof req.body === "string") { try { return Promise.resolve(JSON.parse(req.body)); } catch (e) { return Promise.resolve(null); } }
-  return new Promise(function (resolve) {
-    var raw = "";
-    req.on("data", function (c) { raw += c; if (raw.length > 8000) req.destroy(); });
-    req.on("end", function () { try { resolve(raw ? JSON.parse(raw) : {}); } catch (e) { resolve(null); } });
-    req.on("error", function () { resolve(null); });
-  });
-}
 
 // Fecha de hoy en Argentina (para no rechazar "hoy" por diferencia horaria).
 function todayInArgentina() {
@@ -44,8 +35,8 @@ module.exports = async function handler(req, res) {
   }
   if (!http.requireJson(req, res)) return;
   if (!(await rateLimit.guard(req, res, "plan_inquiry"))) return;
-  var body = await readBody(req);
-  if (!body || typeof body !== "object") return http.sendJson(res, 400, { ok: false, error: "No pudimos leer el formulario. Probá de nuevo." });
+  var body = await http.readJson(req, 8000, res, ["event_request_id", "google_place_id", "name", "phone", "email", "event_date", "approximate_time", "notes", "website", "turnstile_token", "operation_id", "selection_id"]);
+  if (!body) return;
 
   // Campo trampa invisible: si viene completo, es un robot. Respondemos ok sin guardar nada.
   if (body.website) return http.sendJson(res, 200, { ok: true, updated: false });
@@ -81,13 +72,13 @@ module.exports = async function handler(req, res) {
         eventRequestId: requestId, placeId: placeId, selectionId: out.selectionId,
         contact: checked.data, updated: out.updated, inquiryId: out.inquiryId
       }))) warning = "Tu solicitud quedó guardada, pero no pudimos enviar el aviso interno. No hace falta enviarla otra vez.";
-    } catch (e) { console.error("[plan-inquiry] aviso:", e && e.message); warning = "Tu solicitud quedó guardada; el aviso interno no pudo confirmarse. No la repitas por este aviso."; }
+    } catch (e) { log.error("[plan-inquiry] aviso:", e); warning = "Tu solicitud quedó guardada; el aviso interno no pudo confirmarse. No la repitas por este aviso."; }
 
     // Sólo confirmamos: nunca devolvemos los datos personales.
     return http.sendJson(res, 200, { ok: true, updated: out.updated, status: out.status || inquiries.STATUS, already_applied: !!out.already_applied, warning: warning });
   } catch (err) {
     // Sin datos personales en el registro: sólo el paso y el código de error.
-    console.error("[plan-inquiry]", err.step || "", err.status || "", err.code || "");
+    log.error("[plan-inquiry]", err);
     var e = inquiries.explain(err);
     return http.sendJson(res, e.status, { ok: false, error: e.message });
   }

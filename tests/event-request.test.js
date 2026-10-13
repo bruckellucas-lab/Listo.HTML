@@ -198,5 +198,5 @@ test("POST: sin la migration de límites, se frena (503) en vez de fallar en sil
   try { var res = await call(base()); } finally { console.error = orig; }
   assert.equal(res.statusCode, 503);
   assert.equal(fetch.calls.filter(function (c) { return /event_requests$/.test(c.url); }).length, 0);
-  assert.ok(logs.some(function (l) { return /falta correr la migration/.test(l); }), "el registro dice qué falta");
+  assert.ok(logs.some(function (l) { return /PGRST202/.test(l); }), "el registro dice qué falta");
 });

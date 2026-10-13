@@ -69,13 +69,13 @@ async function saveInquiry(cfg, eventRequestId, placeId, data, fetchImpl, opts) 
     body: JSON.stringify({ p_operation_id: opts.operationId, p_request_id: eventRequestId,
       p_selection_id: opts.selectionId, p_place_id: placeId, p_data: data })
   }, "guardar solicitud recuperable");
-  if (!out.ok) { var conflict = new Error("solicitud cambió"); conflict.code = "INQUIRY_CONFLICT"; conflict.result = out; throw conflict; }
+  if (!out.ok) { var conflict = new Error("solicitud cambió"); conflict.code = "INQUIRY_CONFLICT"; conflict.result = require("./rpc-error").payload(out); throw conflict; }
   return out;
 }
 
 function explain(err) {
   if (err.code === "BAD_RECOVERY") return { status: 400, message: "Actualizá la página antes de enviar la solicitud." };
-  if (err.code === "INQUIRY_CONFLICT") return { status: err.result.http_status || 409, message: err.result.error };
+  if (err.code === "INQUIRY_CONFLICT") return { status: err.result.http_status || 409, message: require("./rpc-error")(err.result.error) };
   if (["PGRST202", "42883"].indexOf(err.code) !== -1) return { status: 503, message: "LISTO necesita completar una actualización. No se modificó tu solicitud." };
   var r = requirements.explain(err);
   if (r) return r;

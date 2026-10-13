@@ -14,6 +14,7 @@
    No manda emails ni WhatsApp al cambiar estados.
    ========================================================= */
 "use strict";
+var log = require("./_lib/private-log");
 
 var http = require("./_lib/http");
 var auth = require("./_lib/admin-auth");
@@ -113,7 +114,7 @@ function explain(err) {
   if (err.code === "42703" || err.code === "PGRST204") return "Falta alguna columna en Supabase. ¿Corriste el último SQL de SUPABASE.md?";
   if (err.code === "PGRST200") return "Supabase no encuentra el vínculo entre tablas. Revisá las claves foráneas de la guía.";
   if (err.code === "23514") return "Ese estado no está permitido en Supabase. ¿Corriste el SQL del panel?";
-  return "No pudimos confirmar el resultado con Supabase. Recargá el panel antes de repetir una acción; reenviar los mismos datos recupera la misma operación.";
+  return "No pudimos confirmar el resultado. Puede haberse guardado: recargá el panel antes de repetir una acción; reenviar los mismos datos recupera la misma operación.";
 }
 
 module.exports = async function handler(req, res) {
@@ -160,7 +161,7 @@ module.exports = async function handler(req, res) {
         try { rows = await steps[i](); break; }
         catch (errStep) {
           if (MISSING.indexOf(errStep.code) === -1 || i === steps.length - 1) throw errStep;
-          console.error("[admin] falta un SQL (" + ["reservas", "propuestas", "cotizaciones"][i] + "):", errStep.code);
+          log.error(["[admin] schema: reservas", "[admin] schema: propuestas", "[admin] schema: cotizaciones"][i], errStep);
         }
       }
       // Métricas sobre TODAS las reservas confirmadas (no sólo las solicitudes de la lista).
@@ -169,7 +170,7 @@ module.exports = async function handler(req, res) {
         try {
           metrics = metricsOf(await store.request(fetch, base + "plan_bookings?select=booking_status,currency,final_total_amount,commission_amount,commission_status&booking_status=eq.confirmed",
             { method: "GET", headers: store.headersFor(c.key) }, "métricas"));
-        } catch (errM) { console.error("[admin] métricas:", errM.code || ""); }
+        } catch (errM) { log.error("[admin] métricas:", errM); }
       }
       var items = (rows || []).map(toItem);
       return http.sendJson(res, 200, {
@@ -178,7 +179,7 @@ module.exports = async function handler(req, res) {
         count: items.length, items: items
       });
     } catch (err) {
-      console.error("[admin] listar:", err.status || "", err.code || "", err.message);
+      log.error("[admin] listar:", err);
       return http.sendJson(res, 502, { ok: false, error: explain(err) });
     }
   }
@@ -187,7 +188,8 @@ module.exports = async function handler(req, res) {
     // Defensa extra contra pedidos desde otros sitios (además de SameSite=Strict).
     if (req.headers["x-listo-admin"] !== "1") return http.sendJson(res, 403, { ok: false, error: "Pedido no permitido." });
     if (!http.requireJson(req, res)) return;
-    var body = await http.readJson(req, 1000);
+    var body = await http.readJson(req, 1000, res, ["id", "status", "expected_status", "operation_id", "action", "channel"]);
+    if (!body) return;
     var id = body && String(body.id || "");
     var status = body && String(body.status || "");
     if (!UUID_RE.test(id)) return http.sendJson(res, 400, { ok: false, error: "Solicitud no válida." });
@@ -199,7 +201,7 @@ module.exports = async function handler(req, res) {
         var contact = await commercial.run(c, "contact", id, body.expected_status, { channel: channel }, body.operation_id);
         return http.sendJson(res, contact[0], contact[1]);
       } catch (err) {
-        console.error("[admin] marcar contactado:", err.status || "", err.code || "", err.message);
+        log.error("[admin] marcar contactado:", err);
         return http.sendJson(res, 502, { ok: false, error: explain(err) });
       }
     }
@@ -210,7 +212,7 @@ module.exports = async function handler(req, res) {
       var changed = await commercial.run(c, "transition", id, body.expected_status, { status: status }, body.operation_id);
       return http.sendJson(res, changed[0], changed[1]);
     } catch (err) {
-      console.error("[admin] cambiar estado:", err.status || "", err.code || "", err.message);
+      log.error("[admin] cambiar estado:", err);
       return http.sendJson(res, 502, { ok: false, error: explain(err) });
     }
   }

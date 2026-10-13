@@ -16,6 +16,7 @@
    - Nunca se devuelven IDs internos, notas internas ni datos personales.
    ========================================================= */
 "use strict";
+var log = require("./_lib/private-log");
 
 var http = require("./_lib/http");
 var auth = require("./_lib/admin-auth");
@@ -53,7 +54,7 @@ async function mayAskGoogle(req) {
     var all = await rateLimit.check(req, "proposal_details_all");
     return all.allowed;
   } catch (err) {
-    console.error("[proposal] límite de datos del lugar:", err && err.message);
+    log.error("[proposal] límite de datos del lugar:", err);
     return false;
   }
 }
@@ -106,7 +107,7 @@ async function handleGet(req, res, cfg) {
   var row;
   try { row = await proposals.loadByCode(cfg, code); }
   catch (err) {
-    console.error("[proposal] leer:", err.status || "", err.code || "");
+    log.error("[proposal] leer:", err);
     return http.sendJson(res, 502, { ok: false, error: "No pudimos cargar la propuesta. Probá de nuevo en un rato." });
   }
   if (!row) {
@@ -124,7 +125,7 @@ async function handleGet(req, res, cfg) {
       await store.request(fetch, proposals.api(cfg, "plan_proposals?id=eq." + row.id), {
         method: "PATCH", headers: store.headersFor(cfg.key, { "Prefer": "return=minimal" }), body: JSON.stringify(patch)
       }, "contar visita");
-    } catch (err) { console.error("[proposal] visita:", err.status || "", err.code || ""); }
+    } catch (err) { log.error("[proposal] visita:", err); }
   }
 
   var live = null;
@@ -144,8 +145,8 @@ async function handlePost(req, res, cfg) {
   }
   if (!http.requireJson(req, res)) return;
   if (!(await rateLimit.guard(req, res, "proposal_response"))) return;
-  var body = await http.readJson(req, 6000);
-  if (!body || typeof body !== "object") return http.sendJson(res, 400, { ok: false, error: "No pudimos leer tu respuesta. Probá de nuevo." });
+  var body = await http.readJson(req, 6000, res, ["code", "action", "comment"]);
+  if (!body) return;
   var code = String(body.code || "");
   var action = String(body.action || "");
   if (!proposals.CODE_RE.test(code)) { count("miss", ip, true); return http.sendJson(res, 404, { ok: false, error: "not_found" }); }
@@ -191,11 +192,11 @@ async function handlePost(req, res, cfg) {
       if (!(await notify.notifyProposalResponse(cfg, {
         planInquiryId: row.plan_inquiry_id, action: action, comment: comment, quote: quote, adminUrl: adminUrlOf(req)
       }))) warning = "Tu respuesta quedó guardada, pero no pudimos enviar el aviso interno. No hace falta responder otra vez.";
-    } catch (e) { console.error("[proposal] aviso:", e && e.message); warning = "Tu respuesta quedó guardada; el aviso interno no pudo confirmarse."; }
+    } catch (e) { log.error("[proposal] aviso:", e); warning = "Tu respuesta quedó guardada; el aviso interno no pudo confirmarse."; }
 
     return http.sendJson(res, 200, Object.assign(publicPayload(Object.assign({}, row, { status: target, responded_at: now }), null), { warning: warning }));
   } catch (err) {
-    console.error("[proposal] responder:", err.step || "", err.status || "", err.code || "");
+    log.error("[proposal] responder:", err);
     return http.sendJson(res, 502, { ok: false, error: "No pudimos confirmar el resultado. Puede haberse guardado: reabrí la propuesta para ver su estado. Repetir la misma respuesta no la duplica." });
   }
 }

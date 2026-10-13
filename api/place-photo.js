@@ -9,6 +9,7 @@
    Cada foto mostrada = 1 consulta "Place Details Photos" en Google.
    ========================================================= */
 "use strict";
+var log = require("./_lib/private-log");
 
 var http = require("./_lib/http");
 var photos = require("./_lib/photos");
@@ -39,7 +40,7 @@ module.exports = async function handler(req, res) {
     res.setHeader("X-Robots-Tag", "noindex");
     return res.end();
   } catch (err) {
-    console.error("[place-photo] Google:", err.status, err.message);
+    log.error("[place-photo] Google:", err);
     var why = err.status === 403 || err.status === 401
       ? "Google rechazó la clave para fotos: revisá que Places API (New) esté habilitada y permitida en la clave."
       : err.status === 429 ? "Se alcanzó la cuota diaria de fotos en Google."

@@ -18,6 +18,7 @@
    No mueve dinero ni manda emails. Sólo con el pase de /admin.
    ========================================================= */
 "use strict";
+var log = require("./_lib/private-log");
 
 var http = require("./_lib/http");
 var auth = require("./_lib/admin-auth");
@@ -96,8 +97,8 @@ module.exports = async function handler(req, res) {
   var url = http.env("SUPABASE_URL"), key = http.env("SUPABASE_SECRET_KEY");
   if (!url || !key || /^sb_publishable_/.test(key)) return http.sendJson(res, 503, { ok: false, error: "Falta configurar Supabase en Vercel." });
   if (!http.requireJson(req, res)) return;
-  var body = await http.readJson(req, 12000);
-  if (!body || typeof body !== "object") return http.sendJson(res, 400, { ok: false, error: "No pudimos leer el pedido." });
+  var body = await http.readJson(req, 20000, res, ["plan_inquiry_id", "provider_quote_id", "plan_proposal_id", "provider_google_place_id", "acceptance_source", "acceptance_channel", "acceptance_note", "final_total_amount", "currency", "commission_type", "commission_rate", "commission_fixed_amount", "expected_commission_amount", "confirmed_at", "commission_due_date", "internal_notes", "action", "booking_id", "paid_at", "expected_status", "operation_id"]);
+  if (!body) return;
   var cfg = { url: url, key: key };
 
   try {
@@ -106,7 +107,7 @@ module.exports = async function handler(req, res) {
       : await confirm(cfg, body);
     return http.sendJson(res, out[0], out[1]);
   } catch (err) {
-    console.error("[admin-bookings]", err.step || "", err.status || "", err.code || "", err.message);
+    log.error("[admin-bookings]", err);
     return http.sendJson(res, 502, { ok: false, error: explain(err) });
   }
 };

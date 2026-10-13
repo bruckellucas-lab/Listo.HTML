@@ -33,8 +33,9 @@ module.exports = async function handler(req, res) {
 
   if (!http.requireJson(req, res)) return;
   if (!(await rateLimit.guard(req, res, "admin_login"))) return;
-  var body = await http.readJson(req, 2000);
-  if (!body || !auth.checkPassword(body.password)) {
+  var body = await http.readJson(req, 2000, res, ["password"]);
+  if (!body) return;
+  if (!auth.checkPassword(body.password)) {
     auth.registerFail(req);
     return http.sendJson(res, 401, { ok: false, error: "Contraseña incorrecta." });
   }

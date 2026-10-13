@@ -15,6 +15,7 @@
          con un límite en memoria (como antes).
    ========================================================= */
 "use strict";
+var log = require("./private-log");
 
 var crypto = require("crypto");
 var http = require("./http");
@@ -145,12 +146,14 @@ async function check(req, scope, opts) {
   var problem = !secret ? "falta RATE_LIMIT_SECRET (32 caracteres o más)"
     : !url || !key || /^sb_publishable_/.test(key) ? "falta configurar Supabase" : "";
 
+  var failure;
   if (!problem) {
     try {
       var out = await rpcHit({ url: url, key: key }, scope, visitorKey(secret, scope, ip), limit, opts.fetch);
       out.source = "supabase";
       return out;
     } catch (err) {
+      failure = err;
       problem = err.code === "PGRST202" || err.code === "42883" || err.code === "PGRST205" || err.code === "42P01"
         ? "falta correr la migration " + MIGRATION
         : err.name === "AbortError" ? "Supabase tardó demasiado"
@@ -159,7 +162,7 @@ async function check(req, scope, opts) {
   }
 
   // Nunca se registra la IP ni la huella: sólo la acción y el motivo.
-  console.error("[rate-limit] " + scope + ": " + problem + (limit.failClosed ? " → acción frenada" : " → límite en memoria"));
+  log.error("[rate-limit]", failure || { code: !secret ? "MISSING_SECRET" : "MISSING_STORAGE" });
   if (limit.failClosed) return { allowed: false, retryAfter: 0, source: "unavailable" };
   var mem = memoryHit(scope, memoryKey(secret, scope, ip), limit);
   mem.source = "memory";

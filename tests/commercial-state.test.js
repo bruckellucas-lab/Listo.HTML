@@ -25,7 +25,7 @@ test("S2B: estado esperado se manda a RPC; conflicto no ejecuta PATCH directo", 
 test("S2B: falta migration falla cerrado con 503, sin fallback",async function(t){
   t.mock.method(global,"fetch",async function(){return h.response(404,{code:"PGRST202"});});
   var r=await call("admin-bookings.js","POST",{action:"sync_status",plan_inquiry_id:ID,expected_status:"quoted"});
-  assert.equal(r.statusCode,503); assert.match(r.json().error,/migration/);
+  assert.equal(r.statusCode,503); assert.match(r.json().error,/actualización/);
 });
 test("S2B: mark_contacted usa estado esperado y la misma RPC",async function(t){
   t.mock.method(global,"fetch",async function(url,opts){var d=JSON.parse(opts.body);assert.equal(d.p_action,"contact");assert.equal(d.p_expected,"quoted");return h.response(200,{ok:false,error:"El estado cambió"});});

@@ -9,6 +9,7 @@
    (que vive sólo en Vercel). Devuelve sólo { ok, id }.
    ========================================================= */
 "use strict";
+var log = require("./_lib/private-log");
 
 var http = require("./_lib/http");
 var rateLimit = require("./_lib/rate-limit");
@@ -24,12 +25,8 @@ module.exports = async function handler(req, res) {
   if (!http.requireJson(req, res)) return;
   if (!(await rateLimit.guard(req, res, "event_request"))) return;
 
-  // Tamaño máximo: por el encabezado y también sobre el cuerpo ya leído (Vercel lo trae leído).
-  var tooBig = { ok: false, error: "El pedido es demasiado largo." };
-  if (parseInt(req.headers["content-length"], 10) > MAX_BYTES) return http.sendJson(res, 413, tooBig);
-  var body = await http.readJson(req, MAX_BYTES);
-  if (!body || typeof body !== "object") return http.sendJson(res, 400, { ok: false, error: "No pudimos leer tu pedido. Probá de nuevo." });
-  if (Buffer.byteLength(JSON.stringify(body)) > MAX_BYTES) return http.sendJson(res, 413, tooBig);
+  var body = await http.readJson(req, MAX_BYTES, res, ["id", "original_prompt", "event_type", "guests", "zone", "budget", "needs", "dietary_requirements", "status"]);
+  if (!body) return;
   var checked = requests.validate(body);
   if (checked.error) return http.sendJson(res, 400, { ok: false, error: checked.error });
 
@@ -43,7 +40,7 @@ module.exports = async function handler(req, res) {
     return http.sendJson(res, 200, { ok: true, id: checked.data.id });
   } catch (err) {
     // Sin el contenido del pedido en el registro: sólo el paso y el código.
-    console.error("[event-request]", err.step || "", err.status || "", err.code || "");
+    log.error("[event-request]", err);
     var e = requests.explain(err);
     return http.sendJson(res, e.status, { ok: false, error: e.message });
   }

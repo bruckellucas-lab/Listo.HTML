@@ -98,7 +98,7 @@ test("sin Supabase / sin migration / sin secreto: acciones sensibles frenadas, b
     var out = await quietly(function () { return rl.check(req("190.0.0.3"), scope, { fetch: missing, env: env() }); });
     assert.equal(out.value.allowed, false, scope);
     assert.equal(out.value.source, "unavailable", scope);
-    assert.ok(out.logs.some(function (l) { return l.indexOf(rl.MIGRATION) !== -1; }), "el registro nombra la migration");
+    assert.ok(out.logs.some(function (l) { return l.indexOf("PGRST202") !== -1; }), "el registro incluye el código seguro de schema ausente");
   }
   for (var s2 of ["plan_options", "admin_login"]) {
     var o2 = await quietly(function () { return rl.check(req("190.0.0.3"), s2, { fetch: missing, env: env() }); });
@@ -107,7 +107,7 @@ test("sin Supabase / sin migration / sin secreto: acciones sensibles frenadas, b
   }
   var noSecret = await quietly(function () { return rl.check(req("190.0.0.4"), "plan_inquiry", { fetch: h.mockFetch([h.rpcRule()]), env: env({ RATE_LIMIT_SECRET: "corto" }) }); });
   assert.equal(noSecret.value.allowed, false);
-  assert.ok(noSecret.logs.some(function (l) { return /RATE_LIMIT_SECRET/.test(l); }));
+  assert.ok(noSecret.logs.some(function (l) { return /MISSING_SECRET/.test(l); }));
   var down = await quietly(function () { return rl.check(req("190.0.0.4"), "plan_options", { fetch: h.mockFetch([{ match: /rpc/, reply: function () { return Promise.reject(new Error("caído")); } }]), env: env() }); });
   assert.equal(down.value.allowed, true);
 });

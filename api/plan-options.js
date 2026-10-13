@@ -12,6 +12,7 @@
    - Nunca inventa datos: si Google no informa algo, queda vacío.
    ========================================================= */
 "use strict";
+var log = require("./_lib/private-log");
 
 var http = require("./_lib/http");
 var places = require("./_lib/google-places");
@@ -48,7 +49,7 @@ module.exports = async function handler(req, res) {
   try {
     found = await places.searchText(apiKey, plan.buildQuery(category, zone), places.MAX_RESULTS);
   } catch (err) {
-    console.error("[plan-options] Google:", err.status, err.message);
+    log.error("[plan-options] Google:", err);
     return sendError(res, 502, err.status === 429
       ? "Estamos recibiendo muchas búsquedas. Probá de nuevo en un rato."
       : "No pudimos consultar los lugares en este momento. Probá de nuevo.");
@@ -68,7 +69,7 @@ module.exports = async function handler(req, res) {
       await store.saveProviders({ url: supaUrl, key: supaKey }, converted.rows);
       saved = true;
     } catch (err) {
-      console.error("[plan-options] Supabase:", err.step, err.status, err.code, err.message);
+      log.error("[plan-options] Supabase:", err);
     }
   }
 

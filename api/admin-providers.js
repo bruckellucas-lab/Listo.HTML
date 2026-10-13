@@ -15,6 +15,7 @@
    Google NUNCA verifica: una señal de Google, reseñas o nombre queda como "No verificado".
    ========================================================= */
 "use strict";
+var log = require("./_lib/private-log");
 
 var http = require("./_lib/http");
 var auth = require("./_lib/admin-auth");
@@ -83,7 +84,7 @@ module.exports = async function handler(req, res) {
       } catch (err) {
         // Si la tabla de atributos no estuviera, igual se ven los proveedores.
         if (MISSING.indexOf(err.code) === -1) throw err;
-        console.error("[admin-providers] sin atributos:", err.code);
+        log.error("[admin-providers] sin atributos:", err);
         ready = false;
         rows = await call("providers?select=" + PROVIDER_FIELDS + "&" + ORDER + "&limit=" + LIMIT, "GET", "listar proveedores");
       }
@@ -93,7 +94,7 @@ module.exports = async function handler(req, res) {
         attributes: dietary.ATTRIBUTES
       });
     } catch (err) {
-      console.error("[admin-providers] listar:", err.status || "", err.code || "", err.message);
+      log.error("[admin-providers] listar:", err);
       return http.sendJson(res, 502, { ok: false, error: explain(err) });
     }
   }
@@ -101,8 +102,8 @@ module.exports = async function handler(req, res) {
   // Escrituras: además de la sesión, el encabezado del panel (protección extra contra otros sitios).
   if (req.headers["x-listo-admin"] !== "1") return http.sendJson(res, 403, { ok: false, error: "Pedido no permitido." });
   if (!http.requireJson(req, res)) return;
-  var body = await http.readJson(req, 8000);
-  if (!body || typeof body !== "object") return http.sendJson(res, 400, { ok: false, error: "No pudimos leer el pedido." });
+  var body = await http.readJson(req, 16000, res, ["provider_google_place_id", "attribute", "status", "source_type", "source_url", "certifier", "kosher_category", "verified_at", "review_after", "evidence_valid_until", "verification_notes"]);
+  if (!body) return;
 
   if (req.method === "DELETE") {
     var placeId = String(body.provider_google_place_id || ""), attribute = String(body.attribute || "");
@@ -115,7 +116,7 @@ module.exports = async function handler(req, res) {
       if (!gone || !gone.length) return http.sendJson(res, 404, { ok: false, error: "Ese atributo no estaba cargado." });
       return http.sendJson(res, 200, { ok: true, deleted: true });
     } catch (err) {
-      console.error("[admin-providers] borrar:", err.status || "", err.code || "", err.message);
+      log.error("[admin-providers] borrar:", err);
       return http.sendJson(res, 502, { ok: false, error: explain(err) });
     }
   }
@@ -133,7 +134,7 @@ module.exports = async function handler(req, res) {
     var row = saved && saved[0];
     return http.sendJson(res, 200, { ok: true, attribute: row ? dietary.withEffective(row, today) : null });
   } catch (err) {
-    console.error("[admin-providers] guardar:", err.status || "", err.code || "", err.message);
+    log.error("[admin-providers] guardar:", err);
     return http.sendJson(res, 502, { ok: false, error: explain(err) });
   }
 };

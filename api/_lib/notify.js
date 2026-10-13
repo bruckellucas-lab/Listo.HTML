@@ -18,6 +18,7 @@
      google_place_id (el nombre se ve en /admin).
    ========================================================= */
 "use strict";
+var log = require("./private-log");
 
 var store = require("./providers-store");
 var placeDetails = require("./place-details");
@@ -184,7 +185,7 @@ function notifyInquiry(cfg, info, fetchImpl) {
   var work = !apiKey
     ? Promise.reject(new Error("Falta RESEND_API_KEY en Vercel"))
     : loadContext(cfg, info.eventRequestId, info.placeId, fetchImpl).catch(function (err) {
-        console.error("[notify] no se pudo leer el contexto:", err.step || "", err.status || "", err.code || "");
+        log.error("[notify] no se pudo leer el contexto:", err);
         return livePlace(info.placeId, fetchImpl).then(function (provider) { return { request: {}, provider: provider }; });   // igual avisamos con lo que hay
       }).then(function (ctx) {
         return sendEmail(apiKey, buildEmail({
@@ -195,10 +196,10 @@ function notifyInquiry(cfg, info, fetchImpl) {
 
   return work.then(function () { sent = true; }, function (err) {
     // El detalle sólo va a los registros de Vercel (no a Supabase).
-    console.error("[notify] el email no se envió:", err && err.name === "AbortError" ? "tiempo de espera agotado" : (err && err.message));
+    log.error("[notify] el email no se envió:", err);
   }).then(function () {
     return markNotification(cfg, info.selectionId, sent, fetchImpl, info.inquiryId).catch(function (err) {
-      console.error("[notify] no se pudo marcar notification_status:", err.step || "", err.status || "", err.code || "");
+      log.error("[notify] no se pudo marcar notification_status:", err);
     });
   }).then(function () { return sent; });
 }
@@ -267,13 +268,13 @@ function buildProposalEmail(ctx) {
 // Nunca lanza errores: si Resend falla, la respuesta del usuario ya quedó guardada.
 function notifyProposalResponse(cfg, info, fetchImpl) {
   var apiKey = String(process.env.RESEND_API_KEY || "").trim();
-  if (!apiKey) { console.error("[notify] respuesta de propuesta sin email: falta RESEND_API_KEY"); return Promise.resolve(false); }
+  if (!apiKey) { log.error("[notify] respuesta de propuesta sin email: falta RESEND_API_KEY"); return Promise.resolve(false); }
   var doFetch = fetchImpl || fetch;
   var path = "plan_inquiries?select=contact_name,contact_phone,event_date,approximate_time," +
     "plan_selections(provider_google_place_id,event_requests(event_type,guests,zone))&id=eq." + encodeURIComponent(info.planInquiryId);
   return store.request(doFetch, api(cfg, path), { method: "GET", headers: store.headersFor(cfg.key) }, "leer contexto propuesta")
     .then(first, function (err) {
-      console.error("[notify] no se pudo leer el contexto de la propuesta:", err.status || "", err.code || "");
+      log.error("[notify] no se pudo leer el contexto de la propuesta:", err);
       return null;
     })
     .then(function (inq) {
@@ -288,7 +289,7 @@ function notifyProposalResponse(cfg, info, fetchImpl) {
       }), doFetch);
     })
     .then(function () { return true; }, function (err) {
-      console.error("[notify] el email de respuesta no se envió:", err && err.name === "AbortError" ? "tiempo de espera agotado" : (err && err.message));
+      log.error("[notify] el email de respuesta no se envió:", err);
       return false;
     });
 }

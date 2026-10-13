@@ -12,6 +12,7 @@
    hablar con el proveedor: nada se completa desde Google.
    ========================================================= */
 "use strict";
+var log = require("./_lib/private-log");
 
 var http = require("./_lib/http");
 var auth = require("./_lib/admin-auth");
@@ -96,7 +97,7 @@ module.exports = async function handler(req, res) {
       var quotes = await get("provider_quotes?select=" + FIELDS + "&plan_inquiry_id=eq." + inquiryId + "&order=received_at.desc,created_at.desc", "listar cotizaciones");
       return http.sendJson(res, 200, { ok: true, quotes: quotes || [] });
     } catch (err) {
-      console.error("[admin-quotes] listar:", err.status || "", err.code || "", err.message);
+      log.error("[admin-quotes] listar:", err);
       return http.sendJson(res, 502, { ok: false, error: explain(err) });
     }
   }
@@ -104,8 +105,8 @@ module.exports = async function handler(req, res) {
   if (req.method === "POST") {
     if (req.headers["x-listo-admin"] !== "1") return http.sendJson(res, 403, { ok: false, error: "Pedido no permitido." });
     if (!http.requireJson(req, res)) return;
-    var body = await http.readJson(req, 12000);
-    if (!body) return http.sendJson(res, 400, { ok: false, error: "No pudimos leer el formulario." });
+    var body = await http.readJson(req, 32000, res, ["plan_inquiry_id", "total_price", "price_per_person", "currency", "includes", "conditions", "deposit", "availability", "valid_until", "received_at", "internal_notes"]);
+    if (!body) return;
     var checked = validate(body);
     if (checked.error) return http.sendJson(res, 400, { ok: false, error: checked.error });
     var d = checked.data;
@@ -133,7 +134,7 @@ module.exports = async function handler(req, res) {
         if (result.item) result.status_changed = moved && inquiry[0].status !== "quoted";
         else result.warning = "La cotización quedó guardada. El estado cambió mientras tanto; actualizá el panel. No vuelvas a guardarla.";
       } catch (errStatus) {
-        console.error("[admin-quotes] estado:", errStatus.status || "", errStatus.code || "");
+        log.error("[admin-quotes] estado:", errStatus);
         result.status_pending = true;
         result.warning = "La cotización quedó guardada, pero no pudimos confirmar la actualización del estado. Actualizá el panel; no vuelvas a guardarla.";
       }
@@ -143,12 +144,12 @@ module.exports = async function handler(req, res) {
           var fresh = await get("plan_inquiries?select=id,status,updated_at&id=eq." + d.plan_inquiry_id, "refrescar solicitud");
           result.item = fresh && fresh[0] || null;
         } catch (errRead) {
-          console.error("[admin-quotes] refrescar estado:", errRead.status || "", errRead.code || "");
+          log.error("[admin-quotes] refrescar estado:", errRead);
         }
       }
       return http.sendJson(res, 200, result);
     } catch (err) {
-      console.error("[admin-quotes] guardar:", err.step || "", err.status || "", err.code || "", err.message);
+      log.error("[admin-quotes] guardar:", err);
       return http.sendJson(res, 502, { ok: false, error: explain(err) });
     }
   }

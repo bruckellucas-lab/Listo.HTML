@@ -10,6 +10,7 @@ async function run(cfg, action, id, expected, data, operationId) {
       method: "POST", headers: store.headersFor(cfg.key),
       body: JSON.stringify({ p_action: action, p_inquiry_id: id, p_expected: expected, p_data: data || {}, p_operation_id: operationId })
     }, "estado comercial");
+    if (!out.ok) out = require("./rpc-error").payload(out);
     return [out.ok ? 200 : out.http_status || 409, out];
   } catch (err) {
     if (["PGRST202", "42883"].indexOf(err.code) !== -1) return [503, { ok: false, error: "Falta aplicar la migration S2B-3. No se hicieron cambios." }];
