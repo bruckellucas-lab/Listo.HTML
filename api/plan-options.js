@@ -91,6 +91,7 @@ module.exports = async function handler(req, res) {
     var photo = secret ? photos.photosForPlace(placeById[row.google_place_id], secret, { max: 1 })[0] || null : null;
     var zoneNotice = plan.optionZoneNotice(row, zone);
     return {
+      reasons: plan.optionReasons(row, zone, placeById[row.google_place_id]),
       outside_zone: !!zoneNotice,
       zone_notice: zoneNotice,
       google_place_id: row.google_place_id,

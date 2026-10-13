@@ -238,6 +238,59 @@ function optionsFeedback(options) {
   };
 }
 
+// F3: sólo etiquetas cerradas. verified confirma el dato actual de Google, no certifica el lugar.
+var REASON_LABELS = Object.freeze({
+  grill: "Parrilla · Datos de Google Maps", restaurant: "Restaurante · Datos de Google Maps",
+  bar: "Bar · Datos de Google Maps", cafe: "Café · Datos de Google Maps",
+  space: "Salón / espacio · Datos de Google Maps", event: "Lugar para eventos · Datos de Google Maps",
+  uncertain: "Zona a confirmar", manual: "Precio y disponibilidad a confirmar",
+  dietary: "Preferencias alimentarias a confirmar"
+});
+var ZONE_REASON_LABELS = Object.create(null);
+SEARCH_ZONES.forEach(function (key) {
+  var display = key.split(" ").map(function (word) {
+    return word === "de" || word === "del" ? word : word.charAt(0).toUpperCase() + word.slice(1);
+  }).join(" ");
+  display = display.replace("Nunez", "Núñez").replace("Canitas", "Cañitas");
+  if (key === "caba") display = "CABA";
+  ZONE_REASON_LABELS[key] = "En " + display + " · Datos de Google Maps";
+});
+Object.freeze(ZONE_REASON_LABELS);
+function reason(code, label, source, verified) { return { code: code, label: label, source: source, verified: verified }; }
+function typeReasonLabel(type) {
+  if (typeof type !== "string") return "";
+  if (["steak_house", "barbecue_restaurant"].indexOf(type) !== -1) return REASON_LABELS.grill;
+  if (type === "restaurant" || /_restaurant$/.test(type)) return REASON_LABELS.restaurant;
+  if (["bar", "pub", "cocktail_bar", "wine_bar"].indexOf(type) !== -1) return REASON_LABELS.bar;
+  if (type === "cafe") return REASON_LABELS.cafe;
+  if (["banquet_hall", "wedding_venue"].indexOf(type) !== -1) return REASON_LABELS.space;
+  if (["event_venue", "convention_center"].indexOf(type) !== -1) return REASON_LABELS.event;
+  return "";
+}
+function reasonZoneMatches(row, wanted) {
+  var z = zoneIdentity(wanted);
+  function proves(candidate) {
+    var c = zoneIdentity(candidate);
+    // F5 admite un padre para recuperar opciones; eso no prueba un sub-barrio exacto.
+    if (Object.prototype.hasOwnProperty.call(ZONE_CHILDREN, c) && ZONE_CHILDREN[c].indexOf(z) !== -1) return false;
+    return !!c && clearZoneMatch(c, z);
+  }
+  if (row.zone) return proves(row.zone);
+  return String(row.address || "").split(",").slice(1).some(function (s) {
+    return proves(s.trim().replace(/^(?:[a-z]?\d{4}[a-z]{0,3})\s+/i, ""));
+  });
+}
+function optionReasons(row, zone, place) {
+  var out = [], typeLabel = typeReasonLabel(place && place.primaryType), safeZone = profileZone(zone);
+  if (typeLabel) out.push(reason("profile_type", typeLabel, "google_maps", true));
+  if (zone) {
+    if (safeZone && reasonZoneMatches(row, safeZone)) out.push(reason("zone_match", ZONE_REASON_LABELS[safeZone], "google_maps", true));
+    else out.push(reason("zone_uncertain", REASON_LABELS.uncertain, "listo_policy", false));
+  }
+  out.push(reason("manual_confirmation", REASON_LABELS.manual, "listo_policy", false));
+  return out;
+}
+
 // "Gorriti 5000, C1414 CABA, Argentina" → "Gorriti 5000"
 function shortAddress(address) {
   var first = String(address || "").split(",")[0].trim();
@@ -257,6 +310,9 @@ module.exports = {
   LEGACY_PROFILES: LEGACY_PROFILES,
   optionZoneNotice: optionZoneNotice,
   optionsFeedback: optionsFeedback,
+  REASON_LABELS: REASON_LABELS,
+  ZONE_REASON_LABELS: ZONE_REASON_LABELS,
+  optionReasons: optionReasons,
   shortAddress: shortAddress,
   qualityScore: qualityScore,
   zoneMatches: zoneMatches

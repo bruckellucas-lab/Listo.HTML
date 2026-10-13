@@ -1,0 +1,8 @@
+[
+  {"primaryType":"steak_house","zone":"Palermo","expectedTypeLabel":"Parrilla · Datos de Google Maps","expectedZoneLabel":"En Palermo · Datos de Google Maps"},
+  {"primaryType":"restaurant","zone":"Palermo","expectedTypeLabel":"Restaurante · Datos de Google Maps","expectedZoneLabel":"En Palermo · Datos de Google Maps"},
+  {"primaryType":"cafe","zone":"Palermo","expectedTypeLabel":"Café · Datos de Google Maps","expectedZoneLabel":"En Palermo · Datos de Google Maps"},
+  {"primaryType":"bar","zone":"Palermo","expectedTypeLabel":"Bar · Datos de Google Maps","expectedZoneLabel":"En Palermo · Datos de Google Maps"},
+  {"primaryType":"banquet_hall","zone":"Palermo","expectedTypeLabel":"Salón / espacio · Datos de Google Maps","expectedZoneLabel":"En Palermo · Datos de Google Maps"},
+  {"primaryType":"event_venue","zone":"Palermo","expectedTypeLabel":"Lugar para eventos · Datos de Google Maps","expectedZoneLabel":"En Palermo · Datos de Google Maps"}
+]

@@ -107,9 +107,9 @@ function renderer(list) {
   var src=fs.readFileSync(path.join(h.ROOT,"app.js"),"utf8");
   function grab(name){var start=src.indexOf("  function "+name+"(");assert.ok(start>=0);return src.slice(start,src.indexOf("\n  }\n",start)+4);}
   var box={innerHTML:""}, titles=[{textContent:""},{textContent:""}];
-  var render=new Function("state","$","$all","hardRequirements","renderSensitive","photoHTML","safeHttps","ratingText","shareText","markSelected","watchImage","PRICE_NOTE","GMAPS","LISTO_WHATSAPP",
-    grab("escapeHTML")+grab("setOptionsTitle")+grab("optionsFeedback")+grab("optionsFeedbackHTML")+grab("renderOptions")+'renderOptions();return {html:$("#proposals").innerHTML,feedback:optionsFeedback(state.options),title:$all("#proposals-title .line > span").map(x=>x.textContent).join(" ")};');
-  return render({options:list,selected:null,text:"SENTINEL contacto privado",data:{allergy:"SENTINEL alergia"}},()=>box,sel=>sel==="#proposals-title .line > span"?titles:[],()=>[],()=>{throw Error("unexpected hard");},()=>"",()=>"",()=>"",()=>"",()=>{},()=>{},"Precio y disponibilidad a confirmar","Google Maps","5491158065840");
+  var render=new Function("state","$","$all","hardRequirements","softPreferences","renderSensitive","photoHTML","safeHttps","ratingText","shareText","markSelected","watchImage","PRICE_NOTE","GMAPS","LISTO_WHATSAPP",
+    grab("escapeHTML")+grab("setOptionsTitle")+grab("optionsFeedback")+grab("optionsFeedbackHTML")+grab("reasonForCard")+grab("visibleReason")+grab("renderOptions")+'renderOptions();return {html:$("#proposals").innerHTML,feedback:optionsFeedback(state.options),title:$all("#proposals-title .line > span").map(x=>x.textContent).join(" ")};');
+  return render({options:list,selected:null,text:"SENTINEL contacto privado",data:{allergy:"SENTINEL alergia"}},()=>box,sel=>sel==="#proposals-title .line > span"?titles:[],()=>[],()=>[],()=>{throw Error("unexpected hard");},()=>"",()=>"",()=>"",()=>"",()=>{},()=>{},"Precio y disponibilidad a confirmar","Google Maps","5491158065840");
 }
 test("F5 renderer real muestra mensajes, avisos y acciones con 0/1/2; manual no incluye PII", () => {
   for(var count of [0,1,2,3]) {

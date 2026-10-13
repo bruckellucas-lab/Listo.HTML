@@ -1074,6 +1074,29 @@
       '</div>';
   }
 
+  // No se renderiza texto arbitrario de reasons. Preferencias locales no salen a Google.
+  function reasonForCard(o, hasSoftPreferences) {
+    if (hasSoftPreferences) return { code: "dietary_unverified", label: "Preferencias alimentarias a confirmar", source: "listo_policy", verified: false };
+    var reasons = Array.isArray(o.reasons) ? o.reasons : [];
+    var types = ["Parrilla · Datos de Google Maps", "Restaurante · Datos de Google Maps", "Bar · Datos de Google Maps",
+      "Café · Datos de Google Maps", "Salón / espacio · Datos de Google Maps", "Lugar para eventos · Datos de Google Maps"];
+    var type = reasons.filter(function (r) {
+      return r && r.code === "profile_type" && r.source === "google_maps" && r.verified === true && types.indexOf(r.label) !== -1;
+    })[0];
+    if (type) return type;
+    var policy = reasons.filter(function (r) {
+      return r && r.source === "listo_policy" && r.verified === false &&
+        ((r.code === "zone_uncertain" && r.label === "Zona a confirmar") ||
+         (r.code === "manual_confirmation" && r.label === "Precio y disponibilidad a confirmar"));
+    })[0];
+    return policy || null;
+  }
+
+  function visibleReason(o, hasSoftPreferences) {
+    var reason = reasonForCard(o, hasSoftPreferences);
+    return reason ? reason.label : "";
+  }
+
   function renderOptions() {
     var box = $("#proposals");
     var list = state.options || [];
@@ -1084,8 +1107,10 @@
       box.innerHTML = optionsFeedbackHTML(list);
       return;
     }
+    var hasSoftPreferences = softPreferences().length > 0;
     var feedbackHTML = optionsFeedbackHTML(list);
     var cardsHTML = list.map(function (o, i) {
+      var reasonLabel = visibleReason(o, hasSoftPreferences);
       var num = "0" + (i + 1);
       var where = [o.zone, o.address_short].filter(Boolean).join(" — ");
       var maps = safeHttps(o.maps_url);
@@ -1099,6 +1124,7 @@
             '<p class="card-zone">' + escapeHTML(where || "Dirección a confirmar") + '</p>' +
             (o.outside_zone ? '<p class="card-desc" role="note">' + escapeHTML(o.zone_notice || "Zona a confirmar.") + '</p>' : '') +
             '<p class="card-desc">' + escapeHTML(ratingText(o)) + '</p>' +
+            (reasonLabel ? '<p class="card-desc card-reason">' + escapeHTML(reasonLabel) + '</p>' : '') +
             '<p class="card-attr">Datos del lugar: ' + GMAPS + '</p>' +
             '<p class="card-price">' + PRICE_NOTE + '</p>' +
             '<div class="card-links">' +

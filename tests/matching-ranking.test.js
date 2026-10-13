@@ -91,7 +91,7 @@ test("F2 endpoint real usa primaryType, firma opciones, no guarda score/type ni 
   assert.equal(res.json().fallback.manual_coordination, true);
   res.json().options.forEach(p => {
     assert.equal(require("../api/_lib/option-token").verify(process.env.PHOTO_SIGNING_SECRET, p.google_place_id, p.option_token), "");
-    for (var field of ["score", "quality", "relevant", "primaryType", "reasons", "capacity", "price", "availability"]) assert.equal(Object.hasOwn(p, field), false);
+    for (var field of ["score", "quality", "relevant", "primaryType", "capacity", "price", "availability"]) assert.equal(Object.hasOwn(p, field), false);
   });
   var google = fetch.calls.find(c => /places:searchText$/.test(c.url));
   assert.deepEqual(JSON.parse(google.body), {textQuery:"parrillas en palermo, Buenos Aires", pageSize:20, languageCode:"es", regionCode:"AR"});
