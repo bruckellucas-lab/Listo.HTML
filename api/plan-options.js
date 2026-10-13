@@ -39,9 +39,12 @@ module.exports = async function handler(req, res) {
   var profile = hasProfile && typeof q.profile === "string" ? q.profile : "";
   if (hasProfile ? !plan.PROFILES[profile] : !plan.CATEGORIES[category]) return sendError(res, 400, "Tipo de lugar no válido.");
   var safeZone = plan.profileZone(q.zone);
-  var zone = hasProfile ? safeZone : (safeZone === null ? null : plan.cleanZone(q.zone));
+  var zone = safeZone;
+  // Mantener mayúsculas de clientes viejos sin perder zonas con sufijo o alias normalizados.
+  var legacyZone = !hasProfile ? plan.cleanZone(q.zone) : "";
+  if (legacyZone && legacyZone.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "") === safeZone) zone = legacyZone;
   if (zone === null) return sendError(res, 400, "No reconocemos esa zona. Elegí un barrio o localidad reconocida.");
-  var searchKey = (hasProfile ? profile : category) + "|" + zone.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  var searchKey = (hasProfile ? profile : category) + "|" + safeZone;
   var query = hasProfile ? plan.buildProfileQuery(profile, zone) : plan.buildQuery(category, zone);
 
   // El límite por visitante conserva su fallback. Los presupuestos globales siguientes

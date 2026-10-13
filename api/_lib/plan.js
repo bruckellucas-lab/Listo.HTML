@@ -25,6 +25,26 @@ var BA_ZONES = [
   "zona oeste", "caba", "capital federal"
 ];
 
+// 48 barrios oficiales, más alias y localidades: sólo vocabulario geográfico cerrado.
+var CABA_BARRIOS = [
+  "agronomia", "almagro", "balvanera", "barracas", "belgrano", "boedo", "caballito", "chacarita",
+  "coghlan", "colegiales", "constitucion", "flores", "floresta", "la boca", "la paternal", "liniers",
+  "mataderos", "monserrat", "monte castro", "nueva pompeya", "nunez", "palermo", "parque avellaneda",
+  "parque chacabuco", "parque chas", "parque patricios", "puerto madero", "recoleta", "retiro", "saavedra",
+  "san cristobal", "san nicolas", "san telmo", "velez sarsfield", "versalles", "villa crespo",
+  "villa del parque", "villa devoto", "villa general mitre", "villa lugano", "villa luro", "villa ortuzar",
+  "villa pueyrredon", "villa real", "villa riachuelo", "villa santa rita", "villa soldati", "villa urquiza"
+];
+BA_ZONES = BA_ZONES.concat(CABA_BARRIOS, [
+  "palermo viejo", "barrio norte", "once", "abasto", "belgrano r", "belgrano c",
+  "bernal", "temperley", "san fernando", "hurlingham", "florida", "munro", "carapachay",
+  "villa martelli", "boulogne", "don torcuato", "general pacheco", "benavidez", "del viso",
+  "garin", "maschwitz", "villa ballester", "san martin", "caseros", "ciudadela", "santos lugares",
+  "el palomar", "wilde", "sarandi", "gerli", "remedios de escalada", "ezpeleta", "berazategui",
+  "florencio varela", "burzaco", "longchamps", "luis guillon", "monte grande", "ezeiza", "el jaguel",
+  "san miguel", "bella vista", "jose c paz", "moreno", "merlo"
+]);
+
 var MIN_REVIEWS = 20;
 
 function norm(s) {
@@ -72,6 +92,9 @@ function profileZone(value) {
   if (value !== undefined && value !== null && typeof value !== "string") return null;
   var zone = norm(value);
   if (!zone) return "";
+  // Se quita sólo un sufijo permitido completo; no se acepta contenido libre luego de la coma.
+  zone = zone.replace(/\s*,\s*(?:caba|capital|capital federal|buenos aires|provincia de buenos aires)$/, "").trim();
+  if (zone === "capital") zone = "capital federal";
   // No truncar ni interpolar texto libre. Sólo nombres del catálogo existente.
   return SEARCH_ZONES.indexOf(zone) !== -1 ? zone : null;
 }

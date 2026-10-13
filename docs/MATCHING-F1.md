@@ -19,13 +19,14 @@ selección, solicitudes, admin, emails, límites de costos ni persistencia.
 | romantic | Cena romántica/aniversario | restaurantes para cena romantica |
 | cafe_brunch | Café/brunch/merienda | cafes y brunch |
 | vegan | Selección vegana/vegetariana o tipo explícito | restaurantes veganos |
-| multi_service | Dos o más necesidades entre música, deco, torta y fotos | salones para eventos |
-| celebration | Cumple/fiesta con menos de 40 invitados | salones para celebraciones |
+| multi_service | Dos o más necesidades entre música, deco, torta y foto; no si el tipo principal es cena/comida | salones para eventos |
+| celebration | Cumple/fiesta con necesidad de lugar, al menos 15 invitados o tipo explícito de salón/lugar | salones para celebraciones |
 | venues | Categoría previa salones, incluidos eventos grandes | salones para eventos |
 | bars | Categoría previa bares | bares |
 | dinner | Resto de planes | restaurantes |
 
-Las reglas se evalúan en ese orden. El número de invitados orienta el tipo de búsqueda,
+Cumpleaños/fiestas chicos sin necesidad de lugar conservan restaurante (o bar si sólo piden bebida).
+Fiesta de 15 conserva el fallback previo a salón. Las reglas se evalúan en ese orden. El número de invitados orienta el tipo de búsqueda,
 no garantiza capacidad. La preferencia veggie orienta la consulta, no certifica dieta segura.
 El bloqueo de restricciones obligatorias anterior a la búsqueda permanece intacto (F4 no cambia).
 Un pedido de varios servicios sigue buscando un lugar; no promete que brinde esos servicios.
@@ -36,8 +37,12 @@ filtros de tipo que puedan excluir lugares útiles antes de medirlos en Google r
 No hay fallback automático a otra consulta: no se multiplican llamadas por búsqueda.
 
 Ejemplo: `grill` + ` PÁLERMO ` → `parrillas en palermo, Buenos Aires`.
-La zona vacía busca en Buenos Aires. Se admiten todos los barrios/localidades del catálogo
-actual del frontend, incluyendo Rosario, Córdoba y otras ciudades. Fuera de Buenos Aires
+La zona vacía busca en Buenos Aires. Se admiten los 48 barrios oficiales de CABA, alias comunes
+(Palermo Viejo, Barrio Norte, Once, Abasto, Belgrano R/C, Capital), localidades GBA
+(incluyendo Bernal, Temperley, San Fernando y Hurlingham) y el catálogo previo del frontend,
+incluyendo Rosario, Córdoba y otras ciudades. Los sufijos `, CABA`, `, Capital`,
+`, Capital Federal`, `, Buenos Aires` y `, Provincia de Buenos Aires` se quitan antes
+de comparar con el catálogo y construir la clave de repetición. Capital se normaliza a Capital Federal. Fuera de Buenos Aires
 no se agrega ese sufijo. Las zonas desconocidas, datos de contacto o tipos no-string reciben
 400 humano antes de contadores/Google; no se truncarán a una zona reconocida.
 Esto restringe zonas escritas manualmente que antes pasaban sin validación de catálogo.
@@ -78,19 +83,19 @@ El arnés F6a original y su snapshot se conservan sin cambios de métricas.
 | Métrica (29 escenarios) | Antes | F1 |
 | --- | ---: | ---: |
 | Opciones mostradas | 74 | 70 |
-| Pertinencia | 62,2 % | 88,6 % |
-| Relleno | 29 | 9 |
-| Adecuadas omitidas, hasta 3 slots | 14 | 7 |
-| Adecuadas omitidas, todas las devueltas | 62 | 57 |
+| Pertinencia | 62,2 % | 87,1 % |
+| Relleno | 29 | 10 |
+| Adecuadas omitidas, hasta 3 slots | 14 | 8 |
+| Adecuadas omitidas, todas las devueltas | 62 | 58 |
 | Fuera de zona sin aviso | 1 | 1 |
 | Escenarios con menos de 3 adecuadas disponibles | 13 | 10 |
 | Escenarios mostrando menos de 3 | 7 | 9 |
 | Búsquedas distintas | 12 | 20 |
-| Pares de planes con listas idénticas no vacías | 88 | 27 |
+| Pares de planes con listas idénticas no vacías | 88 | 26 |
 | Escenarios no vacíos idénticos entre usuarios | 27 | 27 |
 | Claims/textos sin fuente | 0 | 0 |
 
-Meta de omisiones de esta etapa: no empeorar slots omitidos contra la base (14); F1 da 7.
+Meta de omisiones de esta etapa: no empeorar slots omitidos contra la base (14); F1 da 8.
 Se cumplen pertinencia >=80 % y relleno <=10, pero NO cero fuera de zona sin aviso.
 No se introducen razones visuales. La falta de personalización dentro del mismo plan persiste.
 
@@ -103,7 +108,7 @@ Las metas pendientes necesitan etapas posteriores de ranking/zona, fuera de F1.
 
 ## Validación y smoke recomendado
 
-`npm run check`: 12/12 funciones. `npm test`: 268 aprobados, 0 fallidos, 3 omitidos (271 en total).
+`npm run check`: 12/12 funciones. `npm test`: 273 aprobados, 0 fallidos, 3 omitidos (276 en total).
 Tres tests Postgres siguen omitidos por falta de `LISTO_TEST_DATABASE_URL`; no se ejecuta SQL.
 No migration, dependencias, endpoints nuevos ni despliegue.
 
@@ -120,3 +125,16 @@ En Preview, antes de aprobar publicación:
 
 No se probaron Google real ni producción. Mantener pendientes los guardianes F3 de honestidad,
 ranking F2 y restricciones fuertes F4. No reformatear F6a completo en este cambio.
+
+## Corrección posterior a review (B1/O1/O2)
+
+La revisión encontró catálogo geográfico incompleto, cumpleaños chicos dirigidos a salón y
+el id `fotos` que no coincide con `foto` del panel. Se corrigieron con tests de endpoint para
+los 48 barrios y clientes antiguos, normalización de sufijos, rechazo previo a Google de
+basura/PII y casos concretos de tipo/necesidades/invitados.
+
+El fixture multi-servicio ahora usa `lugar` y el id real `foto`. El snapshot F6a original no
+cambia sus resultados. Respecto del primer commit F1, pertinencia pasa de 88,6 % a 87,1 %,
+relleno de 9 a 10 y omisiones hasta tres slots de 7 a 8; no se ocultó esa caída sintética.
+Se siguen cumpliendo las metas de pertinencia y relleno, pero no fuera de zona sin aviso.
+La query veggie permanece igual; no se aplicó el ajuste opcional.

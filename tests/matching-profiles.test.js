@@ -33,7 +33,7 @@ test("F1 perfiles cerrados, consultas de servidor y metadatos sin promesas", () 
 test("F1 mapea tipos/necesidades a ids; sin usar prompt, contacto ni alergias", () => {
   var examples = [["Asado", "grill"], ["Baby shower", "baby_shower"], ["Cena romántica", "romantic"], ["After office", "after_office"], ["Corporativo", "corporate"], ["Brunch", "cafe_brunch"], ["Cena vegana", "vegan"], ["Cumpleaños", "celebration"], ["Cena", "dinner"]];
   examples.forEach(([type, profile]) => assert.equal(f1.chooseProfile({type, guests:25, needs:["comida"]}), profile));
-  assert.equal(f1.chooseProfile({type:"Fiesta", needs:["musica", "deco", "torta", "fotos"]}), "multi_service");
+  assert.equal(f1.chooseProfile({type:"Fiesta", needs:["lugar", "musica", "deco", "torta", "foto"]}), "multi_service");
   assert.equal(f1.chooseProfile({type:"Cena", original_prompt:"asado", allergy:"vegan", contact_name:"parrilla"}), "dinner");
   assert.equal(f1.chooseProfile({type:"Cena", diet:{on:{vegan:true}}}), "vegan");
 });
@@ -105,4 +105,81 @@ test("F1 resultado normal conserva option_token y guarda sólo ids/datos LISTO",
   assert.deepEqual(Object.keys(row).sort(), ["google_place_id", "source", "provider_status", "last_verified_at"].sort());
   assert.equal(row.google_place_id, id);
   assert.doesNotMatch(writes[0].body, /Parrilla de prueba|steak_house|Palermo|rating|photos/);
+});
+
+var officialNeighborhoods = [
+  "Agronomía", "Almagro", "Balvanera", "Barracas", "Belgrano", "Boedo", "Caballito", "Chacarita",
+  "Coghlan", "Colegiales", "Constitución", "Flores", "Floresta", "La Boca", "La Paternal", "Liniers",
+  "Mataderos", "Monserrat", "Monte Castro", "Nueva Pompeya", "Núñez", "Palermo", "Parque Avellaneda",
+  "Parque Chacabuco", "Parque Chas", "Parque Patricios", "Puerto Madero", "Recoleta", "Retiro", "Saavedra",
+  "San Cristóbal", "San Nicolás", "San Telmo", "Vélez Sarsfield", "Versalles", "Villa Crespo",
+  "Villa del Parque", "Villa Devoto", "Villa General Mitre", "Villa Lugano", "Villa Luro", "Villa Ortúzar",
+  "Villa Pueyrredón", "Villa Real", "Villa Riachuelo", "Villa Santa Rita", "Villa Soldati", "Villa Urquiza"
+];
+var geographicAliases = ["Palermo Viejo", "Palermo Hollywood", "Palermo Soho", "Palermo Chico", "Barrio Norte",
+  "Once", "Abasto", "Belgrano R", "Belgrano C", "Capital", "CABA", "Bernal", "Temperley", "San Fernando", "Hurlingham"];
+test("B1 los 48 barrios oficiales, alias y localidades funcionan con profile y app vieja", async t => {
+  assert.equal(new Set(officialNeighborhoods).size, 48);
+  var fetch = network(); t.mock.method(global, "fetch", fetch);
+  for (var zone of officialNeighborhoods.concat(geographicAliases)) {
+    for (var query of [{profile:"dinner", zone}, {category:"restaurantes", zone}]) {
+      var res = await search(query); assert.equal(res.statusCode, 200, JSON.stringify(query));
+      assert.ok(JSON.parse(googleCalls(fetch).at(-1).body).textQuery.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").includes(plan.profileZone(zone)));
+    }
+  }
+  assert.equal((await search({category:"bares", zone:"Mataderos"})).statusCode, 200);
+  assert.equal((await search({category:"salones", zone:"Mataderos"})).statusCode, 200);
+});
+test("B1 sufijos permitidos se normalizan antes de query y search_repeat", async t => {
+  var fetch = network(); t.mock.method(global, "fetch", fetch);
+  for (var suffix of [", CABA", ", Capital", ", Capital Federal", ", Buenos Aires", ", Provincia de Buenos Aires"]) {
+    assert.equal(plan.profileZone("  PÁLERMO " + suffix), "palermo");
+    for (var query of [{profile:"dinner", zone:"Palermo" + suffix}, {category:"restaurantes", zone:"Palermo" + suffix}]) {
+      assert.equal((await search(query)).statusCode, 200);
+      assert.equal(JSON.parse(googleCalls(fetch).at(-1).body).textQuery, "restaurantes en palermo, Buenos Aires");
+    }
+  }
+  var ip = "10.70.9.1";
+  assert.equal((await search({profile:"grill", zone:"Palermo, CABA"}, ip)).statusCode, 200);
+  assert.equal((await search({profile:"grill", zone:" PÁLERMO , Buenos Aires"}, ip)).statusCode, 200);
+  assert.equal((await search({profile:"grill", zone:"Palermo"}, ip)).statusCode, 429);
+  assert.equal((await search({category:"restaurantes", zone:"Palermo, CABA"}, ip)).statusCode, 200);
+  assert.equal((await search({category:"restaurantes", zone:"Palermo, Buenos Aires"}, ip)).statusCode, 200);
+  assert.equal((await search({category:"restaurantes", zone:"Palermo"}, ip)).statusCode, 429);
+});
+test("B1 basura/no-zona ni siquiera llama a contadores o Google, también en clientes viejos", async t => {
+  var fetch = network(); t.mock.method(global, "fetch", fetch);
+  var invalid = ["en Marzo", "Ana Perez", "ana@example.invalid", "Mi cena con amigos", "1122334455",
+    "Ana Perez, CABA", "Palermo, ana@example.invalid", "Palermo, Buenos Aires, CABA", ", CABA", "Palermo, secreto", "Palermo\nnota privada"];
+  for (var zone of invalid) {
+    assert.equal(plan.profileZone(zone), null, zone);
+    for (var query of [{profile:"dinner", zone}, {category:"restaurantes", zone}]) assert.equal((await search(query)).statusCode, 400, zone);
+  }
+  assert.equal(fetch.calls.length, 0);
+});
+test("O1 cumpleaños chicos conservan comida/bar; celebración requiere lugar o cantidad", () => {
+  var cases = [
+    [{type:"Cumpleaños", guests:6, needs:["comida"]}, "dinner"],
+    [{type:"Cumpleaños con cena", guests:6, needs:["comida"]}, "dinner"],
+    [{type:"Cumpleaños", guests:4, needs:[]}, "dinner"],
+    [{type:"Cumpleaños", needs:[]}, "dinner"],
+    [{type:"Fiesta", needs:[]}, "dinner"],
+    [{type:"Cumpleaños", guests:10, needs:["bebida"]}, "bars"],
+    [{type:"Cumpleaños", guests:30, needs:["lugar"]}, "celebration"],
+    [{type:"Fiesta", guests:15, needs:[]}, "celebration"],
+    [{type:"Cumpleaños", guests:6, needs:["lugar"]}, "celebration"],
+    [{type:"Cumpleaños en salón", guests:6, needs:[]}, "celebration"],
+    [{type:"Fiesta de 15", needs:["lugar"]}, "venues"]
+  ];
+  cases.forEach(([input, expected]) => assert.equal(f1.chooseProfile(input), expected, JSON.stringify(input)));
+});
+test("O2 foto real suma, foto sola no fuerza salón y cena gana a servicios accesorios", () => {
+  assert.equal(f1.chooseProfile({type:"Fiesta", needs:["lugar", "musica", "deco", "torta", "foto"]}), "multi_service");
+  assert.equal(f1.chooseProfile({type:"Fiesta", needs:["lugar", "musica", "foto"]}), "multi_service");
+  assert.equal(f1.chooseProfile({type:"Cena", needs:["musica", "torta"]}), "dinner");
+  assert.equal(f1.chooseProfile({type:"Comida", needs:["lugar", "musica", "foto"]}), "dinner");
+  assert.equal(f1.chooseProfile({type:"Cena", guests:80, needs:["musica", "torta"]}), "venues");
+  assert.equal(f1.chooseProfile({type:"Juntada", needs:["foto"]}), "dinner");
+  var scenario = require("./fixtures/matching/scenarios-f6a").find(s => s.id === "musica-deco-torta-fotos");
+  assert.ok(scenario.needs.includes("foto")); assert.ok(!scenario.needs.includes("fotos"));
 });

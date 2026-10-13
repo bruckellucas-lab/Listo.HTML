@@ -758,8 +758,13 @@
     if (/brunch|cafe|merienda/.test(type)) return "cafe_brunch";
     if (d.diet && d.diet.on && (d.diet.on.vegan || d.diet.on.vegetarian)) return "vegan";
     if (/vegana|vegano|vegetariana|vegetariano/.test(type)) return "vegan";
-    if (ids.filter(function (id) { return ["musica", "deco", "torta", "fotos"].indexOf(id) !== -1; }).length >= 2) return "multi_service";
-    if (/cumple|fiesta/.test(type) && (d.guests || 0) < 40) return "celebration";
+    // Una cena conserva su intención aunque pida música o torta.
+    var dining = /cena|comida/.test(type);
+    if (!dining && ids.filter(function (id) { return ["musica", "deco", "torta", "foto"].indexOf(id) !== -1; }).length >= 2) return "multi_service";
+    if (/cumple|fiesta/.test(type) && !/fiesta de 15/.test(type)) {
+      if (ids.indexOf("lugar") !== -1 || (d.guests || 0) >= 15 || /salon|lugar/.test(type)) return "celebration";
+      return ids.indexOf("bebida") !== -1 && ids.indexOf("comida") === -1 ? "bars" : "dinner";
+    }
     var category = chooseCategory(d);
     return category === "bares" ? "bars" : category === "salones" ? "venues" : "dinner";
   }
