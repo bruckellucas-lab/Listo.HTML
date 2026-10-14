@@ -9,8 +9,10 @@ aprobación operativa.
 Formulario de feedback preparado:
 [Formulario BETA LISTO](https://docs.google.com/forms/d/e/1FAIpQLSfgJU3941ZyGUrffkHAZmK1xOP-q8lZVJ1TjtRaveumwCPf0g/viewform).
 
-Esta guía no contiene nombres, teléfonos, emails ni respuestas reales. No modifica el formulario
-ni accede a sus resultados.
+Esta guía no contiene nombres de testers, emails ni respuestas reales. El Form publicado pide
+`Nombre` y puede recibir opiniones o texto libre: por eso el Form y su hoja vinculada son registros
+privados con datos personales, no registros anónimos. Esta guía no modifica el formulario ni
+accede a sus resultados.
 
 ## Objetivo de la beta
 
@@ -30,22 +32,36 @@ una nueva funcionalidad.
 
 ## Privacidad y fuentes de verdad
 
-- El Google Form es la fuente para opiniones declaradas por testers.
+- El Google Form y su hoja de respuestas son la fuente privada para opiniones declaradas por
+  testers. Sólo pueden acceder el responsable de beta y las personas expresamente autorizadas.
+- El nombre pedido por el Form se usa exclusivamente para identificar o deduplicar respuestas y
+  marcar “Formulario completado” en el seguimiento privado.
+- La pregunta `Nombre` se mantiene temporalmente porque el formulario ya fue enviado a ocho
+  testers. Antes de ampliar la beta se debe revisar si se reemplaza por un código `T-...` o se hace
+  opcional. Esta decisión no autoriza modificar ahora el Google Form.
 - Admin y el registro operativo de BETA-3 son la fuente para pedidos y tiempos de atención.
-- GitHub guarda sólo problemas resumidos y redactados, nunca respuestas crudas con PII.
-- La relación entre una persona invitada y su ID anónimo vive únicamente en el registro privado
-  controlado; no se versiona ni se comparte en tickets.
+- Los códigos `T-...` son seudónimos, no una anonimización irreversible. La relación entre una
+  persona y su código vive únicamente en el registro privado controlado.
+- El seguimiento de testers y cualquier tabla de feedback que vincule una respuesta con `T-...`
+  son privados: no se versionan ni se copian a documentación, issues o reportes públicos.
+- GitHub guarda únicamente códigos `FB-...` y resúmenes redactados. No debe contener valores reales
+  de `T-...`, `inquiry_id`, `WA-...`, `DATA-...` ni otro identificador que permita vincular el
+  resumen con una persona o caso.
+- Los nombres nunca se copian a GitHub, documentación, issues ni reportes.
 - Si un comentario abierto contiene nombre, teléfono, email, alergia, diagnóstico, pedido o chat,
   redactarlo antes de clasificarlo. No pegar el original en documentación o tareas.
 - El acceso al Form, su hoja de respuestas y cualquier exportación debe limitarse a las personas
   designadas. No descargar copias locales sin un procedimiento acordado.
+- La política pendiente de retención y borrado debe abarcar el Form, su hoja vinculada, las
+  exportaciones y todas sus copias. No borrar respuestas automáticamente mientras esa política no
+  esté definida.
 
 ## Seguimiento de testers
 
-Asignar IDs correlativos no identificables, por ejemplo `T-001`, `T-002`. No derivarlos de
-iniciales, nombre, teléfono o email.
+Este seguimiento es privado. Asignar seudónimos correlativos, por ejemplo `T-001`, `T-002`, sin
+derivarlos de iniciales, nombre, teléfono o email. No copiar la tabla al repositorio.
 
-| ID anónimo | Invitación enviada | Web probada | Formulario completado | Dispositivo | Flujo probado | Problema detectado | Severidad | Requiere seguimiento | Estado del seguimiento |
+| Seudónimo | Invitación enviada | Web probada | Formulario completado | Dispositivo | Flujo probado | Problema detectado | Severidad | Requiere seguimiento | Estado del seguimiento |
 |---|---|---|---|---|---|---|---|---|---|
 | `T-___` | `[sí/no + fecha]` | `[sí/no + fecha]` | `[sí/no + fecha]` | `[celular/computadora/ambos]` | `[búsqueda/elección/avanzar/WhatsApp]` | `[código o resumen sin PII]` | `[P0/P1/P2/P3/N/A]` | `[sí/no]` | `[nuevo/contactado/resuelto/no reproducido]` |
 
@@ -58,10 +74,16 @@ Reglas:
 - “Web probada” requiere confirmación del tester o evidencia operativa, no sólo link enviado.
 - “Formulario completado” se marca desde el Form, sin copiar la respuesta.
 - No registrar nombres, teléfonos, emails, ubicación precisa, restricciones ni datos sensibles.
+- Clasificar cada caso privado como `ensayo BETA4`, `tester` o `real no tester`. Un pedido de un
+  tester puede ser real y debe atenderse como tal; no cambiar el nombre de contacto en Admin ni
+  modificar la base de datos para etiquetarlo.
+- Para métricas cuenta una respuesta válida por tester. Si envía varias, prevalece la más reciente
+  y las anteriores se marcan como duplicadas en el registro privado, sin borrarlas automáticamente.
 
 ## Registro de feedback
 
-Cada observación accionable recibe un ID `FB-AAAAMMDD-01`.
+Cada observación accionable recibe un ID `FB-AAAAMMDD-01`. La tabla detallada que vincula el
+feedback con un tester o caso vive sólo en el registro privado.
 
 | ID feedback | ID tester | Fuente | Categoría | Prioridad | Resumen redactado | Evidencia mínima | Reproducible | Frecuencia | Responsable | Estado |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -69,6 +91,29 @@ Cada observación accionable recibe un ID `FB-AAAAMMDD-01`.
 
 No usar cantidad de comentarios como único criterio de prioridad. Un solo P0 pesa más que muchas
 preferencias visuales.
+
+Si hace falta abrir una tarea en GitHub, trasladar sólo `FB-...`, categoría, prioridad, resumen
+redactado y pasos sintéticos. No trasladar la columna `ID tester`, IDs técnicos reales, capturas,
+respuestas textuales ni enlaces a filas del Form, Admin o registro operativo.
+
+## Ruta urgente hacia la operación BETA-3
+
+- Canal oficial para asuntos urgentes o pedidos sin respuesta: WhatsApp LISTO
+  **+54 11 5806 5840**.
+- El Form es para feedback y **no es un canal de atención urgente**. Se recomienda incluir esta
+  advertencia de forma visible en el Form y en futuras invitaciones; no se afirma que ya esté
+  incorporada ni se modifica el Form desde esta tarea.
+- Responsable o suplente revisa el Form al menos una vez por cada turno de guardia efectiva. No se
+  espera al triage semanal cuando aparece un incidente urgente.
+- Si el feedback revela un pedido sin atender, abrir o recuperar el caso BETA-3 usando el
+  `inquiry_id` del Admin o un código `WA-AAAAMMDD-XX`. Verificar primero si ya existe para evitar
+  duplicados. Registrar en el sistema privado responsable, siguiente acción y vencimiento interno.
+- Si se pide acceso, corrección o eliminación de datos personales, derivar inmediatamente al
+  responsable designado como caso privado `DATA-AAAAMMDD-XX`.
+- Ante un P0, avisar al responsable de beta dentro del mismo turno, decidir si corresponde pausar
+  el flujo afectado o toda la beta, y registrar de forma privada la decisión, hora y responsable.
+- Ninguno de esos identificadores operativos ni la PII asociada se copia al registro de feedback
+  de GitHub.
 
 ## Clasificación del feedback
 
@@ -173,18 +218,38 @@ puede ser P3.
 No completar esta sección sin respuestas o registros reales. Publicar siempre período, fuente,
 denominador y cantidad de valores faltantes.
 
+La vista pública observada muestra 13 preguntas, no 10. Antes de calcular resultados se debe
+confirmar en el editor del Form la cantidad, el texto, el tipo y la obligatoriedad de cada pregunta.
+El mapeo observado, sujeto a esa confirmación, es:
+
+| Pregunta observada | Tratamiento |
+|---|---|
+| P3 Facilidad | Escala 1–5; informar promedio o distribución y `n` válido. |
+| P4 Comprensión | Distribución categórica; no calcular promedio. |
+| P5 Pertinencia | Distribución categórica; no interpretar que midió “opciones mostradas” por separado. |
+| P6 Confianza | Escala 1–10; informar promedio o distribución y `n` válido. |
+| P7 Intención | Distribución `Sí / Tal vez / No`. |
+| P8 Fricciones | Distribución de respuestas; texto libre sólo en la fuente privada. |
+| P11 Eficiencia comparada | Escala 1–5; informar promedio o distribución y `n` válido. |
+| P9, P10 y P12 | Señales exploratorias de producto, no autorización para desarrollar funciones. |
+
+“Testers que probaron” y dispositivo salen del seguimiento privado, no del Form. Para todas las
+preguntas se informa el `n` válido y no se fabrican respuestas para completar faltantes.
+
 | Métrica | Cálculo | Fuente |
 |---|---|---|
-| Testers invitados | IDs anónimos con invitación enviada en el período | registro privado de testers |
+| Testers invitados | seudónimos con invitación enviada en el período | registro privado de testers |
 | Testers que probaron | IDs únicos con prueba confirmada; no contar sólo invitación | seguimiento de testers |
 | Formularios recibidos | respuestas válidas del período, deduplicadas según regla privada | Google Form |
 | Tasa de respuesta entre testers | formularios recibidos / testers que probaron × 100 | seguimiento + Form |
 | Tasa sobre invitados | formularios recibidos / testers invitados × 100, como contexto secundario | seguimiento + Form |
-| Facilidad promedio | promedio de la pregunta de facilidad en su escala original | Google Form |
-| Comprensión del pedido | promedio o distribución de la pregunta correspondiente, sin reinterpretar la escala | Google Form |
-| Pertinencia percibida | promedio o distribución de calidad de opciones | Google Form |
-| Confianza promedio | promedio de la pregunta de confianza en su escala original | Google Form |
-| Intención de avanzar | porcentaje por respuesta o promedio, según el tipo real de pregunta | Google Form |
+| Facilidad | promedio o distribución de P3 en escala 1–5, con `n` válido | Google Form |
+| Comprensión del pedido | distribución categórica de P4; sin promedio | Google Form |
+| Pertinencia percibida | distribución categórica de P5; sin inferir una pregunta separada sobre cantidad | Google Form |
+| Confianza | promedio o distribución de P6 en escala 1–10, con `n` válido | Google Form |
+| Intención de avanzar | distribución y porcentaje de P7: `Sí / Tal vez / No` | Google Form |
+| Fricciones | distribución de P8; comentarios abiertos sólo en fuente privada | Google Form |
+| Eficiencia comparada | promedio o distribución de P11 en escala 1–5, con `n` válido | Google Form |
 | Bugs por prioridad | cantidad de IDs de feedback únicos clasificados P0/P1/P2/P3 | registro de feedback |
 | Pedidos de prueba | casos marcados explícitamente como prueba | Admin/registro operativo |
 | Pedidos reales | casos no marcados como prueba; nunca inferir sólo por nombre | Admin/registro operativo |
@@ -194,11 +259,19 @@ Reglas de cálculo:
 
 - No mezclar respuestas del Form con filas del Admin sin un vínculo anónimo controlado.
 - No sumar respuestas múltiples de una persona como testers distintos.
+- Para las métricas, conservar sólo la respuesta válida más reciente de cada tester; marcar las
+  anteriores como duplicadas en el registro privado sin borrarlas automáticamente.
 - Si una pregunta admite omisión, informar `n` válido de esa métrica.
 - No convertir escalas sin documentar la fórmula.
 - No promediar texto libre.
 - Diferenciar claramente pedidos reales, pedidos del ensayo y pruebas de testers.
 - No afirmar tendencias con una muestra pequeña; describirlas como señales.
+- Como el link publicado puede recibir respuestas de terceros, validar cada respuesta contra el
+  registro privado antes de incluirla. Cerrar el Form al terminar la tanda; esta tarea sólo
+  documenta el control y no cambia su configuración.
+
+Las respuestas de P9, P10 y P12 pueden sugerir chat, división de gastos u otras capacidades. Son
+señales exploratorias: ninguna justifica por sí sola diseñar o desarrollar una función nueva.
 
 Plantilla de reporte:
 
@@ -273,6 +346,9 @@ No comunicarla al tester si guardia y suplente no pueden sostenerla.
 - [ ] P1 del flujo principal resueltos o beta pausada para resolverlos.
 - [ ] Pedidos de la tanda registrados, asignados y atendidos.
 - [ ] Respuestas recopiladas sin copiar PII al repositorio.
+- [ ] Cantidad, tipo y obligatoriedad de las preguntas confirmados en el editor del Form.
+- [ ] Respuestas de terceros o duplicadas excluidas de las métricas mediante el registro privado.
+- [ ] Advertencia “el Form no es atención urgente” preparada para futuras invitaciones y Form.
 - [ ] Problemas clasificados, agrupados y con responsable.
 - [ ] Pruebas y pedidos reales están diferenciados.
 - [ ] No se confundieron aceptaciones con reservas confirmadas.
@@ -333,7 +409,11 @@ cobertura operativa real.
 
 - El ensayo práctico BETA-4 continúa pendiente.
 - La cobertura horaria prevista debe confirmarse con guardia y suplente efectivos.
+- La advertencia de atención urgente todavía no fue incorporada al Form ni a invitaciones futuras.
+- El mapeo de 13 preguntas observado debe confirmarse dentro del editor del Form.
+- El enlace público exige validar respuestas y cerrar el Form al terminar la tanda.
 - Deben definirse acceso, retención y eliminación de respuestas/exportaciones del Form.
+- Debe revisarse si `Nombre` se reemplaza por un código o pasa a ser opcional antes de ampliar.
 - Debe revisarse la base legal/consentimiento para datos sensibles antes de ampliar casos.
 - El mapeo privado entre personas e IDs anónimos necesita responsable y acceso restringido.
 - El registro debe distinguir pruebas, pedidos reales y casos sólo por WhatsApp.
