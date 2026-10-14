@@ -11,7 +11,7 @@ El hallazgo de BETA-4 es una señal válida, pero todavía no alcanza para confi
 se conservaron los nombres, tipos ni posiciones de las opciones consideradas poco pertinentes.
 No deben reconstruirse ni inventarse.
 
-Para el pedido descrito, el código actual debería:
+Para la frase canónica propuesta en este documento, el código actual debería:
 
 1. detectar `Cumpleaños`, 6 personas, Palermo, presupuesto total de $300.000, comida/cena y deco;
 2. elegir el perfil cerrado `dinner`;
@@ -20,7 +20,11 @@ Para el pedido descrito, el código actual debería:
 5. admitir restaurantes con tipo y señales mínimas, y ordenarlos por zona, tipo y calidad de
    reseñas.
 
-Esto explica una limitación comprobada por código: cumpleaños, seis personas, presupuesto y
+No está demostrado que la redacción usada en BETA-4 haya generado `dinner`: el texto exacto y los
+campos estructurados de esa corrida no fueron incorporados al diagnóstico. Cambios pequeños en las
+necesidades detectadas pueden producir `celebration` o `multi_service` antes de consultar Google.
+
+Para la variante canónica `dinner`, esto explica una limitación comprobada por código: cumpleaños, seis personas, presupuesto y
 “buena ambientación” no diferencian resultados dentro de `dinner`. LISTO tampoco recibe precios,
 capacidad ni una señal verificable de ambiente desde Google. Por lo tanto, un restaurante puede
 superar los filtros técnicos y seguir pareciendo poco apropiado para una cena de cumpleaños.
@@ -35,7 +39,8 @@ en el código, pero no está demostrado qué capa produjo las opciones objetadas
 - El código y los tests muestran cómo se clasifica este perfil y qué datos llegan al endpoint.
 - La consulta, filtros, fórmula y presentación están versionados y pueden auditarse sin red.
 - El presupuesto es un total del plan y se conserva como número; no participa del matching.
-- “Ambientación” se detecta como necesidad `deco`, pero no modifica la búsqueda `dinner`.
+- En la frase canónica, “ambientación” se detecta como necesidad `deco`; combinada con otras
+  necesidades puede cambiar el perfil antes de la búsqueda.
 - Google no entrega en este request precio, capacidad, disponibilidad ni una propiedad de
   “buena ambientación”.
 - F5 no rellena hasta tres con candidatos que fallen sus mínimos; muestra 0, 1, 2 o 3.
@@ -43,6 +48,7 @@ en el código, pero no está demostrado qué capa produjo las opciones objetadas
 ### No confirmado
 
 - Cuáles fueron las opciones observadas en BETA-4, su orden, tipo o zona.
+- Qué redacción y perfil exactos se usaron en la búsqueda BETA-4.
 - Si la evaluación negativa se debió al lugar, a una foto, al estilo, al presupuesto, a la zona o
   a una expectativa no visible para LISTO.
 - Qué respuesta exacta devolvió Google en ese momento ni si hoy devolvería la misma.
@@ -63,16 +69,16 @@ en el código, pero no está demostrado qué capa produjo las opciones objetadas
 | Consulta Google | El servidor arma una frase cerrada y pide hasta 20 resultados en español/región AR. Para `dinner|palermo`: `restaurantes en palermo, Buenos Aires`. | `api/_lib/plan.js`, `PROFILES` y `buildProfileQuery` (líneas 69–107); `api/_lib/google-places.js`, `searchText` (líneas 31–63). |
 | Datos disponibles | Se piden ID, nombre, dirección/componentes, ubicación, tipo principal, estado, Maps, web, rating, cantidad de reseñas y fotos. No precio, capacidad, horarios, disponibilidad ni reseñas textuales. | `api/_lib/google-places.js`, `FIELD_MASK` (líneas 10–29). |
 | Conversión | La respuesta se transforma en memoria y se excluyen cerrados permanentes; no se inventan faltantes. | `api/_lib/google-places.js`, `toProviderRow` y `toProviderRows` (líneas 65–121). |
-| Persistencia | Antes del filtro se intenta guardar sólo la fila mínima permitida del proveedor; el resultado visible completo no se guarda. | `api/plan-options.js` (líneas 69–85) y guardianes G/F6B. |
-| Admisión F5 | `dinner` admite `restaurant`, cualquier `*_restaurant` y `steak_house`; exige rating ≥4, al menos 20 reseñas y score calculable. Puede admitir una alternativa fuera de zona con aviso. | `api/_lib/plan.js`, `pertinentType`, `adequateType`, `pickAdequateOptions` (líneas 146–224). |
+| Persistencia | Buscar también guarda un `event_request`. La búsqueda puede intentar un upsert de hasta 20 filas mínimas en `providers` antes del filtro; cada fila conserva sólo `google_place_id` y datos propios permitidos. El resultado visible completo no se guarda. | `app.js`, `saveRequest` (líneas 643–645 y 654–725); `api/plan-options.js` (líneas 58–85) y guardianes G/F6B. |
+| Admisión F5 | `dinner` admite `restaurant`, cualquier `*_restaurant` —incluidos `fast_food_restaurant`, `hamburger_restaurant`, `breakfast_restaurant`, `brunch_restaurant` y `pizza_restaurant`— y `steak_house`; exige rating ≥4, al menos 20 reseñas y score calculable. Si faltan locales, hasta las tres opciones pueden quedar fuera de zona o inciertas, cada una con aviso. | `api/_lib/plan.js`, `pertinentType`, `adequateType`, `pickAdequateOptions` (líneas 146–224). |
 | Ranking F2 | Ordena por coincidencia de zona, tipo pertinente, score bayesiano, reseñas y finalmente orden original de Google. | `api/_lib/plan.js`, `qualityScore` y `pickOptions` (líneas 138–203). |
 | Cantidad/fallback | Devuelve como máximo tres; si quedan menos, no agrega relleno y ofrece coordinación manual. | `api/_lib/plan.js`, `optionsFeedback` (líneas 230–238); `docs/MATCHING-F5.md`. |
 | Tarjeta | Muestra una foto, nombre, tipo visible, zona/dirección corta, rating/reseñas, razón cerrada, atribución, Maps/web y “Precio y disponibilidad a confirmar”. | `app.js`, `photoHTML`, `reasonForCard`, `renderOptions` (líneas 1006–1145). |
 
-## Derivación esperada del caso BETA-4
+## Derivación esperada de la frase canónica
 
-Pedido de referencia, sin agregar datos: cena de cumpleaños, 6 personas, Palermo, presupuesto
-total $300.000 y buena ambientación.
+Frase creada para la reproducción futura, no transcripción de BETA-4: cena de cumpleaños,
+6 personas, Palermo, presupuesto total $300.000 y buena ambientación.
 
 | Dato | Interpretación esperada | Efecto real en las opciones |
 |---|---|---|
@@ -80,7 +86,7 @@ total $300.000 y buena ambientación.
 | 6 personas | `guests=6`. | Evita el umbral de celebración de 15, pero después no participa en búsqueda, filtro o ranking. |
 | Palermo | Zona cerrada válida. | Forma la consulta y prioriza coincidencia geográfica. |
 | $300.000 | `budget=300000` si el texto/campo conserva ese total. | Sólo se muestra y guarda como dato del plan; no llega a `/api/plan-options`. |
-| Buena ambientación | La palabra “ambientación” activa `deco`. “Lindo” por sí solo no es una señal cerrada. | Una sola necesidad `deco` no cambia `dinner` y no llega a Google ni al ranking. |
+| Buena ambientación | La palabra “ambientación” activa `deco`. “Lindo” por sí solo no es una señal cerrada. | En esta combinación, una sola `deco` no cambia `dinner` y no llega a Google ni al ranking. |
 
 ### Presupuesto
 
@@ -91,17 +97,39 @@ usa para aceptar, descartar u ordenar opciones.
 
 Esto es deliberadamente honesto: el FieldMask no pide precios y las tarjetas dicen “Precio y
 disponibilidad a confirmar”. El riesgo no es una comparación monetaria incorrecta, sino que la
-persona puede esperar que el presupuesto haya personalizado resultados cuando hoy no lo hace.
+persona puede esperar que el presupuesto haya personalizado resultados cuando hoy no lo hace. La
+pantalla muestra `Hasta $300.000`, aunque ese valor no filtra ni ordena opciones.
 
 ### Preferencias blandas
 
 - `cumpleaños`: decide entre `dinner`, `bars` o `celebration`; dentro de `dinner` no distingue una
   cena cotidiana de una celebración chica.
-- `buena ambientación`: `ambientación` queda como `deco`, pero no hay una señal permitida que
-  pruebe estética, clima, ruido, iluminación o aptitud para festejos.
+- `buena ambientación`: `ambientación` queda como `deco`, es decir, como servicio de decoración.
+  Esto puede confundir una preferencia estética por un lugar agradable con la necesidad de
+  contratar decoración. Tampoco hay una señal permitida que pruebe estética, clima, ruido,
+  iluminación o aptitud para festejos.
 - `lindo`: no pertenece al catálogo de necesidades ni debe inferirse desde rating o foto.
 - La foto puede influir mucho en la percepción, pero es la primera foto disponible de Google, no
   una prueba de ambiente ni de identidad perfecta del local.
+
+### Variación del perfil antes de Google
+
+Los siguientes resultados están confirmados por las funciones actuales para un cumpleaños chico
+de seis personas cuando “cena” se representa como necesidad de comida. Son ejemplos de
+sensibilidad, no una reconstrucción de lo ocurrido en BETA-4:
+
+| Campos/necesidades detectadas | Perfil | Consulta cerrada posterior |
+|---|---|---|
+| Cumpleaños chico + cena + deco | `dinner` | restaurantes |
+| Cumpleaños chico + cena + lugar + buena ambientación | `celebration` | salones para celebraciones |
+| Cumpleaños chico + cena + torta + ambientación | `multi_service` | salones para eventos |
+| Cumpleaños chico + cena + fotos + deco | `multi_service` | salones para eventos |
+| Cumpleaños chico + cena + tragos + ambientación | `dinner` | restaurantes |
+
+La diferencia se produce antes del endpoint: `lugar` activa `celebration`, mientras que dos
+necesidades entre música, deco, torta y foto pueden activar `multi_service` cuando el tipo
+detectado sigue siendo `Cumpleaños`. Por eso no debe asumirse `dinner` sin revisar primero los
+campos guardados de la corrida original.
 
 ## Hipótesis priorizadas
 
@@ -109,11 +137,12 @@ persona puede esperar que el presupuesto haya personalizado resultados cuando ho
 
 | ID | Hipótesis | Evidencia actual | Riesgo | Cómo distinguirla |
 |---|---|---|---|---|
+| H0 | La redacción usada en BETA-4 cambió el perfil antes de Google. | Alta para la sensibilidad de la función; desconocida para la corrida histórica. | Muy alto: `dinner`, `celebration` y `multi_service` generan universos distintos. | Reconstruir primero los campos estructurados guardados y el perfil, mediante lectura autorizada y minimizada; no repetir todavía la búsqueda. |
 | H1 | Se pierde intención específica al reducir el pedido a `dinner|palermo`. | Alta: invitados, presupuesto, cumpleaños y deco no llegan al endpoint. | Alto: todos los pedidos con ese perfil/zona comparten consulta y criterio. | Confirmar en Network que el request contiene sólo `profile=dinner&zone=Palermo`; comparar evaluación de cada tarjeta con la intención omitida. |
 | H2 | La familia admisible de `dinner` es demasiado amplia para “cumpleaños con ambiente”. | Alta: cualquier `*_restaurant` y `steak_house` puede pasar. | Alto: un tipo gastronómico válido puede ser subjetivamente inadecuado para festejar. | Registrar `tipo visible` y separar “restaurante válido” de “apropiado para el festejo”. |
 | H3 | El ranking premia zona y calidad de reseñas, no atmósfera, grupo chico ni presupuesto. | Alta: comparador y FieldMask no contienen esas señales. | Alto: opciones populares pueden desplazar otras más afines no observables. | Ver si los rechazos tienen zona/tipo correctos pero fallan sólo por estilo, precio supuesto o ocasión. |
 | H4 | La consulta textual genérica de Google recupera un universo demasiado amplio. | Media: la frase es genérica; no tenemos la respuesta real. | Medio/alto. | Reproducir una vez y clasificar los resultados devueltos; no inferir candidatos que Google no mostró. |
-| H5 | Una opción externa o con zona incierta fue percibida como mala. | Media/baja: el código lo permite con aviso, pero no conocemos las tarjetas. | Medio. | Registrar zona general y si apareció el aviso. No usar calle/dirección completa. |
+| H5 | Una o más opciones externas o con zona incierta fueron percibidas como malas. | Media/baja: si faltan locales, el código puede mostrar hasta tres con aviso, pero no conocemos las tarjetas. | Medio. | Registrar zona general y si apareció el aviso. No usar calle/dirección completa. |
 | H6 | Metadata ausente o imprecisa de Google alteró filtro/ranking/presentación. | Posible: el sistema depende de primaryType, zona, rating y reseñas actuales. | Medio. | Comparar tarjeta con Maps en el momento, sin exportar la respuesta ni guardar contenido completo. |
 | H7 | Una foto poco representativa hizo parecer inadecuada una opción pertinente. | Riesgo ya documentado en F6B; sin evidencia del caso. | Medio para confianza, bajo para ranking. | Evaluar por separado “lugar” y “foto”; no rechazar el matching sólo por la imagen. |
 | H8 | F5 introdujo relleno. | Evidencia contraria: exige tipo/calidad y permite menos de tres. | Bajo. | Si una tarjeta pasó, revisar qué criterio objetivo cumplió; puede ser admisión amplia, no relleno técnico. |
@@ -144,6 +173,26 @@ Códigos sugeridos para el motivo: `TIPO`, `ZONA`, `OCASION`, `AMBIENTE_NO_VERIF
    confirmados.
 5. Preparar un registro privado y temporal; no usar GitHub para resultados Google.
 
+### Paso previo: reconstruir el perfil BETA-4 sin una búsqueda nueva
+
+Antes de consumir Google otra vez, el responsable autorizado debe intentar identificar la corrida
+original mediante una lectura segura de los campos ya guardados en `event_requests`:
+
+1. Usar el acceso de sólo lectura aprobado por el responsable de datos, con una ventana horaria
+   estrecha correspondiente al ensayo y el entorno correcto.
+2. Proyectar únicamente `created_at`, `event_type`, `guests`, `zone`, `budget` y las necesidades
+   estándar necesarias para decidir el perfil.
+3. No abrir, seleccionar, exportar ni copiar `original_prompt`, `dietary_requirements`, IDs,
+   contactos u otros campos. Si `needs` contiene texto personalizado en vez de etiquetas estándar,
+   detener la reconstrucción y no copiarlo.
+4. Aplicar la tabla anterior y `chooseProfile` a esos campos. Registrar en el control privado sólo
+   entorno, franja horaria, perfil inferido y si la reconstrucción fue concluyente.
+5. Si hay más de una fila candidata o falta un campo, marcar `perfil no determinado`; no adivinar.
+
+No se incluye una consulta SQL genérica porque `needs` admite variantes de esquema y podría
+contener texto personalizado. La lectura debe configurarla y ejecutarla únicamente el responsable
+autorizado mediante una vista/proyección segura. Esta tarea no consulta Supabase.
+
 ### Ejecución canónica
 
 1. Abrir LISTO en una ventana nueva del navegador y anotar fecha/hora ART, entorno, versión/SHA,
@@ -158,7 +207,7 @@ Códigos sugeridos para el motivo: `TIPO`, `ZONA`, `OCASION`, `AMBIENTE_NO_VERIF
    - necesidades detectadas de cena/comida y deco.
 4. Corregir únicamente un error de extracción visible; registrar antes y después. No agregar
    preferencias nuevas para “ayudar” al resultado.
-5. Abrir DevTools antes de buscar. Confirmar que el request visible es
+5. Abrir DevTools antes de buscar. Para esta frase canónica, confirmar que el request visible es
    `/api/plan-options?profile=dinner&zone=Palermo` (normalización equivalente aceptable). No
    exportar HAR, JSON, headers, tokens ni IDs.
 6. Dejar terminar una sola búsqueda y una carga normal de fotos. No recargar ni repetir por
@@ -169,8 +218,14 @@ Códigos sugeridos para el motivo: `TIPO`, `ZONA`, `OCASION`, `AMBIENTE_NO_VERIF
 8. Abrir Maps o el sitio oficial sólo si hace falta distinguir tipo/zona del lugar. Mantener la
    atribución visible y no copiar contenido adicional.
 9. No tocar “Elegir” ni “Quiero avanzar”: no son necesarios para diagnosticar el ranking.
-10. Como buscar guarda el pedido, identificarlo operativamente por el marcador `PRUEBA BETA6A` y
-    cerrarlo desde Admin según el protocolo BETA-4, con motivo `ensayo`; no borrar filas ni usar SQL.
+10. Buscar guarda un `event_request` sintético aunque no se elija ni se toque “Quiero avanzar”. El
+    Admin actual gestiona `plan_inquiries`; sin inquiry, esa fila no aparece allí y no tiene un
+    estado cancelable desde Admin.
+11. No borrar ni editar esa fila directamente en Supabase. Registrar únicamente el marcador
+    `PRUEBA BETA6A`, fecha/hora y entorno en el registro privado, y excluir el caso de las métricas
+    operativas.
+12. El tratamiento de `event_requests` de prueba sin inquiry debe reconciliarse con el protocolo
+    BETA-4 en una tarea documental separada; BETA-6A no modifica BETA-4.
 
 ### Repetición controlada
 
@@ -184,16 +239,19 @@ Códigos sugeridos para el motivo: `TIPO`, `ZONA`, `OCASION`, `AMBIENTE_NO_VERIF
 
 ## Tabla mínima de resultados
 
-Esta tabla vive en el registro privado y temporal del diagnóstico, no en el repositorio. El nombre
-público se usa sólo para poder discutir la opción durante la revisión inmediata. Definir su
-retención/borrado antes de ejecutar.
+Preferir una revisión en vivo y registrar cada lugar sólo por posición temporal (`Opción 1`,
+`Opción 2`, `Opción 3`). Esta tabla vive en el registro privado del diagnóstico, no en el
+repositorio, y por defecto no conserva nombres ni otro contenido de Google.
 
-| Corrida | Posición | Nombre público observado | Tipo visible | Zona general | Aviso de zona | Evaluación | Código de motivo | Explicación breve sin datos Google adicionales | ¿Foto influyó? |
-|---|---:|---|---|---|---|---|---|---|---|
-| `B6A-01` | `1` | `[nombre mostrado]` | `[tipo mostrado]` | `[Palermo/otra/incierta]` | `[no/fuera/incierta]` | `[pertinente/incierta/no pertinente]` | `[código]` | `[máx. una frase]` | `[sí/no]` |
+| Corrida | Posición de sesión | Tipo visible | Zona general | Aviso de zona | Evaluación | Código de motivo | Explicación breve sin contenido Google adicional | ¿Foto influyó? |
+|---|---:|---|---|---|---|---|---|---|
+| `B6A-01` | `Opción 1` | `[tipo general]` | `[Palermo/otra/incierta]` | `[no/fuera/incierta]` | `[pertinente/incierta/no pertinente]` | `[código]` | `[máx. una frase]` | `[sí/no]` |
 
-No registrar identidad del tester, dirección, coordenadas, contacto, Maps URL, website, place ID,
-rating, cantidad de reseñas, fotos, capturas, payloads ni comentarios libres del usuario.
+No registrar identidad del tester, nombre del lugar, dirección, coordenadas, contacto, Maps URL,
+website, place ID, rating, cantidad de reseñas, fotos, capturas, payloads ni comentarios libres.
+Si excepcionalmente se necesitara conservar un nombre para investigar una opción, verificar antes
+los permisos y términos aplicables, definir retención/borrado y limitar el acceso; sin esa
+verificación, la discusión se hace en vivo y el nombre no se guarda.
 
 ## Google, atribución, cuotas y almacenamiento
 
@@ -201,11 +259,11 @@ rating, cantidad de reseñas, fotos, capturas, payloads ni comentarios libres de
   reutilizar imágenes fuera del producto.
 - La respuesta lleva `Cache-Control: no-store`. Los resultados completos, ranking, razones y fotos
   quedan en memoria y no deben copiarse a Supabase, GitHub, fixtures o documentación.
-- La aplicación conserva sólo el `google_place_id` y datos propios mínimos según el contrato G.
-  Este protocolo no agrega otra persistencia.
-- Los nombres públicos de la tabla son contenido observado para una revisión operativa acotada.
-  Mantener el registro privado, mínimo y temporal; confirmar retención y términos aplicables antes
-  de ejecutar. Si no puede acordarse, usar revisión en vivo sin conservar nombres.
+- La búsqueda puede hacer upsert de hasta 20 filas mínimas en `providers`, antes de elegir las
+  tarjetas. La aplicación conserva sólo `google_place_id` y datos propios permitidos según el
+  contrato G; no significa que se guarden hasta 20 resultados completos.
+- La revisión recomendada es en vivo, sin guardar nombres ni contenido Google en planillas. Si una
+  excepción fuera imprescindible, requiere verificación previa de permisos y retención.
 - Una búsqueda admitida consume una llamada Text Search. Las fotos pueden consumir llamadas
   adicionales al cargarse. No hay segunda búsqueda automática.
 - Límites actuales relevantes: 30 búsquedas por visitante/10 minutos, repetición 2/10 s,
@@ -241,8 +299,8 @@ guardianes F3/F4A. No se implementa aquí.
 
 Modificar sólo si una reproducción documentada permite responder qué falla:
 
-1. **Clasificación:** el perfil enviado no es `dinner` pese a que la pantalla muestra cumpleaños
-   chico + comida, o cambia de manera inesperada al editar.
+1. **Clasificación:** el perfil observado no coincide con el que corresponde a los campos
+   estructurados, o una necesidad ambigua como `deco` cambia de forma reproducible la intención.
 2. **Recuperación Google:** una proporción relevante de lo devuelto contradice tipo o zona, no sólo
    una preferencia de ambiente sin fuente.
 3. **Filtro/ranking:** candidatos observables menos pertinentes desplazan de manera reproducible a
@@ -257,9 +315,10 @@ No modificar todavía cuando:
 - no puede aislarse si la causa fue lugar, zona, foto o expectativa;
 - la propuesta requiere enviar texto libre a Google, almacenar contenido Google o relajar costos.
 
-Evidencia mínima para abrir una implementación: una corrida canónica completa, tabla redactada,
-criterio acordado de pertinencia, al menos dos rechazos reproducibles con el mismo motivo objetivo
-o un solo fallo grave y objetivo, y una hipótesis que pueda probarse contra el resultado actual.
+Evidencia mínima para abrir una implementación: intento documentado de reconstruir el perfil
+BETA-4, una corrida canónica completa si todavía hace falta, tabla redactada, criterio acordado de
+pertinencia, al menos dos rechazos reproducibles con el mismo motivo objetivo o un solo fallo grave
+y objetivo, y una hipótesis que pueda probarse contra el resultado actual.
 
 ## Alcance de BETA-6A
 
