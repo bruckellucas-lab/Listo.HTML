@@ -973,8 +973,8 @@
 
   function renderSensitive(items) {
     var labels = items.map(dietLabel);
-    var msg = "Hola LISTO. Quiero que me ayuden a buscar opciones para este plan:\n“" + state.text + "”\n" +
-      (labels.length > 1 ? "Requisitos: " : "Requisito: ") + labels.join(", ") + ".";
+    // Canal externo: no precargar el pedido ni salud/restricciones; el usuario decide qué escribir.
+    var msg = "Hola LISTO. Quiero ayuda para coordinar un plan con requisitos especiales.";
     $("#proposals").innerHTML =
       '<div class="proposals-message" role="status">' +
         '<p class="proposals-message-title">Todavía no tenemos opciones verificadas para este requisito en esta zona.</p>' +
