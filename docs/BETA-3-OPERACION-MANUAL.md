@@ -13,11 +13,11 @@ interno. El operador de guardia toma cada solicitud nueva, mantiene un único pr
 el traspaso al terminar su turno. El suplente interviene si el operador no está disponible o si
 un plazo interno está por vencer.
 
-El Admin es la fuente de verdad para el estado comercial, cotizaciones, propuestas y reservas.
-Mientras no exista asignación y seguimiento dentro del producto, usar un registro operativo
-interno controlado con sólo estos campos:
+El Admin es la fuente de verdad para el estado comercial, cotizaciones, propuestas y reservas
+que nacen en el flujo web. Mientras no exista asignación y seguimiento dentro del producto,
+usar un registro operativo interno controlado con sólo estos campos:
 
-- `inquiry_id`;
+- `inquiry_id` si existe, o ID operativo propio;
 - iniciales del responsable;
 - etiqueta operativa;
 - fecha y hora del próximo paso;
@@ -25,8 +25,20 @@ interno controlado con sólo estos campos:
 - motivo de cierre, si corresponde.
 
 No copiar allí nombres, teléfonos, emails, prompt, comentarios, restricciones ni detalles de
-salud. Esos datos se consultan en el Admin. Debe haber una sola fila por `inquiry_id` y un solo
-responsable activo.
+salud. Los datos de solicitudes web se consultan en el Admin. Debe haber una sola fila por caso
+y un solo responsable activo.
+
+Antes de abrir la beta, el responsable de operación debe designar **un único espacio controlado**
+para este registro, documentar su ubicación en el runbook privado y otorgar acceso sólo al
+operador de guardia, su suplente y el responsable de datos/operación. No usar archivos personales,
+planillas públicas ni copias locales sin control. También debe definir quién administra y revoca
+los accesos. Registrar el nombre y la ubicación exacta de ese espacio en el runbook privado es
+condición previa para abrir la beta; esta guía no inventa una herramienta que todavía no fue
+designada.
+
+El único canal autorizado para conversar con usuarios es el WhatsApp oficial de LISTO
+**+54 11 5806 5840**. No usar teléfonos personales. Antes de cada turno debe estar definido quién
+tiene acceso al canal y quién recibe el traspaso.
 
 ## Qué permite hoy el Admin
 
@@ -51,7 +63,71 @@ etiqueta operativa o motivo de cierre. `plan_inquiries.notes` es el comentario d
 debe reutilizarse. Las notas de cotización o reserva deben contener sólo contexto de esa
 operación. No se agrega UI ni persistencia en BETA-3.
 
-## Flujo de atención
+## Entradas por WhatsApp sin solicitud en Admin
+
+Hay dos salidas manuales que pueden abrir directamente el WhatsApp oficial con un mensaje
+genérico:
+
+- **Pedile a LISTO que lo busque**, ante requisitos especiales;
+- **Coordinar con LISTO**, cuando hay pocas opciones.
+
+Abrir o enviar esos mensajes no crea necesariamente una solicitud web. El caso puede no tener
+`inquiry_id`, no aparecer como **Nueva** en Admin y no contar con cotización, propuesta, booking
+ni historial técnico. No esperar a que aparezca en el panel.
+
+Al recibirlo:
+
+1. Crear un ID operativo diario correlativo, por ejemplo `WA-AAAAMMDD-01`.
+2. Registrar sólo ID, responsable, fecha/hora, canal, tipo de caso (`requisito_especial` o
+   `pocas_opciones`), próximo paso, vencimiento interno y estado operativo.
+3. No copiar nombre completo, teléfono completo, diagnóstico, texto completo del chat ni detalles
+   sensibles en el registro auxiliar.
+4. Asignar responsable y suplente de inmediato. Estos casos entran en el mismo SLA interno y en
+   el traspaso de turno; por su posible sensibilidad nunca deben quedar sin responsable.
+
+Pedir sólo lo mínimo que cambie la coordinación: fecha, zona, cantidad, presupuesto y la
+restricción concreta únicamente si hace falta. No pedir diagnósticos ni documentación médica.
+Usar la plantilla **Restricción sensible** y permitir que el usuario decida qué información
+imprescindible compartir.
+
+Si el caso continúa por WhatsApp, toda la coordinación es manual y queda fuera de los flujos de
+cotización, propuesta y reserva del Admin. No confirmar disponibilidad, precio, capacidad ni
+condiciones sin respuesta escrita del proveedor. Si el equipo decide llevarlo al flujo web,
+pedir al usuario que cargue un pedido nuevo desde LISTO. No inventar una solicitud en Admin ni
+escribir directamente en Supabase; una conversión asistida queda como mejora futura.
+
+## Pedidos sobre datos personales
+
+El mensaje genérico de **Consultar por mis datos** sólo puede ser atendido por el responsable
+designado de datos/operación. El operador de guardia debe acusar recibo y escalar; no resolver,
+exportar ni borrar por su cuenta.
+
+Procedimiento:
+
+1. Crear un ID correlativo, por ejemplo `DATA-AAAAMMDD-01`.
+2. Registrar sólo ID operativo, tipo (`acceso`, `correccion` o `eliminacion`), canal, fecha,
+   responsable, estado y próximo paso. No copiar el mensaje completo ni PII o datos sensibles al
+   registro auxiliar.
+3. Pedir por el canal directo el mínimo necesario para localizar el pedido: teléfono usado,
+   email usado, fecha aproximada o código si existe. No pedir restricciones ni otros datos que
+   no sean necesarios para identificarlo.
+4. Escalar la identificación y el pedido al responsable designado, que define la verificación y
+   la respuesta técnica/legal.
+5. Acusar recibo dentro de 1 día hábil. Resolver o informar estado dentro de 5 días hábiles,
+   salvo que una revisión legal o técnica requiera más tiempo. Son objetivos internos, no una
+   promesa ni sustituyen plazos legales aplicables.
+
+Acuse sugerido:
+
+> Recibimos tu consulta sobre datos personales y la derivamos a la persona responsable. Vamos a
+> responderte o informarte el estado dentro de nuestro plazo interno. Para proteger tus datos,
+> puede que necesitemos verificar información mínima del pedido.
+
+El operador no debe borrar ni editar filas, tocar Supabase manualmente, prometer eliminación
+inmediata, enviar capturas del Admin con PII ni compartir resultados antes de que la identidad y
+el alcance hayan sido revisados por el responsable.
+
+## Flujo de atención en Admin
 
 ### 1. Entrada y asignación
 
@@ -82,6 +158,9 @@ antes de repetir datos del pedido. Pedir sólo la información faltante, no todo
 nuevo. Registrar `contactado_usuario` y el próximo paso en el registro operativo; hoy este hecho
 no tiene campo propio en Admin.
 
+Usar exclusivamente el WhatsApp oficial de LISTO. No trasladar la conversación a un número
+personal aunque el usuario o proveedor lo proponga.
+
 ### 4. Contacto al proveedor
 
 Revisar y editar siempre el mensaje preparado por Admin antes de enviarlo. No enviar nombre,
@@ -91,6 +170,10 @@ nunca presentar a LISTO como certificador.
 
 Después del envío real, usar **Marcar como contactado** y elegir el canal correcto. No marcarlo
 antes. La solicitud pasa de `inquiry_requested` a `provider_contacted` si todavía estaba nueva.
+
+Si el proveedor pregunta por comisión, exclusividad, alta, pagos o condiciones comerciales de
+LISTO, no negociar ni improvisar una respuesta. Escalar al responsable comercial y mantener la
+consulta del usuario separada de esa conversación.
 
 ### 5. Espera y cotización
 
@@ -126,11 +209,18 @@ No cambiarla manualmente a Confirmado sin reserva; el Admin lo impide en el fluj
 ### 8. Seguimiento y cierre
 
 - `completed`: el servicio ocurrió o el equipo verificó que el caso terminó correctamente.
-- `cancelled`: el usuario canceló, el caso se perdió o no fue viable. Registrar el motivo en el
-  registro operativo hasta contar con motivos de cierre estructurados.
+- `cancelled`: el usuario canceló o el caso no fue viable. Registrar el motivo en el registro
+  operativo hasta contar con motivos de cierre estructurados.
+- Si el usuario no responde, marcar primero `perdido_sin_respuesta` sólo en el registro operativo
+  y mantener el estado técnico vigente hasta la fecha del plan. Así puede retomarse sin intentar
+  reabrir un estado terminal. En la fecha del plan o después, cerrar técnicamente como
+  `cancelled` si siguió sin respuesta.
 - Si hay una reserva confirmada, cancelar desde el flujo de reserva/solicitud y respetar las
   protecciones de comisión. Nunca corregir estados directamente en Supabase.
 - `completed` y `cancelled` son terminales y no se reabren.
+
+Si el usuario vuelve después de un cierre técnico, no reabrir ni alterar la fila: pedir un pedido
+nuevo desde la web y vincular ambos IDs sólo en el registro auxiliar, sin copiar PII.
 
 Al cerrar, eliminar recordatorios operativos que ya no correspondan, pero conservar el ID y el
 motivo mínimo según la política interna vigente.
@@ -152,7 +242,8 @@ No crear ni escribir estados nuevos. Para la beta, usar esta correspondencia:
 | reserva confirmada manualmente | `confirmed` + booking activo | `confirmado_manual` |
 | servicio finalizado | `completed` | `completado` |
 | usuario canceló | `cancelled` | `cancelado_usuario` |
-| usuario no respondió | `cancelled` | `perdido_sin_respuesta` |
+| usuario no respondió antes de la fecha | mantener estado técnico vigente | `perdido_sin_respuesta` |
+| usuario no volvió y pasó la fecha | `cancelled` | `perdido_sin_respuesta` |
 | pedido no viable | `cancelled` | `no_viable` |
 
 Los estados actuales alcanzan para una beta cerrada, pero agrupan motivos distintos dentro de
@@ -176,8 +267,9 @@ debe definir por escrito días y horario de cobertura.
 - Primer contacto: dentro de 2 horas hábiles desde el ingreso.
 - Fuera de cobertura: próximo turno hábil.
 - Usuario sin respuesta: primer seguimiento a las 24 horas.
-- Cierre sin respuesta: a las 72 horas; puede adelantarse a 48 horas si la fecha del plan es
-  próxima, dejando constancia del motivo.
+- Cierre operativo sin respuesta: a las 72 horas; puede adelantarse a 48 horas si la fecha del
+  plan es próxima. Usar `perdido_sin_respuesta`, pero no pasar a `cancelled` antes de la fecha del
+  plan salvo cancelación explícita u otra razón irreversible documentada.
 - Proveedor sin respuesta: seguimiento a las 4–6 horas hábiles; si ya terminó el turno, al día
   hábil siguiente.
 - Propuesta enviada: seguimiento a las 24 horas o antes si vence la cotización.
@@ -301,6 +393,9 @@ no necesarias.
 | posible duplicado | comparar IDs y contexto; operar uno, no enviar mensajes repetidos ni borrar filas |
 | promesa por WhatsApp | corregir por escrito de inmediato y registrar condiciones verificables en cotización/propuesta |
 | datos sensibles en chats | minimizar, no reenviar identidad, limitar acceso y seguir la política de conservación |
+| entrada sólo por WhatsApp | crear ID `WA-...`, asignar responsable y no esperar que aparezca en Admin |
+| pedido sobre datos personales | crear ID `DATA-...`, acusar recibo y escalar al responsable designado |
+| proveedor plantea comisión | separar la consulta del usuario y escalar; el operador no negocia |
 | pestaña vieja/conflicto | recargar Admin; no repetir a ciegas ni editar Supabase |
 | email o servicio externo falla | comprobar el estado guardado antes de reintentar para evitar avisos duplicados |
 
@@ -314,6 +409,9 @@ no necesarias.
 - No pedir diagnósticos ni datos sensibles innecesarios.
 - No enviar al proveedor más datos personales que los necesarios para ejecutar una reserva.
 - No copiar PII ni restricciones al registro operativo auxiliar.
+- No usar teléfonos personales para hablar con usuarios o proveedores.
+- No borrar datos, exportarlos o enviar capturas del Admin ante un pedido de privacidad.
+- No negociar comisiones ni condiciones comerciales con proveedores.
 - No cerrar acuerdos comerciales ambiguos en nombre de LISTO.
 - No usar “garantizado”, “seguro”, “apto”, “el mejor” o equivalentes sin respaldo permitido.
 - No cambiar estados ni corregir filas directamente en Supabase.
@@ -323,16 +421,16 @@ no necesarias.
 
 Al abrir el turno:
 
-1. revisar **Nueva** y solicitudes con próximo paso vencido;
-2. asignar todo lo no asignado;
+1. revisar **Nueva**, el WhatsApp oficial y casos con próximo paso vencido;
+2. asignar todo lo no asignado, incluidos `WA-...` y `DATA-...`;
 3. priorizar por fecha del plan y antigüedad, no por tamaño económico;
 4. comprobar propuestas aceptadas todavía sin reserva confirmada.
 
 Al cerrar el turno:
 
-1. ninguna solicitud abierta debe quedar sin responsable ni próximo paso;
+1. ninguna solicitud o conversación abierta debe quedar sin responsable ni próximo paso;
 2. verificar que cada contacto real tenga su señal técnica correspondiente cuando exista;
-3. entregar al suplente los casos urgentes sólo por `inquiry_id`;
+3. entregar al suplente los casos urgentes sólo por `inquiry_id` o ID operativo;
 4. cerrar accesos y no dejar exportaciones o chats abiertos en equipos compartidos.
 
 Una vez por semana: revisar solicitudes abiertas antiguas, motivos de cancelación, duplicados,
@@ -350,6 +448,9 @@ No son parte de BETA-3. Antes de ampliar volumen conviene evaluar, con diseño y
 - paginación cuando acercarse al límite actual de 500 filas;
 - auditoría por operador y roles individuales en lugar de una única sesión compartida;
 - revisión específica del mensaje preparado para proveedor en casos sensibles;
+- conversión asistida y trazable de conversaciones WhatsApp al flujo web/Admin;
+- procedimiento técnico/legal aprobado para acceso, corrección y eliminación de datos;
+- términos para proveedores y acuerdo comercial sobre comisión, pagos y responsabilidades;
 - retención y eliminación operativa de registros auxiliares y chats.
 
 Hasta entonces, la guía y el registro mínimo cubren la coordinación de una beta cerrada, pero no
