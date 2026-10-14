@@ -96,6 +96,11 @@ condiciones sin respuesta escrita del proveedor. Si el equipo decide llevarlo al
 pedir al usuario que cargue un pedido nuevo desde LISTO. No inventar una solicitud en Admin ni
 escribir directamente en Supabase; una conversión asistida queda como mejora futura.
 
+No pedir al usuario que quite la restricción para entrar al flujo web. Si el caso se convierte o
+se vincula con un pedido web, el responsable mantiene la restricción en el caso `WA-...` y la
+incluye en la consulta al proveedor. Hasta que exista una conversión técnica segura, los casos
+con restricción fuerte se coordinan sólo por WhatsApp.
+
 ## Pedidos sobre datos personales
 
 El mensaje genérico de **Consultar por mis datos** sólo puede ser atendido por el responsable
@@ -270,6 +275,8 @@ debe definir por escrito días y horario de cobertura.
 - Cierre operativo sin respuesta: a las 72 horas; puede adelantarse a 48 horas si la fecha del
   plan es próxima. Usar `perdido_sin_respuesta`, pero no pasar a `cancelled` antes de la fecha del
   plan salvo cancelación explícita u otra razón irreversible documentada.
+- Si el pedido no tiene fecha del plan, usar un plazo operativo fijo de 30 días para
+  seguimiento/cierre, documentado en el registro auxiliar.
 - Proveedor sin respuesta: seguimiento a las 4–6 horas hábiles; si ya terminó el turno, al día
   hábil siguiente.
 - Propuesta enviada: seguimiento a las 24 horas o antes si vence la cotización.
