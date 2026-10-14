@@ -4,7 +4,17 @@ var plan = require("../../api/_lib/plan");
 function normalize(text) {
   return String(text || "").normalize("NFKD").replace(/\p{M}|\p{Cf}/gu, "").toLowerCase().replace(/[^\p{L}\p{N}$]+/gu, " ").trim();
 }
-var BANNED = /\b(?:apt[oa]s?|tacc|celiac[oa]s?|gluten|kosher|halal|certificad\w*|verificad\w*|verificar\w*|disponible\w*|disponibilidad|reserv\w*|capacidad|ars|recomendad\w*|garantizad\w*|confirmad\w*)\b|\beventos? privados?\b|\b(?:hasta|entran|para)\s+(?:[\p{L}\p{N}]+\s+){1,4}personas?\b|\bprecio desde\b|\bdesde\s*\$|\bpor persona\b|\bideal para tu grupo\b|\$\s*\d/u;
+// F4A: familias sobre texto normalizado, con límites de palabra para conservar las labels F3.
+// No basta bloquear "ideal para tu grupo" o "evento privado": cualquier uso del claim es riesgoso.
+var BANNED = new RegExp([
+  /\b(?:ideal(?:es)?|recomendad\w*|(?:el|la) mejor|mejor de|popular(?:es)?|top|favorit[oa]s?|garantizad\w*)\b/.source,
+  /\b(?:privad[oa]s?|exclusiv[oa]s?)\b/.source,
+  // Tipo Google/datos de búsqueda no prueban dieta, salud, certificación ni seguridad.
+  /\b(?:vegan(?:[oa]s?|s)?|vegetarian[oa]s?|lactosa|alergic[oa]s?|alergias?|segur[oa]s?|apt[oa]s?|tacc|celiac[oa]s?|gluten|kosher|halal|certificad\w*|verificad\w*|verificar\w*)\b/.source,
+  /\b(?:barat[oa]s?|economic[oa]s?|accesibles?|buen precio|ars)\b|\bprecio desde\b|\bdesde\s*\$|\bpor persona\b|\$\s*\d/.source,
+  // "Confirmar" no equivale a "confirmado"; textIssues conserva la excepción pendiente completa.
+  /\b(?:disponible\w*|disponibilidad|reserv\w*|capacidad|confirmad\w*)\b|\b(?:hasta|entran|para)\s+(?:[\p{L}\p{N}]+\s+){1,4}personas?\b/.source
+].join("|"), "u");
 function textIssues(text) {
   // Única excepción de disponibilidad: frase segura completa. El resto continúa escaneándose.
   var n = normalize(text).replace(/\bprecio y disponibilidad a confirmar\b/g, "");

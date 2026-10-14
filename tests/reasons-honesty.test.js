@@ -30,6 +30,31 @@ test("F3 guardianes bloquean TODO el catálogo prohibido, variantes y afirmacion
  for(var label of Object.values(plan.REASON_LABELS).concat(Object.values(plan.ZONE_REASON_LABELS)))assert.deepEqual(guard.textIssues(label),[],label);
  assert.deepEqual(guard.textIssues("Precio y disponibilidad a confirmar"),[]);
 });
+var f4aClaims = {
+ recommendation: ["Ideal para cumpleaños", "Ideal para grupos grandes", "ideal", "ideal para", "recomendado", "recomendada", "recomendados", "recomendadas", "el mejor", "la mejor", "mejor de", "Muy popular", "popular", "top", "favorito", "garantizado"],
+ private: ["privado", "privada", "privados", "privadas", "Salón privado", "espacio privado", "evento privado", "eventos privados", "exclusivo", "exclusiva"],
+ dietary: ["100% vegano", "Opciones veganas", "Vegetariano", "vegano", "vegana", "veganos", "veganas", "vegan", "vegetariano", "vegetariana", "vegetarianos", "vegetarianas", "Sin lactosa", "lactosa", "alérgico", "alergico", "alérgica", "alergica", "alérgicos", "alergicos", "alergias", "alergia", "Seguro para alérgicos", "seguro para alergicos", "seguro", "segura", "seguros", "seguras", "apto vegano", "apto vegetariano", "libre de gluten"],
+ price: ["Precio accesible", "Barato", "barata", "baratos", "baratas", "Económico", "economico", "económica", "economica", "accesible", "buen precio", "barato por persona"]
+};
+for (let [family, claims] of Object.entries(f4aClaims)) {
+ test("F4A bloquea claims de " + family + " incluso normalizados o mezclados",()=>{
+  for (var text of claims) {
+   var variants = [text, text.toUpperCase(), text.normalize("NFKD"), text.replace(/ /g,"-"), text.split("").join("\u200b")];
+   for (var label of variants) {
+    assert.ok(guard.textIssues(label).includes("forbidden-claim"),label);
+    assert.ok(guard.textIssues("Precio y disponibilidad a confirmar. " + label).length,label);
+    assert.ok(guard.textIssues(label + ". Preferencias alimentarias a confirmar").length,label);
+    assert.ok(guard.reasonIssues({code:"profile_type",label,source:"google_maps",verified:true},{primaryType:"restaurant"}).includes("forbidden-claim"),label);
+   }
+  }
+ });
+}
+test("F4A conserva todas las etiquetas actuales y confirmar sin habilitar claims mezclados",()=>{
+ var labels = ["Parrilla · Datos de Google Maps", "Restaurante · Datos de Google Maps", "Bar · Datos de Google Maps", "Café · Datos de Google Maps", "Salón / espacio · Datos de Google Maps", "Lugar para eventos · Datos de Google Maps", "Zona a confirmar", "Precio y disponibilidad a confirmar", "Preferencias alimentarias a confirmar"];
+ for (var label of labels.concat(Object.values(plan.ZONE_REASON_LABELS))) assert.deepEqual(guard.textIssues(label),[],label);
+ assert.deepEqual(guard.textIssues("Confirmar"),[]);
+ for (var text of ["Precio y disponibilidad a confirmar. Disponible", "Precio y disponibilidad a confirmar. Reserva confirmada", "Precio y disponibilidad a confirmar. El mejor de Palermo"]) assert.ok(guard.textIssues(text).length,text);
+});
 test("F3 source y flags no bastan: fuente ajena, tipo falso, zona sin prueba, extra fields fallan",()=>{
  var type=plan.optionReasons({zone:"Palermo"},"Palermo",{primaryType:"restaurant"})[0];
  assert.ok(guard.reasonIssues(type,{primaryType:"cafe"}).length);
