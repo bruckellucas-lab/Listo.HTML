@@ -59,7 +59,7 @@ test("BETA-2 privacidad explica datos, usos, terceros, derechos y límites pendi
     /fecha, hora y presupuesto/i,
     /preferencias o restricciones alimentarias y de salud/i,
     /nombre, teléfono o WhatsApp, email y comentarios/i,
-    /Cuando LISTO te muestra opciones, guardamos el texto del pedido y los datos del plan/i,
+    /Cuando buscás opciones, guardamos el texto del pedido y los datos del plan/i,
     /incluidas las restricciones que indiques/i,
     /aunque no elijas avanzar/i,
     /Tu navegador guarda una copia del último plan, incluidas las restricciones/i,
