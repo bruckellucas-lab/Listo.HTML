@@ -30,7 +30,7 @@ test("F1 perfiles cerrados, consultas de servidor y metadatos sin promesas", () 
   var zoneList = source.match(/var ZONES = (\[[\s\S]*?\]).sort/)[1];
   JSON.parse(zoneList).forEach(zone => assert.notEqual(plan.profileZone(zone), null, zone));
 });
-test("F1 mapea tipos/necesidades a ids; sin usar prompt, contacto ni alergias", () => {
+test("F1 mapea tipos/necesidades a ids cerrados sin leer campos libres del objeto", () => {
   var examples = [["Asado", "grill"], ["Baby shower", "baby_shower"], ["Cena romántica", "romantic"], ["After office", "after_office"], ["Corporativo", "corporate"], ["Brunch", "cafe_brunch"], ["Cena vegana", "vegan"], ["Cumpleaños", "celebration"], ["Cena", "dinner"]];
   examples.forEach(([type, profile]) => assert.equal(f1.chooseProfile({type, guests:25, needs:["comida"]}), profile));
   assert.equal(f1.chooseProfile({type:"Fiesta", needs:["lugar", "musica", "deco", "torta", "foto"]}), "multi_service");
@@ -182,4 +182,42 @@ test("O2 foto real suma, foto sola no fuerza salón y cena gana a servicios acce
   assert.equal(f1.chooseProfile({type:"Juntada", needs:["foto"]}), "dinner");
   var scenario = require("./fixtures/matching/scenarios-f6a").find(s => s.id === "musica-deco-torta-fotos");
   assert.ok(scenario.needs.includes("foto")); assert.ok(!scenario.needs.includes("fotos"));
+});
+
+test("BETA-6B cenas pequeñas no se convierten en salones por necesidades ambiguas o accesorias", () => {
+  var cases = [
+    ["Cena de cumpleaños para 6 personas en Palermo", "dinner"],
+    ["Cena para 6 personas en un lugar lindo con buena ambientación", "dinner"],
+    ["Cena de cumpleaños para 6 personas con torta", "dinner"],
+    ["Cena para 6 personas con fotos y decoración", "dinner"],
+    ["Cena de cumpleaños para 6 personas en un lugar lindo con buena ambientación", "dinner"],
+    ["Cena de cumpleaños para 6 personas con torta y ambientación", "dinner"],
+    ["Cena de cumpleaños para 6 personas con fotos y decoración", "dinner"]
+  ];
+  for (var [prompt, expected] of cases) {
+    assert.equal(f1.profileForText(prompt).profile, expected, prompt);
+  }
+});
+
+test("BETA-6B conserva salones explícitos, celebraciones grandes y pedidos multiservicio", () => {
+  var cases = [
+    ["Cumpleaños para 30 personas con salón", "celebration"],
+    ["Evento con lugar, música, fotografía y catering", "multi_service"],
+    ["Quiero alquilar un salón para 6 personas", "venues"],
+    ["Cena de cumpleaños para 6 personas en un salón privado", "celebration"]
+  ];
+  for (var [prompt, expected] of cases) {
+    assert.equal(f1.profileForText(prompt).profile, expected, prompt);
+  }
+});
+
+test("BETA-6B no cambia perfiles no relacionados ni el guard de dieta", () => {
+  var cases = [
+    ["After office con tragos en Palermo", "after_office"],
+    ["Asado para 8 personas en Palermo", "grill"],
+    ["Aniversario para 2 personas en Recoleta", "romantic"],
+    ["Evento corporativo para 20 personas en Palermo", "corporate"]
+  ];
+  for (var [prompt, expected] of cases) assert.equal(f1.profileForText(prompt).profile, expected, prompt);
+  assert.equal(f1.chooseProfile({type:"Cena", needs:["comida"], diet:{on:{vegan:true}}}), "vegan");
 });

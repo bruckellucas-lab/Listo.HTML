@@ -748,8 +748,13 @@
   var PRICE_NOTE = "Precio y disponibilidad a confirmar";
 
   // Sólo se transmite este id cerrado, nunca las palabras usadas para detectarlo.
-  function chooseProfile(d) {
+  function chooseProfile(d, originalPrompt) {
     var type = normalize(d.type), ids = d.needs || [];
+    // "Lugar" también aparece en frases gastronómicas como "un lugar lindo". Sólo una mención
+    // explícita a salón/espacio privado o alquiler cuenta como pedido de espacio para eventos.
+    // El texto se usa únicamente acá, en el navegador, para producir un id cerrado de perfil.
+    var venueText = normalize((originalPrompt || "") + " " + type);
+    var explicitVenue = /\bsalon(?:es)?\b|\bespacio(?:s)?\s+privad[oa]s?\b|\b(?:alquilar|alquiler(?:\s+de)?|arrendar)\b[^.]{0,40}\b(?:lugar|espacio|local|quinta|terraza)\b/.test(venueText);
     if (/asado|parrilla/.test(type)) return "grill";
     if (/baby shower/.test(type)) return "baby_shower";
     if (/corporativo/.test(type)) return "corporate";
@@ -758,13 +763,19 @@
     if (/brunch|cafe|merienda/.test(type)) return "cafe_brunch";
     if (d.diet && d.diet.on && (d.diet.on.vegan || d.diet.on.vegetarian)) return "vegan";
     if (/vegana|vegano|vegetariana|vegetariano/.test(type)) return "vegan";
-    // Una cena conserva su intención aunque pida música o torta.
-    var dining = /cena|comida/.test(type);
+    var birthday = /cumple|fiesta/.test(type) && !/fiesta de 15/.test(type);
+    // Una cena conserva su intención aunque pida música, torta, fotos o ambientación. Cuando
+    // detectType prioriza "Cumpleaños", comida + menos de 15 invitados conserva esa misma regla.
+    var smallBirthdayDinner = birthday && ids.indexOf("comida") !== -1 &&
+      (d.guests || 0) > 0 && d.guests < 15 && !explicitVenue;
+    var dining = /cena|comida/.test(type) || smallBirthdayDinner;
     if (!dining && ids.filter(function (id) { return ["musica", "deco", "torta", "foto"].indexOf(id) !== -1; }).length >= 2) return "multi_service";
-    if (/cumple|fiesta/.test(type) && !/fiesta de 15/.test(type)) {
-      if (ids.indexOf("lugar") !== -1 || (d.guests || 0) >= 15 || /salon|lugar/.test(type)) return "celebration";
+    if (birthday) {
+      if (explicitVenue || (d.guests || 0) >= 15 || /salon/.test(type) ||
+          (ids.indexOf("lugar") !== -1 && !smallBirthdayDinner)) return "celebration";
       return ids.indexOf("bebida") !== -1 && ids.indexOf("comida") === -1 ? "bars" : "dinner";
     }
+    if (explicitVenue) return "venues";
     var category = chooseCategory(d);
     return category === "bares" ? "bars" : category === "salones" ? "venues" : "dinner";
   }
@@ -831,7 +842,7 @@
     setOptionsTitle(null);
     $("#loading").hidden = false;
 
-    var profile = chooseProfile(d);
+    var profile = chooseProfile(d, state.text);
     var url = "/api/plan-options?profile=" + encodeURIComponent(profile) + "&zone=" + encodeURIComponent(d.zone || "");
     var controller = "AbortController" in window ? new AbortController() : null;
     var timer = controller ? setTimeout(function () { controller.abort(); }, SEARCH_TIMEOUT_MS) : null;

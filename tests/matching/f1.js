@@ -10,6 +10,16 @@ function grab(name) {
   return source.slice(start, source.indexOf("\n  }\n", start) + 4);
 }
 var chooseProfile = new Function(grab("normalize") + grab("chooseCategory") + grab("chooseProfile") + "return chooseProfile;")();
+var interpretationDefinitions = source.slice(source.indexOf("  var EVENT_TYPES = ["), source.indexOf("  // Zonas conocidas"));
+var interpretForProfile = new Function(
+  interpretationDefinitions + grab("normalize") + grab("escapeRegExp") + grab("hasWord") +
+  grab("detectType") + grab("detectGuests") + grab("detectNeeds") +
+  "return function (text) { var t = normalize(text); return { type: detectType(t), guests: detectGuests(t), needs: detectNeeds(t) }; };"
+)();
+function profileForText(text) {
+  var data = interpretForProfile(text);
+  return { data: data, profile: chooseProfile(data, text) };
+}
 // Sólo adaptador de fixtures: conserva exactamente los pools, tipos y ratings F6a.
 // Los barrios ficticios se renombran a localidades admitidas; jamás se agregan al servidor.
 var zones = {"Villa Cero":"Agronomia", "Villa Uno":"Boedo", "Villa Dos":"Flores", "Villa Pocos":"Villa Devoto", "Villa Borde":"Saavedra", "Villa Lejos":"Coghlan"};
@@ -39,5 +49,5 @@ function report() {
   after.targets.omissionsNotWorse = after.summary.adequateMissedSlots <= before.summary.adequateMissedSlots;
   return {synthetic: true, before: before, after: after};
 }
-module.exports = {chooseProfile: chooseProfile, adapter: adapter, scenarios: scenarios, syntheticSearch: syntheticSearch, report: report};
+module.exports = {chooseProfile: chooseProfile, profileForText: profileForText, adapter: adapter, scenarios: scenarios, syntheticSearch: syntheticSearch, report: report};
 if (require.main === module) console.log(JSON.stringify(report(), null, 2));
