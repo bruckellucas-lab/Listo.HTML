@@ -52,9 +52,24 @@ Es obligatorio para aprobar. Antes de empezarlo, el responsable debe autorizar p
 - tratamiento posterior de los registros sintéticos sin borrado manual ni SQL;
 - quién puede entrar al Admin y al WhatsApp oficial.
 
-Si Preview usa la misma base que Production, no asumir que es un entorno aislado. Si no existe un
-entorno autorizado o un procedimiento para los registros sintéticos, ejecutar sólo el ensayo de
-mesa y mantener la decisión final en **BLOQUEAR / PENDIENTE**.
+Preview y Production pueden compartir la misma base de datos. Salvo confirmación técnica por
+escrito de lo contrario, asumir que el ensayo práctico escribe en la base real. Autorizar por
+escrito el ensayo en la URL elegida antes de enviar cualquier formulario. Si no existe un entorno
+autorizado o un procedimiento para los registros sintéticos, ejecutar sólo el ensayo de mesa y
+mantener la decisión final en **BLOQUEAR / PENDIENTE**.
+
+### Marcador obligatorio de prueba
+
+En todo recorrido práctico usar datos sintéticos claramente reconocibles:
+
+- nombre de contacto: **PRUEBA BETA4**;
+- palabra **PRUEBA** al comienzo del pedido;
+- teléfono y email de prueba controlados por el equipo.
+
+Sin esos marcadores, las filas pueden confundirse con pedidos reales y afectar operación,
+métricas o comisiones futuras. Al terminar, cerrar las solicitudes de prueba desde Admin como
+`cancelled` o con el estado que corresponda al guion, y anotar motivo `ensayo` en el registro
+auxiliar. No borrar filas, no ejecutar SQL y no tocar Supabase manualmente.
 
 No contactar lugares reales durante el ensayo: una persona del equipo representa al proveedor.
 No usar nombres, teléfonos, emails, alergias o diagnósticos de personas reales.
@@ -129,6 +144,10 @@ Pedido sintético:
 
 No usar una fecha relativa en la ejecución: elegir una fecha futura concreta dentro del rango
 permitido y registrarla sólo en el sistema autorizado.
+
+Si el primer intento devuelve 0 opciones, registrarlo como resultado válido y repetir el caso con
+otra zona sintética, por ejemplo Palermo o Recoleta. No forzar el flujo, inventar opciones ni
+ocultar que la primera búsqueda devolvió 0.
 
 ### Guion
 
@@ -229,10 +248,14 @@ momento simulado y el vencimiento que tendría en operación.
 | 7 | Revisar fecha del plan | No se cambia a `cancelled` antes de esa fecha salvo decisión irreversible documentada | fecha/decisión sin PII |
 | 8 | Hacer traspaso al suplente | El suplente conoce próximo paso y fecha de cierre | iniciales y hora |
 | 9 | Simular regreso antes del cierre técnico | Se retoma la misma inquiry abierta, sin duplicar promesas | `inquiry_id` original |
-| 10 | Simular regreso después del cierre técnico | No se reabre: se pide pedido nuevo y se vinculan sólo IDs en registro auxiliar | IDs o `N/A` |
+| 10 | Simular regreso después del cierre técnico sólo en mesa o tras cancelación explícita simulada | No se reabre: se pide pedido nuevo y se vinculan sólo IDs en registro auxiliar | IDs o `N/A` |
 
 Si el pedido no tiene fecha, aplicar el plazo operativo fijo de 30 días de BETA-3 y documentarlo
 en el registro auxiliar.
+
+La variante posterior al cierre se prueba sólo en mesa o con una cancelación explícita del
+usuario simulado y motivo documentado. No provocar una cancelación técnica prematura antes de la
+fecha del plan sólo para completar el ensayo.
 
 ### Criterios del caso 3
 
@@ -257,6 +280,24 @@ consultar qué datos tienen sobre mi pedido”. Verificar sin ejecutar borrados 
 - programa acuse dentro de 1 día hábil y respuesta/estado dentro de 5 días hábiles.
 
 Resultado de la inyección: `[OK / REPETIR / BLOQUEAR / NO EJECUTADA]`.
+
+## Variantes de mesa
+
+Estas variantes no requieren escrituras ni contacto real. Recorrer la decisión y registrar si el
+equipo supo identificar responsable y próximo paso.
+
+| Variante | Respuesta operativa prudente |
+|---|---|
+| Proveedor no responde | Programar follow-up según BETA-3; informar al usuario si afecta el plazo y consultar una alternativa sólo con su conocimiento. No inventar disponibilidad. |
+| Cambia precio o disponibilidad después de enviar propuesta | Detener confirmación, avisar al usuario, guardar una nueva cotización y reemplazar la propuesta en un ensayo práctico autorizado. No cambiar el significado de la anterior ni reutilizar una aceptación. |
+| Usuario cambia fecha o zona a mitad del proceso | Tratarlo como cambio material, detener la consulta vigente y pedir un pedido web nuevo si el sistema no permite actualizarlo de forma segura. Vincular sólo IDs en el registro auxiliar; no editar Supabase. |
+| Foto o dato de Google no coincide con el lugar | No usar la foto o dato como prueba. Abrir Maps/datos actuales, advertir la incertidumbre y no presentar la opción si no puede identificarse con confianza. Registrar el desvío sin guardar contenido Google. |
+| Admin no carga o una pestaña vieja genera conflicto | Recargar y comprobar el estado actual antes de repetir. No insistir a ciegas, no cambiar filas manualmente y escalar si el estado no puede confirmarse. |
+| WhatsApp no abre en el dispositivo del usuario | No prometer un canal alternativo no autorizado. Registrar el caso como bloqueo o pendiente operativo y escalar para definir un canal aprobado antes de continuar. |
+| Caso sensible sin fecha | Mantener coordinación manual, pedir la fecha sólo si es necesaria y aplicar el plazo operativo de 30 días en el registro auxiliar mientras falte. |
+| Posible duplicado entre `WA-...` y pedido web de la misma persona | Mantener ambos IDs, un único responsable y un próximo paso. No fusionar ni borrar filas; conservar la restricción en el caso WA y evitar mensajes o promesas duplicados. |
+
+Resultado de variantes: `[OK / REPETIR / BLOQUEAR / PENDIENTE]`.
 
 ## Registro de resultados
 
