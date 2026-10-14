@@ -773,6 +773,7 @@ figcaption {
 .advance-bar::after { background: var(--cream); }
 .advance-actions { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; margin-top: 26px; }
 .advance-legal { margin: 18px 0 0; font-size: 12px; opacity: .55; }
+.advance-legal a { color: inherit; text-underline-offset: 3px; }
 @media (max-width: 720px) {
   .advance { width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0; border: 0; }
   .advance-grid { grid-template-columns: 1fr; }

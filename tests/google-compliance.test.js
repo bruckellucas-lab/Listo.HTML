@@ -202,6 +202,6 @@ test("Términos: aviso de Google Maps (ToS §3.2.2(a)) y links desde el footer",
   assert.match(t, /href="https:\/\/maps\.google\.com\/help\/terms_maps\/"/);
   assert.match(t, /href="https:\/\/policies\.google\.com\/privacy"/);
   assert.match(t, /Pendiente de revisión legal/);
-  assert.match(read("index.html"), /<footer[\s\S]*<a href="terminos\.html">Términos<\/a>[\s\S]*<\/footer>/);
+  assert.match(read("index.html"), /<footer[\s\S]*<a href="terminos\.html">Términos beta<\/a>[\s\S]*<\/footer>/);
   assert.match(read("propuesta/index.html"), /<footer>[\s\S]*href="\/terminos\.html">Términos<\/a><\/footer>/);
 });
