@@ -59,6 +59,11 @@ test("BETA-2 privacidad explica datos, usos, terceros, derechos y límites pendi
     /fecha, hora y presupuesto/i,
     /preferencias o restricciones alimentarias y de salud/i,
     /nombre, teléfono o WhatsApp, email y comentarios/i,
+    /Cuando LISTO te muestra opciones, guardamos el texto del pedido y los datos del plan/i,
+    /incluidas las restricciones que indiques/i,
+    /aunque no elijas avanzar/i,
+    /Tu navegador guarda una copia del último plan, incluidas las restricciones/i,
+    /Podés borrarla borrando los datos del sitio en tu navegador/i,
     /coordinar manualmente, contactar al usuario/i,
     /mejorar el servicio durante la beta/i,
     /no vende datos personales/i,
@@ -72,6 +77,7 @@ test("BETA-2 privacidad explica datos, usos, terceros, derechos y límites pendi
   ]) assert.match(privacyText, phrase);
   assert.match(privacyText, /Vercel, Supabase, Resend y Cloudflare Turnstile/);
   assert.match(privacyText, /sus propias condiciones y políticas/);
+  assert.doesNotMatch(privacy, /localStorage/);
   assert.match(privacy, /href="\/terminos\.html"/);
 });
 

@@ -27,6 +27,10 @@ La implementación es estática y no bloqueante:
 
 - Datos que el usuario puede ingresar: plan, zona, invitados, fecha/hora, presupuesto,
   necesidades, restricciones, nombre y contacto, email y comentarios.
+- Guardado del texto del pedido, los datos del plan y sus restricciones cuando LISTO muestra
+  opciones, aunque el usuario no elija avanzar.
+- Copia del último plan y sus restricciones en el navegador para poder retomarlo, junto con
+  la forma de borrarla eliminando los datos del sitio.
 - Finalidades: interpretar y armar opciones, registrar la elección, coordinar, contactar,
   detectar errores y mejorar la beta.
 - LISTO no vende datos ni los usa para publicidad de terceros.
