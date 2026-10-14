@@ -19,6 +19,7 @@ test("F2 confianza bayesiana: 4.9 con cinco reseñas no domina 4.6 con dos mil",
   var rows = [row("pocas", 4.9, 5), row("muchas", 4.6, 2000), row("alta", 4.7, 600), row("media", 4.5, 800)];
   var opts = ranking({pocas:"steak_house", muchas:"steak_house", alta:"steak_house", media:"steak_house"});
   assert.ok(plan.qualityScore(rows[1]) > plan.qualityScore(rows[0]));
+  assert.ok(plan.qualityScore(row("mil", 4.6, 1000)) > plan.qualityScore(rows[0]));
   assert.equal(plan.qualityScore(row("x", 4.9, 5)), (5 * 4.9 + 50 * 4) / 55);
   assert.deepEqual(ids(rows, opts), ["alta", "muchas", "media"]);
 });
