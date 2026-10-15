@@ -259,6 +259,26 @@ test("BETA-6B B2 conserva afirmaciones explícitas de salón", () => {
   for (var [prompt, expected] of cases) assert.equal(f1.profileForText(prompt).profile, expected, prompt);
 });
 
+test("BETA-6B B3 reconoce pedidos afirmativos variados de salón", () => {
+  var prompts = [
+    "Salón para cumpleaños de 8 personas con catering",
+    "Buscamos un salón para un cumpleaños de 8 personas con comida",
+    "Necesitamos un salón para festejar mi cumple, somos 10, con comida",
+    "Cumpleaños para 8 personas, busco algún salón con comida",
+    "Cumpleaños de 10 personas con comida, salón de fiestas",
+    "Cumple 12 personas, comida y torta, salón chico",
+    "Cumple de 8 personas con comida, espacio privado",
+    "Cumpleaños para 10 personas con comida en un salón no muy grande",
+    "Busco un salón no tan caro para cumpleaños de 10 personas con comida"
+  ];
+  for (var prompt of prompts) assert.equal(f1.profileForText(prompt).profile, "celebration", prompt);
+});
+
+test("BETA-6B B4 negación de alquiler no gana; alquiler afirmativo sí", () => {
+  assert.equal(f1.profileForText("No quiero alquilar un salón, quiero reservar un restaurante").profile, "dinner");
+  assert.equal(f1.profileForText("Quiero alquilar un salón para 6 personas").profile, "venues");
+});
+
 test("BETA-6B privacidad: el prompt se reduce localmente a profile y zone", () => {
   var source = require("node:fs").readFileSync(require("node:path").join(h.ROOT, "app.js"), "utf8");
   assert.match(source, /var profile = chooseProfile\(d, state\.text\);\s*var url = "\/api\/plan-options\?profile=" \+ encodeURIComponent\(profile\) \+ "&zone=" \+ encodeURIComponent\(d\.zone \|\| ""\);/);

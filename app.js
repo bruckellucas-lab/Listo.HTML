@@ -748,19 +748,26 @@
   var PRICE_NOTE = "Precio y disponibilidad a confirmar";
 
   function explicitVenueMention(text) {
-    var clauses = normalize(text).split(/[.!?;,]|\bpero\b/);
+    var clauses = normalize(text).split(/[.!?;,]|\b(?:pero|aunque|y)\b/);
     return clauses.some(function (clause) {
-      if (!clause.trim()) return false;
-      var venue = "(?:salon(?:es)?|espacio(?:s)?(?:\\s+privad[oa]s?)?|lugar|local|quinta|terraza)";
-      var denied = new RegExp("\\bsin\\s+(?:un(?:a)?\\s+)?" + venue + "\\b|\\b" + venue +
-        "\\s+no\\b|\\bno\\s+(?:(?:quiero|busco|necesito|prefiero)\\s+)?(?:un(?:a)?\\s+)?" + venue +
-        "\\b|\\bno\\s+hace\\s+falta\\s+(?:alquilar|reservar)\\s+(?:un(?:a)?\\s+)?" + venue + "\\b");
+      clause = clause.trim();
+      if (!clause) return false;
+      var specific = "(?:salon(?:es)?|espacio(?:s)?\\s+privad[oa]s?)";
+      var rentable = "(?:salon(?:es)?|espacio(?:s)?|lugar|local|quinta|terraza)";
+      var article = "(?:un|una|el|la|algun|alguna)?";
+      var denied = new RegExp("\\bsin\\s+" + article + "\\s*" + rentable + "\\b|\\b" + specific +
+        "\\s+no(?:\\s+(?:gracias|quiero|busco|necesito))?\\s*$|\\bno\\s+" +
+        "(?:(?:quiero|busco|necesito|prefiero)\\s+)?" + article + "\\s*" + specific +
+        "\\b|\\bno\\s+(?:(?:quiero|busco|necesito|prefiero|hace\\s+falta)\\s+)?" +
+        "(?:alquilar|arrendar|reservar)\\s+" + article + "\\s*" + rentable + "\\b");
       if (denied.test(clause)) return false;
       // Un salón interno del restaurante es una característica gastronómica, no un alquiler.
       if (/\b(?:restaurante|bar|cafe|parrilla)\b.{0,60}\bcon\s+(?:un\s+)?salon(?:\s+privado)?\b/.test(clause)) return false;
       // El objeto del alquiler debe ser el espacio: "alquilar una mesa en un lugar" no coincide.
-      if (new RegExp("\\b(?:alquilar|alquiler(?:\\s+de)?|arrendar|reservar)\\s+(?:un|una|el|la)?\\s*" + venue + "\\b").test(clause)) return true;
-      return /\b(?:quiero|busco|necesito|en|con)\s+(?:un|una|el|la)?\s*(?:salon(?:es)?|espacio(?:s)?\s+privad[oa]s?)\b/.test(clause);
+      if (new RegExp("\\b(?:alquilar|alquiler(?:\\s+de)?|arrendar|reservar)\\s+" + article + "\\s*" + rentable + "\\b").test(clause)) return true;
+      if (new RegExp("\\b(?:quiero|queremos|busco|buscamos|necesito|necesitamos|en|con)\\b.{0,45}\\b" + specific + "\\b").test(clause)) return true;
+      if (/\bsalon(?:es)?\s+(?:para\b|de\s+fiestas?\b|chic[oa]s?\b|privad[oa]s?\b|no\s+(?:muy|tan)\b)/.test(clause)) return true;
+      return /^salon(?:es)?$/.test(clause) || /\bespacio(?:s)?\s+privad[oa]s?\b/.test(clause);
     });
   }
 

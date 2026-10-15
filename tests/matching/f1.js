@@ -4,25 +4,29 @@ var plan = require("../../api/_lib/plan"), quality = require("./quality");
 var world = require("../fixtures/matching/world-f6a");
 var places = require("../../api/_lib/google-places");
 var source = fs.readFileSync(path.join(__dirname, "../../app.js"), "utf8");
-function grab(name) {
-  var start = source.indexOf("  function " + name + "(");
+function grabFrom(input, name) {
+  var start = input.indexOf("  function " + name + "(");
   if (start < 0) throw Error("Falta función " + name);
-  return source.slice(start, source.indexOf("\n  }\n", start) + 4);
+  return input.slice(start, input.indexOf("\n  }\n", start) + 4);
 }
-var interpretationDefinitions = source.slice(source.indexOf("  var EVENT_TYPES = ["), source.indexOf("  // Zonas conocidas"));
-var chooseProfile = new Function(
-  interpretationDefinitions + grab("normalize") + grab("escapeRegExp") + grab("hasWord") +
-  grab("detectType") + grab("detectNeeds") + grab("explicitVenueMention") + grab("explicitVenueIntent") +
-  grab("chooseCategory") + grab("chooseProfile") + "return chooseProfile;"
-)();
-var interpretForProfile = new Function(
-  interpretationDefinitions + grab("normalize") + grab("escapeRegExp") + grab("hasWord") +
-  grab("detectType") + grab("detectGuests") + grab("detectNeeds") +
-  "return function (text) { var t = normalize(text); return { type: detectType(t), guests: detectGuests(t), needs: detectNeeds(t) }; };"
-)();
+function grab(name) { return grabFrom(source, name); }
+function buildClassifier(input) {
+  var definitions = input.slice(input.indexOf("  var EVENT_TYPES = ["), input.indexOf("  // Zonas conocidas"));
+  var core = definitions + grabFrom(input, "normalize") + grabFrom(input, "escapeRegExp") + grabFrom(input, "hasWord") +
+    grabFrom(input, "detectType") + grabFrom(input, "detectNeeds");
+  var venue = input.indexOf("  function explicitVenueMention(") === -1 ? "" :
+    grabFrom(input, "explicitVenueMention") + grabFrom(input, "explicitVenueIntent");
+  var choose = new Function(core + venue + grabFrom(input, "chooseCategory") + grabFrom(input, "chooseProfile") + "return chooseProfile;")();
+  var interpret = new Function(core + grabFrom(input, "detectGuests") +
+    "return function (text) { var t = normalize(text); return { type: detectType(t), guests: detectGuests(t), needs: detectNeeds(t) }; };")();
+  return {
+    chooseProfile: choose,
+    profileForText: function (text) { var data = interpret(text); return {data:data, profile:choose(data, text)}; }
+  };
+}
+var classifier = buildClassifier(source), chooseProfile = classifier.chooseProfile;
 function profileForText(text) {
-  var data = interpretForProfile(text);
-  return { data: data, profile: chooseProfile(data, text) };
+  return classifier.profileForText(text);
 }
 // Sólo adaptador de fixtures: conserva exactamente los pools, tipos y ratings F6a.
 // Los barrios ficticios se renombran a localidades admitidas; jamás se agregan al servidor.
@@ -53,5 +57,5 @@ function report() {
   after.targets.omissionsNotWorse = after.summary.adequateMissedSlots <= before.summary.adequateMissedSlots;
   return {synthetic: true, before: before, after: after};
 }
-module.exports = {chooseProfile: chooseProfile, profileForText: profileForText, adapter: adapter, scenarios: scenarios, syntheticSearch: syntheticSearch, report: report};
+module.exports = {buildClassifier: buildClassifier, chooseProfile: chooseProfile, profileForText: profileForText, adapter: adapter, scenarios: scenarios, syntheticSearch: syntheticSearch, report: report};
 if (require.main === module) console.log(JSON.stringify(report(), null, 2));

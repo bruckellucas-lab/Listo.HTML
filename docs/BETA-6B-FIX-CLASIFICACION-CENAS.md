@@ -21,25 +21,48 @@ salón. Al mismo tiempo, un pedido explícito de salón para un grupo pequeño p
   contradictoria del texto inicial deja de decidir el perfil.
 - `sin salón`, `no quiero salón`, `salón no` y “no hace falta alquilar” no son pedidos de espacio.
   Tampoco lo son alquilar una mesa dentro de un lugar ni un restaurante que tiene salón privado.
+- La negación de alquiler abarca el verbo y su objeto: “no quiero alquilar un salón” no cuenta como
+  intención afirmativa.
+- `salón no` sólo expresa rechazo cuando cierra la cláusula o continúa con una fórmula de rechazo.
+  Frases como “salón no muy grande” y “salón no tan caro” siguen siendo pedidos afirmativos.
+- Un pedido afirmativo puede usar `salón`, `salones` o `espacio privado` con redacciones variadas;
+  no necesita un verbo exacto inmediatamente antes de la mención.
 - Un salón explícito para un cumpleaños sigue usando `celebration`; para un plan genérico usa
   `venues`.
 - Un evento realmente multiservicio conserva `multi_service`.
 - El prompt sólo se inspecciona localmente para producir el ID cerrado del perfil. No se agrega al
   request de Google ni se incorpora al backend.
 
-## Ejemplos
+## Diferencias deseadas contra `main`
 
-| Pedido | Antes | Ahora |
+La columna “Main” corresponde exclusivamente a
+`a04af77743f2a53d1b3ee05116ebf83c8fb25430`; no compara contra commits intermedios de BETA-6B.
+
+| Pedido | Main | BETA-6B |
 |---|---|---|
 | Cena de cumpleaños para 6 en un lugar lindo con ambientación | `celebration` | `dinner` |
 | Cena de cumpleaños para 6 con torta y ambientación | `multi_service` | `dinner` |
 | Cena de cumpleaños para 6 con fotos y decoración | `multi_service` | `dinner` |
 | Alquilar un salón para 6 | `dinner` | `venues` |
-| No quiero salón; quiero restaurante para cenar 6 | `venues` | `dinner` |
-| Alquilar una mesa en un lugar lindo para cenar 6 | `venues` | `dinner` |
-| Pedido con salón, luego tipo editado a Cena | `venues` | `dinner` |
-| Cumpleaños para 30 con salón | `celebration` | `celebration` |
-| Evento con lugar, música, fotografía y catering | `multi_service` | `multi_service` |
+| Alquilar un espacio para una cena de 10 | `dinner` | `venues` |
+
+## Regresiones intermedias restauradas
+
+Estos comportamientos ya eran correctos en `main`. Una versión intermedia de BETA-6B los cambió;
+los fixes B1–B4 restauran el perfil de `main` y los fijan en la matriz automática.
+
+| Caso | Main | Versión intermedia | BETA-6B final |
+|---|---|---|---|
+| Campo editado a Cena o `Lugar` desmarcado | `dinner` | `venues` | `dinner` |
+| Negación o contexto gastronómico con salón | `dinner` | `venues` | `dinner` |
+| Pedido afirmativo de salón para cumpleaños chico | `celebration` | `dinner` | `celebration` |
+| “No quiero alquilar un salón; quiero restaurante” | `dinner` | `venues` | `dinner` |
+
+La matriz diferencial contiene 42 casos sintéticos: las cinco diferencias autorizadas de la
+primera tabla y 37 escenarios que deben coincidir con `main`. En un checkout con el commit base,
+el test carga y ejecuta el `app.js` real de ambos commits. En un checkout superficial sin ese
+objeto Git, compara contra un snapshot de salidas; no mantiene una segunda implementación del
+clasificador.
 
 ## Tests
 
@@ -48,6 +71,8 @@ Los tests usan las funciones reales de detección y clasificación extraídas de
 - cenas pequeñas simples y con menciones ambiguas/accesorias;
 - los cinco escenarios de edición de tipo/necesidades de B1;
 - las siete negaciones o referencias gastronómicas de B2 y sus cuatro controles positivos;
+- las nueve redacciones afirmativas de salón de B3;
+- la negación de alquiler de B4 y su control afirmativo;
 - salón explícito, celebración grande y evento multiservicio;
 - perfiles de bar, asado, aniversario y corporativo;
 - preferencia vegana y el corte previo de todas las restricciones obligatorias;
@@ -57,7 +82,7 @@ Los tests usan las funciones reales de detección y clasificación extraídas de
 
 - Sin cantidad de invitados no se presume que el evento sea pequeño.
 - La detección explícita depende de palabras cerradas. Frases inusuales pueden seguir siendo
-  ambiguas, especialmente negaciones o correcciones con una redacción no cubierta.
+  ambiguas, especialmente negaciones, correcciones o coordinaciones con una redacción no cubierta.
 - Seleccionar simultáneamente `Lugar` y `Comida` en una cena pequeña no conserva información sobre
   si `Lugar` fue detectado o elegido manualmente. BETA-6B prioriza la intención gastronómica salvo
   que el texto sea explícito.
