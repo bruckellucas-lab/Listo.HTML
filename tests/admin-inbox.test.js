@@ -94,6 +94,26 @@ test("CO-2a búsqueda global por nombre/email/teléfono/ID, literal y sin PII en
     var p = await page({ status: "open" }, search); assert.equal(p.total, 0);
   }
 });
+test("CO-2a cursor: búsqueda telefónica ligada por HMAC, no por SHA-256 público", async function (t) {
+  var crypto = require("node:crypto"), search = "54 11 1234-5678";
+  world(t, Array.from({ length: 60 }, function (_, n) { return fixture.inquiry(n + 1); }));
+  var first = await page({ status: "open" }, search);
+  var state = JSON.parse(Buffer.from(first.next_cursor.split(".")[0], "base64url").toString("utf8"));
+  var unkeyed = crypto.createHash("sha256").update(search).digest("hex");
+  var expected = crypto.createHmac("sha256", "listo-inbox:" + process.env.ADMIN_PASSWORD)
+    .update("search:" + search).digest("base64url");
+  assert.equal(state.search_hash, expected);
+  assert.notEqual(state.search_hash, unkeyed);
+  assert.doesNotMatch(JSON.stringify(state), /1234|5678/);
+  var next = await page({ status: "open", cursor: first.next_cursor }, search);
+  assert.equal(next.items.length, 10);
+  assert.equal((await call({ status: "open", cursor: first.next_cursor }, "54 11 1234-5679")).statusCode, 400);
+  // Even a validly signed cursor using the old public digest is no longer accepted.
+  state.search_hash = unkeyed;
+  var payload = Buffer.from(JSON.stringify(state)).toString("base64url");
+  var signed = payload + "." + crypto.createHmac("sha256", "listo-inbox:" + process.env.ADMIN_PASSWORD).update(payload).digest("base64url");
+  assert.equal((await call({ status: "open", cursor: signed }, search)).statusCode, 400);
+});
 test("CO-2a autenticación, validación de cursor y contratos de escritura conservados", async function (t) {
   var f = world(t, Array.from({ length: 52 }, function (_, n) { return fixture.inquiry(n + 1); }));
   for (var query of [{}, { id: fixture.id(1) }]) assert.equal((await call(query, "", { cookie: "" })).statusCode, 401);

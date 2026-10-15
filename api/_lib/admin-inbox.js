@@ -33,7 +33,8 @@ function parse(req, query) {
   }
   var status = query.status || "open";
   if (["all", "open", "proposal_accepted"].concat(inquiries.STATUSES).indexOf(status) === -1) throw invalid();
-  var hash = crypto.createHash("sha256").update(search).digest("hex");
+  // Domain-separated HMAC: a decoded cursor must not expose a dictionary-testable phone hash.
+  var hash = signature("search:" + search);
   var state = { status: status, search_hash: hash, as_of: new Date().toISOString(), after: null };
   if (query.cursor) {
     if (query.cursor.length > 1600) throw invalid();
