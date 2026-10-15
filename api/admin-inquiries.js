@@ -1,8 +1,7 @@
 /* =========================================================
    LISTO — Función serverless de Vercel (PANEL INTERNO)
    Ruta: /api/admin-inquiries
-   GET   → lista de solicitudes con todo el contexto combinado:
-           plan_inquiries + plan_selections + event_requests + providers
+   GET   → bandeja mínima paginada; ?id=UUID → detalle completo autenticado
    PATCH → { id, status } cambia el estado (y updated_at = ahora)
 
    Datos del lugar (G1B): la lista NO pide nada a Google (sería un pedido
@@ -26,7 +25,7 @@ var placeDetails = require("./_lib/place-details");
 var commercial = require("./_lib/commercial-state");
 
 var UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-var LIMIT = 500;
+var inbox = require("./_lib/admin-inbox");
 
 var QUOTE_FIELDS = "id,created_at,received_at,total_price,price_per_person,currency,includes,conditions,deposit,availability,valid_until,internal_notes";
 
@@ -84,7 +83,7 @@ function toItem(row) {
       return String(b.received_at).localeCompare(String(a.received_at)) || String(b.created_at).localeCompare(String(a.created_at));
     }),
     proposals: (Array.isArray(row.plan_proposals) ? row.plan_proposals : []).slice().sort(function (a, b) {
-      return String(b.created_at).localeCompare(String(a.created_at));
+      return String(b.created_at).localeCompare(String(a.created_at)) || String(b.id).localeCompare(String(a.id));
     }),
     bookings: (Array.isArray(row.plan_bookings) ? row.plan_bookings : []).slice().sort(function (a, b) {
       return String(b.created_at).localeCompare(String(a.created_at));
@@ -129,11 +128,20 @@ module.exports = async function handler(req, res) {
 
   if (req.method === "GET") {
     try {
+      var options = inbox.parse(req, http.queryOf(req));
+      if (!options.id) {
+        var page = await inbox.list(c, options);
+        if (!options.state.after) {
+          try { page.metrics = metricsOf(await inbox.metrics(c)); }
+          catch (errMetrics) { log.error("[admin] métricas:", errMetrics); page.metrics = null; }
+        }
+        return http.sendJson(res, 200, page);
+      }
       var get = function (select) {
         return store.request(fetch, base + "plan_inquiries?select=" + encodeURIComponent(select) +
-          "&order=created_at.desc&limit=" + LIMIT, { method: "GET", headers: store.headersFor(c.key) }, "listar");
+          "&id=eq." + options.id + "&limit=1", { method: "GET", headers: store.headersFor(c.key) }, "listar");
       };
-      // Si la columna de restricciones todavía no existiera, se lista igual (sin ese dato).
+      // Si la columna de restricciones todavía no existiera, se abre el detalle sin ese dato.
       var list = function (select) {
         return get(select).catch(function (e) {
           if (["42703", "PGRST204", "PGRST200"].indexOf(e.code) === -1 || !/dietary_requirements/.test(String(e.message))) throw e;
@@ -164,23 +172,18 @@ module.exports = async function handler(req, res) {
           log.error(["[admin] schema: reservas", "[admin] schema: propuestas", "[admin] schema: cotizaciones"][i], errStep);
         }
       }
-      // Métricas sobre TODAS las reservas confirmadas (no sólo las solicitudes de la lista).
-      var metrics = null;
-      if (bookingsReady) {
-        try {
-          metrics = metricsOf(await store.request(fetch, base + "plan_bookings?select=booking_status,currency,final_total_amount,commission_amount,commission_status&booking_status=eq.confirmed",
-            { method: "GET", headers: store.headersFor(c.key) }, "métricas"));
-        } catch (errM) { log.error("[admin] métricas:", errM); }
-      }
-      var items = (rows || []).map(toItem);
+      if (!rows || !rows[0]) return http.sendJson(res, 404, { ok: false, error: "No encontramos esa solicitud." });
       return http.sendJson(res, 200, {
-        ok: true, statuses: inquiries.STATUSES, schema_ready: schemaReady, proposals_ready: proposalsReady,
-        bookings_ready: bookingsReady, metrics: metrics,
-        count: items.length, items: items
+        ok: true, schema_ready: schemaReady, proposals_ready: proposalsReady,
+        bookings_ready: bookingsReady, item: toItem(rows[0])
       });
     } catch (err) {
-      log.error("[admin] listar:", err);
-      return http.sendJson(res, 502, { ok: false, error: explain(err) });
+      log.error("[admin] leer:", err);
+      var readStatus = err.httpStatus === 400 ? 400 : err.httpStatus === 503 ? 503 : 502;
+      var readError = readStatus === 400 ? "Consulta no válida. Actualizá la bandeja."
+        : readStatus === 503 ? "No se puede consultar propuestas. Actualizá o contactá al equipo técnico."
+        : "No pudimos cargar las solicitudes. Actualizá o probá de nuevo.";
+      return http.sendJson(res, readStatus, { ok: false, error: readError });
     }
   }
 

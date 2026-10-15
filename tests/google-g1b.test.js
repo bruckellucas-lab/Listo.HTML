@@ -657,25 +657,24 @@ function adminReq(method, query) {
   return req;
 }
 
-test("admin: lista de solicitudes sin pedidos a Google (sólo place_id + link a Maps)", async function () {
-  var rows = [];
-  for (var i = 1; i <= 50; i++) {
-    rows.push({ id: "i" + i, status: "inquiry_requested", contact_name: "Ana", plan_selection_id: "s" + i,
-      plan_selections: { provider_google_place_id: "ChIJabcdefghij" + String(1000 + i), event_requests: { event_type: "Cena" } } });
-  }
+test("admin: detalle de solicitud sin pedidos a Google (sólo place_id + link a Maps)", async function () {
+  var id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  var row = { id: id, status: "inquiry_requested", contact_name: "Ana", plan_selection_id: "s1",
+    plan_selections: { provider_google_place_id: "ChIJabcdefghij1001", event_requests: { event_type: "Cena" } } };
   var fetch = h.mockFetch([
-    { match: /\/rest\/v1\/plan_inquiries\?select=/, reply: function () { return h.response(200, rows); } },
-    { match: /\/rest\/v1\/plan_bookings/, reply: function () { return h.response(200, []); } }
+    { match: /\/rest\/v1\/plan_inquiries\?select=/, reply: function (call) {
+      assert.equal(new URL(call.url).searchParams.get("id"), "eq." + id);
+      return h.response(200, [row]);
+    } }
   ]);
   global.fetch = fetch;
   var res = h.fakeRes();
-  await quiet(function () { return adminInquiries(adminReq("GET"), res); });
+  await quiet(function () { return adminInquiries(adminReq("GET", { id: id }), res); });
   assert.equal(res.statusCode, 200);
-  var items = res.json().items;
-  assert.equal(items.length, 50);
-  assert.deepEqual(Object.keys(items[0].provider).sort(), ["google_place_id", "maps_url"]);
-  assert.match(items[0].provider.maps_url, /query_place_id=ChIJabcdefghij1001/);
-  assert.equal(googleCalls(fetch).length, 0, "ningún pedido a Google para la lista");
+  var item = res.json().item;
+  assert.deepEqual(Object.keys(item.provider).sort(), ["google_place_id", "maps_url"]);
+  assert.match(item.provider.maps_url, /query_place_id=ChIJabcdefghij1001/);
+  assert.equal(googleCalls(fetch).length, 0, "el detalle de inquiry tampoco pide Google");
   assert.doesNotMatch(decodeURIComponent(fetch.calls[0].url), /providers\(|provider_name/);
 });
 

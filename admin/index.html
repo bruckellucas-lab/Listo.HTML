@@ -242,20 +242,23 @@
     <main id="requests-view">
       <div class="summary">
         <span class="big" id="new-count">0</span>
-        <p><span class="label">Solicitudes nuevas</span><br><span class="muted" id="total-count"></span></p>
+        <p><span class="label">Solicitudes en esta consulta</span><br><span class="muted" id="total-count"></span></p>
       </div>
 
       <div class="toolbar">
-        <input class="search" id="search" type="search" placeholder="Buscar por nombre o teléfono" autocomplete="off" aria-label="Buscar">
+        <input class="search" id="search" type="search" placeholder="Buscar por nombre, email, teléfono o ID" autocomplete="off" aria-label="Buscar">
         <div class="chips" id="chips" role="group" aria-label="Filtrar por estado"></div>
         <p class="label sorted">Más recientes primero</p>
       </div>
 
       <p class="muted p-note">Los datos del lugar se consultan al abrir el detalle por cumplimiento de Google Maps.</p>
+      <p class="muted p-note">Las métricas de reservas son globales; no cambian con el filtro de solicitudes.</p>
       <div class="metrics" id="metrics" hidden></div>
       <p class="banner" id="schema-banner" hidden>Falta correr en Supabase el SQL de cotizaciones (SUPABASE.md, Paso 8). Mientras tanto, contacto y cotizaciones no se pueden guardar.</p>
       <div id="state" class="state" hidden></div>
       <div class="list" id="list"></div>
+      <p class="muted" id="page-note" role="status" aria-live="polite"></p>
+      <button class="btn btn-ghost" type="button" id="load-more" hidden>Cargar más solicitudes</button>
     </main>
 
     <!-- Proveedores y sus atributos alimentarios (sólo /admin: nada de esto se ve en la web pública) -->
@@ -327,9 +330,12 @@
     var MAIL_LABELS = { sent: "Email enviado", failed: "Email falló", pending: "Email pendiente" };
 
     var items = [];
-    var filter = "all";
+    var filter = "open";
     var query = "";
     var loading = false;
+    var listGeneration = 0, detailGeneration = 0;
+    var nextCursor = null, total = null, countedAt = null, inboxChanged = false;
+    var detailItem = null;
 
     function $(id) { return document.getElementById(id); }
     function el(tag, cls, text) {
@@ -338,7 +344,6 @@
       if (text !== undefined && text !== null) n.textContent = text;
       return n;
     }
-    function norm(s) { return String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, ""); }
 
     function fmtDateTime(iso) {
       if (!iso) return "—";
@@ -362,7 +367,7 @@
     }
 
     // Pedidos al backend. Si la sesión venció, vuelve al ingreso.
-    async function api(method, url, body, lastProposalId) {
+    async function api(method, url, body, lastProposalId, search) {
       var recoverable = body && ((url === "/api/admin-inquiries" && method === "PATCH") ||
         (url === "/api/admin-bookings" && (method === "POST" || body.action === "cancel")) || url === "/api/admin-proposals");
       if (recoverable) {
@@ -374,6 +379,8 @@
         body[url === "/api/admin-proposals" ? "proposal_id" : "operation_id"] = op;
       }
       var opts = { method: method, credentials: "same-origin", headers: { "Accept": "application/json" } };
+      // Search PII stays out of browser URLs/history and query-string access logs.
+      if (search) opts.headers["X-Listo-Search"] = encodeURIComponent(search);
       if (body) { opts.headers["Content-Type"] = "application/json"; opts.headers["X-Listo-Admin"] = "1"; opts.body = JSON.stringify(body); }
       return fetch(url, opts).then(function (r) {
         return r.json().catch(function () { return {}; }).then(function (data) {
@@ -391,6 +398,13 @@
     /* ---------- Ingreso / salida ---------- */
 
     function showLogin(msg) {
+      listGeneration++; detailGeneration++;
+      detailItem = null; items = []; nextCursor = null; total = null;
+      $("list").innerHTML = "";
+      $("metrics").innerHTML = ""; $("metrics").hidden = true;
+      $("d-body").innerHTML = "";
+      if ($("detail").open) $("detail").close();
+      $("search").value = ""; query = "";
       $("panel").hidden = true;
       $("login").hidden = false;
       $("login-error").hidden = !msg;
@@ -447,47 +461,55 @@
       }
     }
 
-    function load() {
-      if (loading) return;
+    function load(append) {
+      append = append === true;
+      if (append && (loading || !nextCursor || inboxChanged)) return;
+      var generation = ++listGeneration;
       loading = true;
       $("refresh").disabled = true;
-      $("list").innerHTML = "";
-      setState("loading");
-      api("GET", "/api/admin-inquiries").then(function (data) {
-        items = data.items || [];
-        $("schema-banner").hidden = data.schema_ready !== false;
-        proposalsReady = data.proposals_ready !== false;
-        bookingsReady = data.bookings_ready !== false;
-        renderMetrics(bookingsReady ? data.metrics : null);
+      $("load-more").disabled = true;
+      if (!append) {
+        items = []; nextCursor = null; total = null; inboxChanged = false;
+        $("list").innerHTML = "";
+        $("new-count").textContent = "—";
+        $("total-count").textContent = "";
+        $("page-note").textContent = "";
+        $("load-more").hidden = true;
+        setState("loading");
+        renderChips();
+      }
+      var url = "/api/admin-inquiries?status=" + encodeURIComponent(filter);
+      if (append) url += "&cursor=" + encodeURIComponent(nextCursor);
+      return api("GET", url, null, null, query).then(function (data) {
+        if (generation !== listGeneration) return;
+        var seen = new Set(items.map(function (it) { return it.id; }));
+        items = items.concat((data.items || []).filter(function (it) { if (seen.has(it.id)) return false; seen.add(it.id); return true; }));
+        nextCursor = data.next_cursor;
+        total = data.total;
+        countedAt = data.counted_at;
+        if (Object.prototype.hasOwnProperty.call(data, "metrics")) renderMetrics(data.metrics);
         setState(null);
-        render();
+        render(true);
       }).catch(function (err) {
-        if (err.message === "__session__") return;
-        setState("error", "No pudimos cargar.", err.message, true);
-      }).then(function () { loading = false; $("refresh").disabled = false; });
+        if (generation !== listGeneration || err.message === "__session__") return;
+        if (append) $("page-note").textContent = "No pudimos cargar más. Podés reintentar; las solicitudes cargadas se conservan.";
+        else setState("error", "No pudimos cargar.", err.message, true);
+      }).then(function () {
+        if (generation !== listGeneration) return;
+        loading = false; $("refresh").disabled = false; $("load-more").disabled = false;
+      });
     }
     $("refresh").addEventListener("click", function () { if (view === "providers") loadProviders(); else load(); });
-
-    function matches(it) {
-      if (filter !== "all" && viewStatus(it) !== filter) return false;
-      if (!query) return true;
-      var q = norm(query), qd = query.replace(/\D/g, "");
-      var hay = norm([it.contact.name, it.contact.email].join(" "));
-      if (hay.indexOf(q) !== -1) return true;
-      return qd.length >= 3 && String(it.contact.phone || "").replace(/\D/g, "").indexOf(qd) !== -1;
-    }
+    $("load-more").addEventListener("click", function () { load(true); });
 
     function renderChips() {
       var box = $("chips");
       box.innerHTML = "";
-      var counts = { all: items.length };
-      items.forEach(function (it) { var v = viewStatus(it); counts[v] = (counts[v] || 0) + 1; });
-      [["all", "Todas"]].concat(VIEW_ORDER.map(function (s) { return [s, VIEW_LABELS[s]]; })).forEach(function (pair) {
+      [["open", "Abiertas"], ["all", "Todas"]].concat(VIEW_ORDER.map(function (s) { return [s, VIEW_LABELS[s]]; })).forEach(function (pair) {
         var b = el("button", "chip", pair[1]);
         b.type = "button";
         b.setAttribute("aria-pressed", filter === pair[0] ? "true" : "false");
-        b.appendChild(el("b", "", String(counts[pair[0]] || 0)));
-        b.addEventListener("click", function () { filter = pair[0]; render(); });
+        b.addEventListener("click", function () { filter = pair[0]; load(); });
         box.appendChild(b);
       });
     }
@@ -522,59 +544,49 @@
       return s;
     }
 
-    function planLine(it) {
-      var p = it.plan;
-      return [p.type, p.guests ? p.guests + " personas" : "", p.zone, fmtDate(p.date) + (p.time ? " " + p.time : ""), money(p.budget)]
-        .filter(Boolean).join(" · ");
-    }
-
-    function render() {
-      $("new-count").textContent = items.filter(function (i) { return i.status === "inquiry_requested"; }).length;
-      $("total-count").textContent = items.length + " en total";
+    function render(skipDetail) {
+      // Never merge full detail objects (PII) into the inbox collection.
+      if (detailItem && !skipDetail) {
+        items.forEach(function (row) {
+          if (row.id !== detailItem.id) return;
+          var nextView = viewStatus(detailItem);
+          if (row.status !== detailItem.status || row.view_status !== nextView) {
+            inboxChanged = true;
+            row.status = detailItem.status; row.view_status = nextView;
+          }
+        });
+      }
+      $("new-count").textContent = total === null ? "—" : String(total);
+      $("total-count").textContent = items.length + " cargadas" + (total === null ? "" : " · " + total + " en la consulta") +
+        (countedAt ? " · Consultado " + fmtDateTime(countedAt) : "");
+      $("page-note").textContent = inboxChanged ? "Hubo cambios comerciales. Actualizá la bandeja para renovar resultados y total." :
+        nextCursor ? "Hay más solicitudes. Cargá la siguiente página." : "No hay más resultados en esta consulta. Actualizá para ver nuevos ingresos o cambios.";
+      $("load-more").hidden = !nextCursor || inboxChanged;
       renderChips();
       var list = $("list");
       list.innerHTML = "";
-      var shown = items.filter(matches);
-      if (!items.length) { setState("empty", "Todavía no hay solicitudes.", "Cuando alguien toque “Quiero avanzar”, va a aparecer acá."); return; }
-      if (!shown.length) { setState("empty", "Sin resultados.", "Probá con otro filtro o búsqueda."); return; }
+      if (!items.length) {
+        setState("empty", "Sin solicitudes en esta consulta.", "Probá otro estado o cambiá la búsqueda.");
+        return;
+      }
       setState(null);
-
-      shown.forEach(function (it) {
+      items.forEach(function (it) {
         var card = el("article", "item");
         var head = el("div", "item-head");
-        var vs = viewStatus(it);
+        var vs = it.view_status;
         head.appendChild(el("span", "badge s-" + vs, VIEW_LABELS[vs] || it.status));
         head.appendChild(el("span", "label muted", fmtDateTime(it.created_at)));
         if (it.notification_status) head.appendChild(el("span", "mail " + it.notification_status, MAIL_LABELS[it.notification_status] || it.notification_status));
         card.appendChild(head);
-
         var info = el("div");
-        info.appendChild(el("h2", "name", it.contact.name || "Sin nombre"));
-        info.appendChild(el("p", "contact", [it.contact.phone, it.contact.email].filter(Boolean).join(" · ")));
-        info.appendChild(el("p", "plan", planLine(it)));
-        // Sin pedidos a Google por fila: sólo el identificador del lugar (el nombre se ve en el detalle).
-        var prov = el("p", "prov");
-        prov.appendChild(document.createTextNode("→ Lugar: "));
-        prov.appendChild(el("span", "mono", it.provider.google_place_id || "sin lugar"));
-        info.appendChild(prov);
-        var act = activeBooking(it);
-        if (it.quotes && it.quotes.length && !act) info.appendChild(el("p", "card-quote", "Cotización: " + quotePrice(it.quotes[0]) + " · " + AVAIL[it.quotes[0].availability]));
-        if (act) info.appendChild(el("p", "card-booking", "Reserva confirmada · " + amount(act.final_total_amount, act.currency) + " · Comisión " +
-          amount(act.commission_amount, act.currency) + " (" + COMMISSION_LABELS[act.commission_status] + ")"));
-        var lastProp = currentProposal(it);
-        if (lastProp) info.appendChild(el("p", "card-proposal " + lastProp.status, "Propuesta: " + (PROPOSAL_LABELS[lastProp.status] || lastProp.status) +
-          (lastProp.status === "proposal_sent" ? " · " + opensText(lastProp) : "")));
+        info.appendChild(el("h2", "name", it.contact_label || "—"));
+        info.appendChild(el("p", "mono", it.id));
+        info.appendChild(el("p", "plan", fmtDate(it.event_date) + (it.approximate_time ? " · " + it.approximate_time : "")));
         card.appendChild(info);
-
         var actions = el("div", "item-actions");
-        var links = el("div", "links");
-        if (it.contact.whatsapp_url) links.appendChild(linkBtn(it.contact.whatsapp_url, "WhatsApp"));
-        if (it.provider.maps_url) links.appendChild(linkBtn(it.provider.maps_url, "Maps"));
-        actions.appendChild(links);
-        actions.appendChild(statusSelect(it));
         var more = el("button", "btn btn-sm", "Ver detalle");
         more.type = "button";
-        more.addEventListener("click", function () { openDetail(it); });
+        more.addEventListener("click", function () { loadDetail(it.id); });
         actions.appendChild(more);
         card.appendChild(actions);
         list.appendChild(card);
@@ -584,7 +596,7 @@
     var searchTimer;
     $("search").addEventListener("input", function () {
       clearTimeout(searchTimer);
-      searchTimer = setTimeout(function () { query = $("search").value.trim(); render(); }, 120);
+      searchTimer = setTimeout(function () { query = $("search").value.trim(); load(); }, 300);
     });
 
     /* ---------- Cambiar estado (sin emails ni WhatsApp automáticos) ---------- */
@@ -1309,13 +1321,41 @@
       return wrap;
     }
 
+    function loadDetail(id) {
+      var generation = ++detailGeneration;
+      detailItem = null;
+      $("d-label").textContent = "Solicitud";
+      $("d-body").innerHTML = "";
+      var title = el("h2", "d-title", "Cargando solicitud…"); title.id = "d-title";
+      $("d-body").appendChild(title);
+      if (!$("detail").open) $("detail").showModal();
+      return api("GET", "/api/admin-inquiries?id=" + encodeURIComponent(id)).then(function (data) {
+        if (generation !== detailGeneration || !$("detail").open) return;
+        $("schema-banner").hidden = data.schema_ready !== false;
+        proposalsReady = data.proposals_ready !== false;
+        bookingsReady = data.bookings_ready !== false;
+        openDetail(data.item);
+        render();
+      }).catch(function (err) {
+        if (generation !== detailGeneration || err.message === "__session__") return;
+        title.textContent = "No pudimos abrir la solicitud";
+        $("d-body").appendChild(el("p", "error", err.message));
+        var retry = el("button", "btn", "Reintentar"); retry.type = "button";
+        retry.addEventListener("click", function () { loadDetail(id); });
+        $("d-body").appendChild(retry);
+      });
+    }
+
     function openDetail(it) {
+      if ($("panel").hidden) return;
+      detailItem = it;
       $("d-label").textContent = "Solicitud";
       var b = $("d-body");
       b.innerHTML = "";
       var dvs = viewStatus(it);
       b.appendChild(el("span", "badge s-" + dvs, VIEW_LABELS[dvs] || it.status));
-      b.appendChild(el("h2", "d-title", it.contact.name || "Sin nombre"));
+      var heading = el("h2", "d-title", it.contact.name || "Sin nombre"); heading.id = "d-title";
+      b.appendChild(heading);
       var sel = statusSelect(it);
       sel.style.maxWidth = "320px";
       sel.style.marginTop = "6px";
@@ -1447,7 +1487,7 @@
       if (!d.open) { if (d.showModal) d.showModal(); else d.setAttribute("open", ""); }
     }
     $("d-close").addEventListener("click", function () { $("detail").close(); });
-    $("detail").addEventListener("close", function () { liveOpen = null; });
+    $("detail").addEventListener("close", function () { liveOpen = null; detailItem = null; detailGeneration++; $("d-body").innerHTML = ""; });
     $("detail").addEventListener("click", function (e) { if (e.target === $("detail")) $("detail").close(); });
 
     /* ---------- Proveedores y atributos alimentarios ----------
