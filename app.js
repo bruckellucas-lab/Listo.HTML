@@ -747,14 +747,43 @@
   var searchButton = $("#details-form button[type=submit]");
   var PRICE_NOTE = "Precio y disponibilidad a confirmar";
 
+  function explicitVenueMention(text) {
+    var clauses = normalize(text).split(/[.!?;,]|\bpero\b/);
+    return clauses.some(function (clause) {
+      if (!clause.trim()) return false;
+      var venue = "(?:salon(?:es)?|espacio(?:s)?(?:\\s+privad[oa]s?)?|lugar|local|quinta|terraza)";
+      var denied = new RegExp("\\bsin\\s+(?:un(?:a)?\\s+)?" + venue + "\\b|\\b" + venue +
+        "\\s+no\\b|\\bno\\s+(?:(?:quiero|busco|necesito|prefiero)\\s+)?(?:un(?:a)?\\s+)?" + venue +
+        "\\b|\\bno\\s+hace\\s+falta\\s+(?:alquilar|reservar)\\s+(?:un(?:a)?\\s+)?" + venue + "\\b");
+      if (denied.test(clause)) return false;
+      // Un salón interno del restaurante es una característica gastronómica, no un alquiler.
+      if (/\b(?:restaurante|bar|cafe|parrilla)\b.{0,60}\bcon\s+(?:un\s+)?salon(?:\s+privado)?\b/.test(clause)) return false;
+      // El objeto del alquiler debe ser el espacio: "alquilar una mesa en un lugar" no coincide.
+      if (new RegExp("\\b(?:alquilar|alquiler(?:\\s+de)?|arrendar|reservar)\\s+(?:un|una|el|la)?\\s*" + venue + "\\b").test(clause)) return true;
+      return /\b(?:quiero|busco|necesito|en|con)\s+(?:un|una|el|la)?\s*(?:salon(?:es)?|espacio(?:s)?\s+privad[oa]s?)\b/.test(clause);
+    });
+  }
+
+  function explicitVenueIntent(d, originalPrompt) {
+    var type = normalize(d.type), ids = d.needs || [];
+    // Un tipo editado que en sí pide salón conserva esa decisión aun sin evidencia en el prompt.
+    if (/^salon(?:es)?$/.test(type) || explicitVenueMention(type)) return true;
+    if (!originalPrompt || !explicitVenueMention(originalPrompt)) return false;
+    var promptText = normalize(originalPrompt);
+    // Los campos de revisión son la decisión final: cambiar el tipo o quitar Lugar invalida la
+    // inferencia contradictoria del texto inicial, sin guardar flags ni estado adicional.
+    if (normalize(detectType(promptText)) !== type) return false;
+    if (detectNeeds(promptText).indexOf("lugar") !== -1 && ids.indexOf("lugar") === -1) return false;
+    return true;
+  }
+
   // Sólo se transmite este id cerrado, nunca las palabras usadas para detectarlo.
   function chooseProfile(d, originalPrompt) {
     var type = normalize(d.type), ids = d.needs || [];
     // "Lugar" también aparece en frases gastronómicas como "un lugar lindo". Sólo una mención
     // explícita a salón/espacio privado o alquiler cuenta como pedido de espacio para eventos.
     // El texto se usa únicamente acá, en el navegador, para producir un id cerrado de perfil.
-    var venueText = normalize((originalPrompt || "") + " " + type);
-    var explicitVenue = /\bsalon(?:es)?\b|\bespacio(?:s)?\s+privad[oa]s?\b|\b(?:alquilar|alquiler(?:\s+de)?|arrendar)\b[^.]{0,40}\b(?:lugar|espacio|local|quinta|terraza)\b/.test(venueText);
+    var explicitVenue = explicitVenueIntent(d, originalPrompt);
     if (/asado|parrilla/.test(type)) return "grill";
     if (/baby shower/.test(type)) return "baby_shower";
     if (/corporativo/.test(type)) return "corporate";

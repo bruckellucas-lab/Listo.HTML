@@ -17,6 +17,10 @@ salón. Al mismo tiempo, un pedido explícito de salón para un grupo pequeño p
   mencione lugar, ambientación, torta, fotos o música.
 - Esa protección no se aplica cuando el texto pide explícitamente salón, espacio privado o
   alquiler de un lugar/espacio.
+- Los campos revisados tienen prioridad: si el usuario cambia el tipo o quita `Lugar`, la mención
+  contradictoria del texto inicial deja de decidir el perfil.
+- `sin salón`, `no quiero salón`, `salón no` y “no hace falta alquilar” no son pedidos de espacio.
+  Tampoco lo son alquilar una mesa dentro de un lugar ni un restaurante que tiene salón privado.
 - Un salón explícito para un cumpleaños sigue usando `celebration`; para un plan genérico usa
   `venues`.
 - Un evento realmente multiservicio conserva `multi_service`.
@@ -31,6 +35,9 @@ salón. Al mismo tiempo, un pedido explícito de salón para un grupo pequeño p
 | Cena de cumpleaños para 6 con torta y ambientación | `multi_service` | `dinner` |
 | Cena de cumpleaños para 6 con fotos y decoración | `multi_service` | `dinner` |
 | Alquilar un salón para 6 | `dinner` | `venues` |
+| No quiero salón; quiero restaurante para cenar 6 | `venues` | `dinner` |
+| Alquilar una mesa en un lugar lindo para cenar 6 | `venues` | `dinner` |
+| Pedido con salón, luego tipo editado a Cena | `venues` | `dinner` |
 | Cumpleaños para 30 con salón | `celebration` | `celebration` |
 | Evento con lugar, música, fotografía y catering | `multi_service` | `multi_service` |
 
@@ -39,6 +46,8 @@ salón. Al mismo tiempo, un pedido explícito de salón para un grupo pequeño p
 Los tests usan las funciones reales de detección y clasificación extraídas de `app.js`. Cubren:
 
 - cenas pequeñas simples y con menciones ambiguas/accesorias;
+- los cinco escenarios de edición de tipo/necesidades de B1;
+- las siete negaciones o referencias gastronómicas de B2 y sus cuatro controles positivos;
 - salón explícito, celebración grande y evento multiservicio;
 - perfiles de bar, asado, aniversario y corporativo;
 - preferencia vegana y el corte previo de todas las restricciones obligatorias;
@@ -48,10 +57,13 @@ Los tests usan las funciones reales de detección y clasificación extraídas de
 
 - Sin cantidad de invitados no se presume que el evento sea pequeño.
 - La detección explícita depende de palabras cerradas. Frases inusuales pueden seguir siendo
-  ambiguas; una negación como “no quiero salón” todavía contiene la palabra `salón`.
+  ambiguas, especialmente negaciones o correcciones con una redacción no cubierta.
 - Seleccionar simultáneamente `Lugar` y `Comida` en una cena pequeña no conserva información sobre
   si `Lugar` fue detectado o elegido manualmente. BETA-6B prioriza la intención gastronómica salvo
   que el texto sea explícito.
+- No se agrega un historial de edición: se compara el estado actual con la extracción original.
+  Si ambos coinciden, se conserva un pedido positivo de salón; si el tipo cambió o `Lugar` fue
+  quitado, prevalece la revisión del usuario.
 - No se modificaron consultas, filtros, ranking, familias de tipos, umbrales ni cantidad de
   resultados.
 

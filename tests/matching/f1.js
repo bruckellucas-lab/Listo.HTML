@@ -9,8 +9,12 @@ function grab(name) {
   if (start < 0) throw Error("Falta función " + name);
   return source.slice(start, source.indexOf("\n  }\n", start) + 4);
 }
-var chooseProfile = new Function(grab("normalize") + grab("chooseCategory") + grab("chooseProfile") + "return chooseProfile;")();
 var interpretationDefinitions = source.slice(source.indexOf("  var EVENT_TYPES = ["), source.indexOf("  // Zonas conocidas"));
+var chooseProfile = new Function(
+  interpretationDefinitions + grab("normalize") + grab("escapeRegExp") + grab("hasWord") +
+  grab("detectType") + grab("detectNeeds") + grab("explicitVenueMention") + grab("explicitVenueIntent") +
+  grab("chooseCategory") + grab("chooseProfile") + "return chooseProfile;"
+)();
 var interpretForProfile = new Function(
   interpretationDefinitions + grab("normalize") + grab("escapeRegExp") + grab("hasWord") +
   grab("detectType") + grab("detectGuests") + grab("detectNeeds") +

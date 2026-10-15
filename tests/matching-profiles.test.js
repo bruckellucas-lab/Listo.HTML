@@ -221,3 +221,45 @@ test("BETA-6B no cambia perfiles no relacionados ni el guard de dieta", () => {
   for (var [prompt, expected] of cases) assert.equal(f1.profileForText(prompt).profile, expected, prompt);
   assert.equal(f1.chooseProfile({type:"Cena", needs:["comida"], diet:{on:{vegan:true}}}), "vegan");
 });
+
+test("BETA-6B B1 los campos editados prevalecen sobre el texto original", () => {
+  function edited(prompt, changes) {
+    var data = f1.profileForText(prompt).data;
+    Object.keys(changes).forEach(function (key) { data[key] = changes[key]; });
+    return f1.chooseProfile(data, prompt);
+  }
+  var birthday = "Cumpleaños en un salón para 6 personas con comida";
+  assert.equal(edited(birthday, {type:"Cena"}), "dinner");
+  assert.equal(edited(birthday, {type:"Cena", needs:["comida"]}), "dinner");
+  assert.equal(edited("Quiero alquilar un salón para 6 personas", {type:"Cena", needs:["comida"]}), "dinner");
+  assert.equal(edited("Cumple de 6 personas en un salón con comida", {needs:["comida"]}), "dinner");
+  assert.equal(edited("Juntada de 6 amigos en un salón", {needs:["comida"]}), "dinner");
+});
+
+test("BETA-6B B2 negaciones y contexto gastronómico no se clasifican como salón", () => {
+  var prompts = [
+    "No quiero salón, quiero restaurante para cenar 6 personas",
+    "Cena para 6 personas en Palermo, sin salón",
+    "Cena para 6 personas, salón no",
+    "Cena de 6 personas, no hace falta alquilar un lugar",
+    "Juntada de 6 amigos sin salón, algo tranqui para comer",
+    "Alquilar una mesa en un lugar lindo para cenar 6 personas",
+    "Cena para 8 personas en un restaurante con salón privado"
+  ];
+  for (var prompt of prompts) assert.equal(f1.profileForText(prompt).profile, "dinner", prompt);
+});
+
+test("BETA-6B B2 conserva afirmaciones explícitas de salón", () => {
+  var cases = [
+    ["Quiero alquilar un salón para 6 personas", "venues"],
+    ["Cena de cumpleaños para 6 personas en un salón privado", "celebration"],
+    ["Quiero alquilar un espacio para cena de 10 personas", "venues"],
+    ["Cumpleaños para 30 personas con salón", "celebration"]
+  ];
+  for (var [prompt, expected] of cases) assert.equal(f1.profileForText(prompt).profile, expected, prompt);
+});
+
+test("BETA-6B privacidad: el prompt se reduce localmente a profile y zone", () => {
+  var source = require("node:fs").readFileSync(require("node:path").join(h.ROOT, "app.js"), "utf8");
+  assert.match(source, /var profile = chooseProfile\(d, state\.text\);\s*var url = "\/api\/plan-options\?profile=" \+ encodeURIComponent\(profile\) \+ "&zone=" \+ encodeURIComponent\(d\.zone \|\| ""\);/);
+});
